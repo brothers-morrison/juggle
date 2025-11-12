@@ -17,6 +17,7 @@ var (
 	priorityFlag    string
 	tagsFlag        []string
 	ballIDFlag      string
+	beadsFlag       []string
 )
 
 var startCmd = &cobra.Command{
@@ -35,6 +36,7 @@ func init() {
 	startCmd.Flags().StringVarP(&priorityFlag, "priority", "p", "medium", "Priority: low, medium, high, urgent")
 	startCmd.Flags().StringSliceVarP(&tagsFlag, "tags", "t", []string{}, "Tags for categorization")
 	startCmd.Flags().StringVar(&ballIDFlag, "id", "", "ID of planned ball to activate")
+	startCmd.Flags().StringSliceVarP(&beadsFlag, "beads", "b", []string{}, "Beads issue IDs to link (e.g., bd-a1b2)")
 }
 
 func runStart(cmd *cobra.Command, args []string) error {
@@ -150,6 +152,11 @@ func runStart(cmd *cobra.Command, args []string) error {
 		sess.AddTag(tag)
 	}
 
+	// Add beads issues if provided
+	for _, beadsIssue := range beadsFlag {
+		sess.AddBeadsIssue(beadsIssue)
+	}
+
 	// Set to juggling/in-air since we're starting work NOW
 	sess.ActiveState = session.ActiveJuggling
 	inAir := session.JuggleInAir
@@ -187,6 +194,9 @@ func runStart(cmd *cobra.Command, args []string) error {
 	}
 	if len(sess.Tags) > 0 {
 		fmt.Printf("  Tags: %s\n", strings.Join(sess.Tags, ", "))
+	}
+	if len(sess.BeadsIssues) > 0 {
+		fmt.Printf("  Beads: %s\n", strings.Join(sess.BeadsIssues, ", "))
 	}
 
 	return nil

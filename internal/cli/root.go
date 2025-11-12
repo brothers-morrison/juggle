@@ -235,4 +235,6 @@ func init() {
 	rootCmd.AddCommand(auditCmd)
 	rootCmd.AddCommand(reminderCmd)
 	rootCmd.AddCommand(trackActivityCmd)
+	rootCmd.AddCommand(linkCmd)
+	rootCmd.AddCommand(unlinkCmd)
 }
