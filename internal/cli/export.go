@@ -329,34 +329,17 @@ func filterByState(balls []*session.Session, stateStr string) ([]*session.Sessio
 	return filteredBalls, nil
 }
 
-// Legacy types and functions kept for backward compatibility
+// stateFilter for filtering balls by state
 type stateFilter struct {
-	activeState session.ActiveState
-	juggleState string // empty means any juggle state
+	state session.BallState
 }
 
 func matchesStateFilter(ball *session.Session, filter stateFilter) bool {
-	if ball.ActiveState != filter.activeState {
-		return false
-	}
-
-	if filter.juggleState == "" {
-		return true
-	}
-
-	if ball.JuggleState == nil {
-		return false
-	}
-
-	return string(*ball.JuggleState) == filter.juggleState
+	return ball.State == filter.state
 }
 
-func isValidActiveState(state string) bool {
-	return state == "ready" || state == "juggling" || state == "dropped" || state == "complete"
-}
-
-func isValidJuggleState(state string) bool {
-	return state == "needs-thrown" || state == "in-air" || state == "needs-caught"
+func isValidBallState(state string) bool {
+	return session.ValidateBallState(state)
 }
 
 func exportJSON(balls []*session.Session) ([]byte, error) {
@@ -407,8 +390,8 @@ func exportCSV(balls []*session.Session) ([]byte, error) {
 		"Intent",
 		"Description",
 		"Priority",
-		"ActiveState",
-		"JuggleState",
+		"State",
+		"BlockedReason",
 		"StartedAt",
 		"CompletedAt",
 		"LastActivity",
@@ -432,18 +415,14 @@ func exportCSV(balls []*session.Session) ([]byte, error) {
 
 		total, completed := ball.TodoStats()
 
-		juggleState := ""
-		if ball.JuggleState != nil {
-			juggleState = string(*ball.JuggleState)
-		}
 		row := []string{
 			ball.ID,
 			ball.WorkingDir,
 			ball.Intent,
 			ball.Description,
 			string(ball.Priority),
-			string(ball.ActiveState),
-			juggleState,
+			string(ball.State),
+			ball.BlockedReason,
 			ball.StartedAt.Format("2006-01-02 15:04:05"),
 			completedAt,
 			ball.LastActivity.Format("2006-01-02 15:04:05"),

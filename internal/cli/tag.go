@@ -72,12 +72,12 @@ func getCurrentBallForTag(store *session.Store) (*session.Session, error) {
 		return ball, nil
 	}
 
-	// Try to get most recently active juggling ball
-	jugglingBalls, err := store.GetJugglingBalls()
-	if err != nil || len(jugglingBalls) == 0 {
-		return nil, fmt.Errorf("no juggling balls found. Use --ball <id> to specify which ball to tag")
+	// Try to get most recently active in-progress ball
+	inProgressBalls, err := store.GetInProgressBalls()
+	if err != nil || len(inProgressBalls) == 0 {
+		return nil, fmt.Errorf("no in-progress balls found. Use --ball <id> to specify which ball to tag")
 	}
-	ball := jugglingBalls[0] // Most recently active
+	ball := inProgressBalls[0] // Most recently active
 
 	return ball, nil
 }

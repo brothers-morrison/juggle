@@ -81,7 +81,7 @@ func runSearch(cmd *cobra.Command, args []string) error {
 	// Filter to non-complete balls
 	activeBalls := make([]*session.Session, 0)
 	for _, ball := range allBalls {
-		if ball.ActiveState != session.ActiveComplete {
+		if ball.State != session.StateComplete {
 			activeBalls = append(activeBalls, ball)
 		}
 	}
@@ -141,7 +141,7 @@ func runSearch(cmd *cobra.Command, args []string) error {
 
 		filtered := make([]*session.Session, 0)
 		for _, ball := range activeBalls {
-			if string(ball.ActiveState) == searchStatus {
+			if string(ball.State) == searchStatus {
 				filtered = append(filtered, ball)
 			}
 		}
@@ -210,10 +210,9 @@ func renderSearchResults(balls []*session.Session) {
 	headerStyle := StyleHeader.Padding(0, 1)
 
 	// Use consistent styles from styles.go
-	activeStyle := StyleInAir        // In-air (actively working)
-	blockedStyle := StyleNeedsThrown // Needs-thrown (blocked/waiting)
-	reviewStyle := StyleNeedsCaught  // Needs-caught (needs review)
-	plannedStyle := StyleReady       // Ready (planned)
+	activeStyle := StyleInAir        // In-progress (actively working)
+	blockedStyle := StyleNeedsThrown // Blocked
+	plannedStyle := StyleReady       // Pending (planned)
 
 	// Table header
 	fmt.Println(
@@ -236,23 +235,14 @@ func renderSearchResults(balls []*session.Session) {
 		// State with color
 		var statusCell string
 		var statusStyle lipgloss.Style
-		stateStr := string(ball.ActiveState)
-		if ball.JuggleState != nil {
-			stateStr = stateStr + ":" + string(*ball.JuggleState)
-		}
-		
-		switch ball.ActiveState {
-		case session.ActiveJuggling:
-			if ball.JuggleState != nil && *ball.JuggleState == session.JuggleNeedsCaught {
-				statusStyle = reviewStyle
-			} else if ball.JuggleState != nil && *ball.JuggleState == session.JuggleNeedsThrown {
-				statusStyle = blockedStyle
-			} else {
-				statusStyle = activeStyle
-			}
-		case session.ActiveDropped:
+		stateStr := string(ball.State)
+
+		switch ball.State {
+		case session.StateInProgress:
+			statusStyle = activeStyle
+		case session.StateBlocked:
 			statusStyle = blockedStyle
-		case session.ActiveReady:
+		case session.StatePending:
 			statusStyle = plannedStyle
 		default:
 			statusStyle = lipgloss.NewStyle()

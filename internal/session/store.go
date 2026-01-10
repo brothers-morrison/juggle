@@ -257,33 +257,31 @@ func (s *Store) ArchiveBall(ball *Session) error {
 	return s.DeleteBall(ball.ID)
 }
 
-// GetCurrentBall attempts to find an active ball in the current directory
-// GetJugglingBalls returns all balls currently being juggled in this project
-func (s *Store) GetJugglingBalls() ([]*Session, error) {
+// GetInProgressBalls returns all balls currently in progress in this project
+func (s *Store) GetInProgressBalls() ([]*Session, error) {
 	balls, err := s.LoadBalls()
 	if err != nil {
 		return nil, err
 	}
 
-	// Filter for juggling balls
-	juggling := make([]*Session, 0)
+	// Filter for in_progress balls
+	inProgress := make([]*Session, 0)
 	for _, ball := range balls {
-		if ball.ActiveState == ActiveJuggling {
-			juggling = append(juggling, ball)
+		if ball.State == StateInProgress {
+			inProgress = append(inProgress, ball)
 		}
 	}
 
 	// Sort by most recently active first
-	sort.Slice(juggling, func(i, j int) bool {
-		return juggling[i].LastActivity.After(juggling[j].LastActivity)
+	sort.Slice(inProgress, func(i, j int) bool {
+		return inProgress[i].LastActivity.After(inProgress[j].LastActivity)
 	})
 
-	return juggling, nil
+	return inProgress, nil
 }
 
-// GetBallsByStatus returns all balls with the given status
-// GetBallsByActiveState returns all balls with the given active state
-func (s *Store) GetBallsByActiveState(state ActiveState) ([]*Session, error) {
+// GetBallsByState returns all balls with the given state
+func (s *Store) GetBallsByState(state BallState) ([]*Session, error) {
 	all, err := s.LoadBalls()
 	if err != nil {
 		return nil, err
@@ -291,24 +289,7 @@ func (s *Store) GetBallsByActiveState(state ActiveState) ([]*Session, error) {
 
 	filtered := make([]*Session, 0)
 	for _, ball := range all {
-		if ball.ActiveState == state {
-			filtered = append(filtered, ball)
-		}
-	}
-
-	return filtered, nil
-}
-
-// GetBallsByJuggleState returns all juggling balls with the given juggle state
-func (s *Store) GetBallsByJuggleState(state JuggleState) ([]*Session, error) {
-	all, err := s.LoadBalls()
-	if err != nil {
-		return nil, err
-	}
-
-	filtered := make([]*Session, 0)
-	for _, ball := range all {
-		if ball.ActiveState == ActiveJuggling && ball.JuggleState != nil && *ball.JuggleState == state {
+		if ball.State == state {
 			filtered = append(filtered, ball)
 		}
 	}
@@ -440,12 +421,11 @@ func (s *Store) UnarchiveBall(ballID string) (*Session, error) {
 		return nil, fmt.Errorf("ball not found in archive: %s", ballID)
 	}
 
-	// Change state to pending (ready) using new state model
+	// Change state to pending using new state model
 	ball.State = StatePending
 	ball.BlockedReason = ""
 	ball.CompletedAt = nil
 	ball.CompletionNote = ""
-	ball.syncLegacyFields() // Update legacy fields for backward compatibility
 
 	// Append to active balls
 	if err := s.AppendBall(ball); err != nil {

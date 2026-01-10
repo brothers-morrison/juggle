@@ -73,11 +73,7 @@ func runDelete(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  ID: %s\n", foundBall.ID)
 	fmt.Printf("  Intent: %s\n", foundBall.Intent)
 	fmt.Printf("  Priority: %s\n", foundBall.Priority)
-	fmt.Printf("  State: %s", foundBall.ActiveState)
-	if foundBall.ActiveState == session.ActiveJuggling && foundBall.JuggleState != nil {
-		fmt.Printf(" (%s)", *foundBall.JuggleState)
-	}
-	fmt.Printf("\n")
+	fmt.Printf("  State: %s\n", foundBall.State)
 	if len(foundBall.Todos) > 0 {
 		fmt.Printf("  Todos: %d items\n", len(foundBall.Todos))
 	}

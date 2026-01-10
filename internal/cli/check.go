@@ -46,28 +46,28 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	}
 
 	// Load all ball states
-	jugglingBalls, err := session.LoadJugglingBalls(projects)
+	inProgressBalls, err := session.LoadInProgressBalls(projects)
 	if err != nil {
-		return fmt.Errorf("failed to load juggling balls: %w", err)
+		return fmt.Errorf("failed to load in-progress balls: %w", err)
 	}
 
-	readyBalls, err := session.LoadReadyBalls(projects)
+	pendingBalls, err := session.LoadPendingBalls(projects)
 	if err != nil {
-		return fmt.Errorf("failed to load ready balls: %w", err)
+		return fmt.Errorf("failed to load pending balls: %w", err)
 	}
 
-	// Case 1: No juggling balls
-	if len(jugglingBalls) == 0 {
-		return handleNoJugglingBalls(readyBalls)
+	// Case 1: No in-progress balls
+	if len(inProgressBalls) == 0 {
+		return handleNoInProgressBalls(pendingBalls)
 	}
 
-	// Case 2: Single juggling ball
-	if len(jugglingBalls) == 1 {
-		return handleSingleJugglingBall(jugglingBalls[0], readyBalls)
+	// Case 2: Single in-progress ball
+	if len(inProgressBalls) == 1 {
+		return handleSingleInProgressBall(inProgressBalls[0], pendingBalls)
 	}
 
-	// Case 3: Multiple juggling balls
-	return handleMultipleJugglingBalls(jugglingBalls, readyBalls)
+	// Case 3: Multiple in-progress balls
+	return handleMultipleInProgressBalls(inProgressBalls, pendingBalls)
 }
 
 func printNoJugglerDir() {
@@ -83,7 +83,7 @@ func printNoJugglerDir() {
 	fmt.Println("  juggle start   - Create and start juggling immediately")
 }
 
-func handleNoJugglingBalls(readyBalls []*session.Session) error {
+func handleNoInProgressBalls(pendingBalls []*session.Session) error {
 	successStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
 	dimStyle := StyleDim
 
@@ -92,9 +92,9 @@ func handleNoJugglingBalls(readyBalls []*session.Session) error {
 	fmt.Println("Ready to start new work.")
 	fmt.Println()
 
-	// Case 4: Ready balls exist
-	if len(readyBalls) > 0 {
-		return promptForReadyBalls(readyBalls)
+	// Case 4: Pending balls exist
+	if len(pendingBalls) > 0 {
+		return promptForPendingBalls(pendingBalls)
 	}
 
 	fmt.Println(dimStyle.Render("Create a ball:"))
@@ -103,32 +103,21 @@ func handleNoJugglingBalls(readyBalls []*session.Session) error {
 	return nil
 }
 
-func handleSingleJugglingBall(ball *session.Session, readyBalls []*session.Session) error {
+func handleSingleInProgressBall(ball *session.Session, pendingBalls []*session.Session) error {
 	focusStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true)
 	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
 	valueStyle := lipgloss.NewStyle()
 
 	// Get state style
-	var stateStyle lipgloss.Style
-	stateStr := ""
-	if ball.JuggleState != nil {
-		stateStr = string(*ball.JuggleState)
-		switch *ball.JuggleState {
-		case session.JuggleNeedsCaught:
-			stateStyle = StyleNeedsCaught
-		case session.JuggleNeedsThrown:
-			stateStyle = StyleNeedsThrown
-		case session.JuggleInAir:
-			stateStyle = StyleInAir
-		}
-	}
+	stateStyle := StyleInAir // in_progress uses the in-air style
+	stateStr := string(ball.State)
 
-	fmt.Println(focusStyle.Render("🎯 Currently juggling: " + ball.ShortID()))
+	fmt.Println(focusStyle.Render("🎯 Currently in progress: " + ball.ShortID()))
 	fmt.Println(labelStyle.Render("Intent:"), valueStyle.Render(ball.Intent))
 	fmt.Println(labelStyle.Render("State:"), stateStyle.Render(stateStr))
-	if ball.StateMessage != "" {
+	if ball.BlockedReason != "" {
 		messageStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
-		fmt.Println(labelStyle.Render("Message:"), messageStyle.Render(ball.StateMessage))
+		fmt.Println(labelStyle.Render("Note:"), messageStyle.Render(ball.BlockedReason))
 	}
 	fmt.Println()
 
@@ -145,20 +134,20 @@ func handleSingleJugglingBall(ball *session.Session, readyBalls []*session.Sessi
 		return nil
 	}
 
-	// User said no - check for ready balls
-	if len(readyBalls) > 0 {
+	// User said no - check for pending balls
+	if len(pendingBalls) > 0 {
 		fmt.Println()
 		warningStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
-		fmt.Println(warningStyle.Render("⚠️  You have other ready balls that need attention."))
+		fmt.Println(warningStyle.Render("⚠️  You have other pending balls that need attention."))
 		fmt.Println()
-		return promptForReadyBalls(readyBalls)
+		return promptForPendingBalls(pendingBalls)
 	}
 
-	// No ready balls - suggest moving current ball to ready
+	// No pending balls - suggest moving current ball to pending
 	fmt.Println()
 	dimStyle := StyleDim
-	fmt.Println(dimStyle.Render("Consider moving the current ball to ready:"))
-	fmt.Printf("  juggle %s ready\n", ball.ShortID())
+	fmt.Println(dimStyle.Render("Consider moving the current ball to pending:"))
+	fmt.Printf("  juggle %s pending\n", ball.ShortID())
 	fmt.Println()
 	fmt.Println(dimStyle.Render("Then create a new ball:"))
 	fmt.Println("  juggle start")
@@ -166,28 +155,17 @@ func handleSingleJugglingBall(ball *session.Session, readyBalls []*session.Sessi
 	return nil
 }
 
-func handleMultipleJugglingBalls(jugglingBalls []*session.Session, readyBalls []*session.Session) error {
+func handleMultipleInProgressBalls(inProgressBalls []*session.Session, pendingBalls []*session.Session) error {
 	warningStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Bold(true)
 	dimStyle := StyleDim
 
-	fmt.Println(warningStyle.Render(fmt.Sprintf("⚠️  Multiple balls juggling (%d):", len(jugglingBalls))))
+	fmt.Println(warningStyle.Render(fmt.Sprintf("⚠️  Multiple balls in progress (%d):", len(inProgressBalls))))
 	fmt.Println()
 
-	// Show all juggling balls with numbers
-	for i, ball := range jugglingBalls {
-		stateStr := ""
-		var stateStyle lipgloss.Style
-		if ball.JuggleState != nil {
-			stateStr = string(*ball.JuggleState)
-			switch *ball.JuggleState {
-			case session.JuggleNeedsCaught:
-				stateStyle = StyleNeedsCaught
-			case session.JuggleNeedsThrown:
-				stateStyle = StyleNeedsThrown
-			case session.JuggleInAir:
-				stateStyle = StyleInAir
-			}
-		}
+	// Show all in-progress balls with numbers
+	for i, ball := range inProgressBalls {
+		stateStr := string(ball.State)
+		stateStyle := StyleInAir // in_progress uses the in-air style
 
 		fmt.Printf("%d. %s: %s [%s]\n",
 			i+1,
@@ -200,7 +178,7 @@ func handleMultipleJugglingBalls(jugglingBalls []*session.Session, readyBalls []
 
 	// Prompt user to select
 	reader := bufio.NewReader(os.Stdin)
-	fmt.Printf("Which are you working on? (1-%d): ", len(jugglingBalls))
+	fmt.Printf("Which are you working on? (1-%d): ", len(inProgressBalls))
 	input, err := reader.ReadString('\n')
 	if err != nil {
 		return fmt.Errorf("failed to read input: %w", err)
@@ -208,36 +186,36 @@ func handleMultipleJugglingBalls(jugglingBalls []*session.Session, readyBalls []
 
 	choice := strings.TrimSpace(input)
 	selected, err := strconv.Atoi(choice)
-	if err != nil || selected < 1 || selected > len(jugglingBalls) {
-		return fmt.Errorf("invalid choice: %s (must be 1-%d)", choice, len(jugglingBalls))
+	if err != nil || selected < 1 || selected > len(inProgressBalls) {
+		return fmt.Errorf("invalid choice: %s (must be 1-%d)", choice, len(inProgressBalls))
 	}
 
-	selectedBall := jugglingBalls[selected-1]
+	selectedBall := inProgressBalls[selected-1]
 	successStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
 	fmt.Println()
 	fmt.Println(successStyle.Render(fmt.Sprintf("✓ Working on: %s - %s", selectedBall.ShortID(), selectedBall.Intent)))
 	fmt.Println()
-	fmt.Println(dimStyle.Render("Consider moving other balls to ready:"))
-	fmt.Println(dimStyle.Render("  juggle <ball-id> ready"))
+	fmt.Println(dimStyle.Render("Consider moving other balls to pending:"))
+	fmt.Println(dimStyle.Render("  juggle <ball-id> pending"))
 
 	return nil
 }
 
-func promptForReadyBalls(readyBalls []*session.Session) error {
+func promptForPendingBalls(pendingBalls []*session.Session) error {
 	warningStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Bold(true)
 	dimStyle := StyleDim
 
-	fmt.Println(warningStyle.Render(fmt.Sprintf("⚠️  Found %d ready ball%s that need attention:", len(readyBalls), pluralS(len(readyBalls)))))
+	fmt.Println(warningStyle.Render(fmt.Sprintf("⚠️  Found %d pending ball%s that need attention:", len(pendingBalls), pluralS(len(pendingBalls)))))
 	fmt.Println()
 
-	// Show up to 5 ready balls
-	displayCount := len(readyBalls)
+	// Show up to 5 pending balls
+	displayCount := len(pendingBalls)
 	if displayCount > 5 {
 		displayCount = 5
 	}
 
 	for i := 0; i < displayCount; i++ {
-		ball := readyBalls[i]
+		ball := pendingBalls[i]
 		priorityStyle := GetPriorityStyle(string(ball.Priority))
 		fmt.Printf("%d. %s: %s [%s]\n",
 			i+1,
@@ -247,8 +225,8 @@ func promptForReadyBalls(readyBalls []*session.Session) error {
 		)
 	}
 
-	if len(readyBalls) > 5 {
-		fmt.Printf("%s\n", dimStyle.Render(fmt.Sprintf("[... %d more]", len(readyBalls)-5)))
+	if len(pendingBalls) > 5 {
+		fmt.Printf("%s\n", dimStyle.Render(fmt.Sprintf("[... %d more]", len(pendingBalls)-5)))
 	}
 	fmt.Println()
 	fmt.Println("You should work on these before creating new balls.")
@@ -256,9 +234,9 @@ func promptForReadyBalls(readyBalls []*session.Session) error {
 
 	// Prompt for action
 	fmt.Println("What would you like to do?")
-	fmt.Println("1) Start working on a ready ball")
-	fmt.Println("2) View all ready balls")
-	fmt.Println("3) Drop some ready balls")
+	fmt.Println("1) Start working on a pending ball")
+	fmt.Println("2) View all pending balls")
+	fmt.Println("3) Block some pending balls")
 	fmt.Println("4) Continue anyway (not recommended)")
 	fmt.Println()
 
@@ -273,11 +251,11 @@ func promptForReadyBalls(readyBalls []*session.Session) error {
 
 	switch choice {
 	case "1":
-		return promptToStartReadyBall(readyBalls)
+		return promptToStartPendingBall(pendingBalls)
 	case "2":
-		return showAllReadyBalls(readyBalls)
+		return showAllPendingBalls(pendingBalls)
 	case "3":
-		return suggestDroppingBalls(readyBalls)
+		return suggestBlockingBalls(pendingBalls)
 	case "4":
 		fmt.Println()
 		fmt.Println(dimStyle.Render("Continuing anyway..."))
@@ -288,26 +266,26 @@ func promptForReadyBalls(readyBalls []*session.Session) error {
 	}
 }
 
-func promptToStartReadyBall(readyBalls []*session.Session) error {
+func promptToStartPendingBall(pendingBalls []*session.Session) error {
 	dimStyle := StyleDim
 	fmt.Println()
-	fmt.Println(dimStyle.Render("To start working on a ready ball:"))
+	fmt.Println(dimStyle.Render("To start working on a pending ball:"))
 	fmt.Println("  juggle <ball-id>")
 	fmt.Println()
 	fmt.Println(dimStyle.Render("Example:"))
-	if len(readyBalls) > 0 {
-		fmt.Printf("  juggle %s\n", readyBalls[0].ShortID())
+	if len(pendingBalls) > 0 {
+		fmt.Printf("  juggle %s\n", pendingBalls[0].ShortID())
 	}
 	return nil
 }
 
-func showAllReadyBalls(readyBalls []*session.Session) error {
+func showAllPendingBalls(pendingBalls []*session.Session) error {
 	fmt.Println()
 	headerStyle := StyleHeader
-	fmt.Println(headerStyle.Render(fmt.Sprintf(" All Ready Balls (%d) ", len(readyBalls))))
+	fmt.Println(headerStyle.Render(fmt.Sprintf(" All Pending Balls (%d) ", len(pendingBalls))))
 	fmt.Println()
 
-	for i, ball := range readyBalls {
+	for i, ball := range pendingBalls {
 		priorityStyle := GetPriorityStyle(string(ball.Priority))
 		fmt.Printf("%3d. [%s] [%s] %s\n",
 			i+1,
@@ -324,15 +302,15 @@ func showAllReadyBalls(readyBalls []*session.Session) error {
 	return nil
 }
 
-func suggestDroppingBalls(readyBalls []*session.Session) error {
+func suggestBlockingBalls(pendingBalls []*session.Session) error {
 	dimStyle := StyleDim
 	fmt.Println()
-	fmt.Println(dimStyle.Render("To drop a ball you're not planning to work on:"))
-	fmt.Println("  juggle <ball-id> drop")
+	fmt.Println(dimStyle.Render("To block a ball you're not planning to work on:"))
+	fmt.Println("  juggle <ball-id> blocked <reason>")
 	fmt.Println()
 	fmt.Println(dimStyle.Render("Example:"))
-	if len(readyBalls) > 0 {
-		fmt.Printf("  juggle %s drop\n", readyBalls[0].ShortID())
+	if len(pendingBalls) > 0 {
+		fmt.Printf("  juggle %s blocked \"waiting for dependencies\"\n", pendingBalls[0].ShortID())
 	}
 	return nil
 }

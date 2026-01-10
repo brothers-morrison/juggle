@@ -66,14 +66,10 @@ func renderSessionDetails(sess *session.Session) {
 		fmt.Println(labelStyle.Render("Description:"), valueStyle.Render(sess.Description))
 	}
 	fmt.Println(labelStyle.Render("Priority:"), valueStyle.Render(string(sess.Priority)))
-	stateStr := string(sess.ActiveState)
-	if sess.JuggleState != nil {
-		stateStr = stateStr + ":" + string(*sess.JuggleState)
-	}
-	fmt.Println(labelStyle.Render("State:"), valueStyle.Render(stateStr))
+	fmt.Println(labelStyle.Render("State:"), valueStyle.Render(string(sess.State)))
 
-	if sess.StateMessage != "" {
-		fmt.Println(labelStyle.Render("Message:"), valueStyle.Render(sess.StateMessage))
+	if sess.BlockedReason != "" {
+		fmt.Println(labelStyle.Render("Blocked:"), valueStyle.Render(sess.BlockedReason))
 	}
 
 	fmt.Println(labelStyle.Render("Started:"), valueStyle.Render(sess.StartedAt.Format("2006-01-02 15:04:05")))

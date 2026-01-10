@@ -81,7 +81,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	// Filter to non-complete balls
 	activeBalls := make([]*session.Session, 0)
 	for _, ball := range allBalls {
-		if ball.ActiveState != session.ActiveComplete {
+		if ball.State != session.StateComplete {
 			activeBalls = append(activeBalls, ball)
 		}
 	}
@@ -171,10 +171,10 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	// Try to identify current ball (most recently active non-done, non-planned ball in cwd)
 	var currentBallID string
 	if cwdBalls, ok := ballsByProject[cwd]; ok && len(cwdBalls) > 0 {
-		// Filter juggling balls in current project
+		// Filter in-progress balls in current project
 		activeBalls := make([]*session.Session, 0)
 		for _, ball := range cwdBalls {
-			if ball.ActiveState == session.ActiveJuggling {
+			if ball.State == session.StateInProgress {
 				activeBalls = append(activeBalls, ball)
 			}
 		}
@@ -198,10 +198,9 @@ func runStatus(cmd *cobra.Command, args []string) error {
 func renderGroupedSessions(ballsByProject map[string][]*session.Session, cwd string, currentBallID string) {
 	// Use consistent styles from styles.go
 	headerStyle := StyleHeader
-	activeStyle := StyleInAir        // In-air (actively working)
-	blockedStyle := StyleNeedsThrown // Needs-thrown (blocked/waiting)
-	reviewStyle := StyleNeedsCaught  // Needs-caught (needs review)
-	plannedStyle := StyleReady       // Ready (planned)
+	activeStyle := StyleInAir        // In-progress (actively working)
+	blockedStyle := StyleNeedsThrown // Blocked
+	plannedStyle := StyleReady       // Pending (planned)
 
 	// Get sorted project names
 	projectNames := make([]string, 0, len(ballsByProject))
@@ -230,27 +229,16 @@ func renderGroupedSessions(ballsByProject map[string][]*session.Session, cwd str
 			headerStyle.Render(padRight("INTENT", 40)),
 		)
 
-		// Sort balls by status priority: needs-review > blocked > active > planned
+		// Sort balls by status priority: in_progress > blocked > pending
 		sort.Slice(balls, func(i, j int) bool {
-			stateOrder := map[session.ActiveState]int{
-				session.ActiveJuggling: 0,
-				session.ActiveDropped:  1,
-				session.ActiveReady:    2,
+			stateOrder := map[session.BallState]int{
+				session.StateInProgress: 0,
+				session.StateBlocked:    1,
+				session.StatePending:    2,
 			}
-			// Primary sort by ActiveState
-			if stateOrder[balls[i].ActiveState] != stateOrder[balls[j].ActiveState] {
-				return stateOrder[balls[i].ActiveState] < stateOrder[balls[j].ActiveState]
-			}
-			// Secondary sort by JuggleState if both are juggling
-			if balls[i].ActiveState == session.ActiveJuggling && balls[j].ActiveState == session.ActiveJuggling {
-				if balls[i].JuggleState != nil && balls[j].JuggleState != nil {
-					juggleOrder := map[session.JuggleState]int{
-						session.JuggleNeedsCaught: 0,
-						session.JuggleNeedsThrown: 1,
-						session.JuggleInAir:       2,
-					}
-					return juggleOrder[*balls[i].JuggleState] < juggleOrder[*balls[j].JuggleState]
-				}
+			// Sort by state
+			if stateOrder[balls[i].State] != stateOrder[balls[j].State] {
+				return stateOrder[balls[i].State] < stateOrder[balls[j].State]
 			}
 			return false
 		})
@@ -260,23 +248,14 @@ func renderGroupedSessions(ballsByProject map[string][]*session.Session, cwd str
 			// State with color
 			var statusCell string
 			var statusStyle lipgloss.Style
-			stateStr := string(ball.ActiveState)
-			if ball.JuggleState != nil {
-				stateStr = stateStr + ":" + string(*ball.JuggleState)
-			}
-			
-			switch ball.ActiveState {
-			case session.ActiveJuggling:
-				if ball.JuggleState != nil && *ball.JuggleState == session.JuggleNeedsCaught {
-					statusStyle = reviewStyle
-				} else if ball.JuggleState != nil && *ball.JuggleState == session.JuggleNeedsThrown {
-					statusStyle = blockedStyle
-				} else {
-					statusStyle = activeStyle
-				}
-			case session.ActiveDropped:
+			stateStr := string(ball.State)
+
+			switch ball.State {
+			case session.StateInProgress:
+				statusStyle = activeStyle
+			case session.StateBlocked:
 				statusStyle = blockedStyle
-			case session.ActiveReady:
+			case session.StatePending:
 				statusStyle = plannedStyle
 			default:
 				statusStyle = lipgloss.NewStyle()

@@ -75,13 +75,22 @@ func styleBallByState(ball *session.Session, line string) string {
 }
 
 func truncate(s string, maxLen int) string {
+	if maxLen <= 0 {
+		return ""
+	}
 	if len(s) <= maxLen {
 		return s
+	}
+	if maxLen <= 3 {
+		return s[:maxLen]
 	}
 	return s[:maxLen-3] + "..."
 }
 
 func truncateID(id string, maxLen int) string {
+	if maxLen <= 0 {
+		return ""
+	}
 	if len(id) <= maxLen {
 		return id
 	}
@@ -92,7 +101,7 @@ func truncateID(id string, maxLen int) string {
 		projectName := parts[0]
 		// Calculate how many chars we have left: maxLen - projectName - "-..."
 		remainingChars := maxLen - len(projectName) - 4 // 4 for "-..."
-		if remainingChars > 0 {
+		if remainingChars > 0 && len(id) >= remainingChars {
 			lastChars := id[len(id)-remainingChars:]
 			return projectName + "-..." + lastChars
 		}

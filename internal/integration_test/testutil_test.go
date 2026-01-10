@@ -117,26 +117,13 @@ func (env *TestEnv) AssertSessionExists(t *testing.T, sessionID string) *session
 	return sess
 }
 
-// AssertActiveState checks that a session has the expected active state
-func (env *TestEnv) AssertActiveState(t *testing.T, sessionID string, expectedState session.ActiveState) {
+// AssertState checks that a session has the expected state
+func (env *TestEnv) AssertState(t *testing.T, sessionID string, expectedState session.BallState) {
 	t.Helper()
 
 	sess := env.AssertSessionExists(t, sessionID)
-	if sess.ActiveState != expectedState {
-		t.Fatalf("Expected session %s to have active state %s, but got %s", sessionID, expectedState, sess.ActiveState)
-	}
-}
-
-// AssertJuggleState checks that a session has the expected juggle state
-func (env *TestEnv) AssertJuggleState(t *testing.T, sessionID string, expectedState session.JuggleState) {
-	t.Helper()
-
-	sess := env.AssertSessionExists(t, sessionID)
-	if sess.JuggleState == nil {
-		t.Fatalf("Expected session %s to have juggle state %s, but got nil", sessionID, expectedState)
-	}
-	if *sess.JuggleState != expectedState {
-		t.Fatalf("Expected session %s to have juggle state %s, but got %s", sessionID, expectedState, *sess.JuggleState)
+	if sess.State != expectedState {
+		t.Fatalf("Expected session %s to have state %s, but got %s", sessionID, expectedState, sess.State)
 	}
 }
 
@@ -206,8 +193,8 @@ func (env *TestEnv) ClearEnvVar(t *testing.T, key string) {
 	})
 }
 
-// CreateJugglingBall creates a new session in juggling state for testing
-func (env *TestEnv) CreateJugglingBall(t *testing.T, intent string, priority session.Priority, juggleState session.JuggleState) *session.Session {
+// CreateInProgressBall creates a new session in in_progress state for testing
+func (env *TestEnv) CreateInProgressBall(t *testing.T, intent string, priority session.Priority) *session.Session {
 	t.Helper()
 
 	store := env.GetStore(t)
@@ -217,12 +204,11 @@ func (env *TestEnv) CreateJugglingBall(t *testing.T, intent string, priority ses
 		t.Fatalf("Failed to create session: %v", err)
 	}
 
-	// Set to juggling state
-	sess.SetActiveState(session.ActiveJuggling)
-	sess.SetJuggleState(juggleState, "")
+	// Set to in_progress state
+	sess.Start()
 
 	if err := store.AppendBall(sess); err != nil {
-		t.Fatalf("Failed to save juggling session: %v", err)
+		t.Fatalf("Failed to save in-progress session: %v", err)
 	}
 
 	return sess

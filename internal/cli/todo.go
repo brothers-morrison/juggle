@@ -137,27 +137,27 @@ func getCurrentBall(store *session.Store) (*session.Session, error) {
 		return ball, nil
 	}
 
-	// Try to get most recently active juggling ball
-	jugglingBalls, err := store.GetJugglingBalls()
-	if err != nil || len(jugglingBalls) == 0 {
+	// Try to get most recently active in-progress ball
+	inProgressBalls, err := store.GetInProgressBalls()
+	if err != nil || len(inProgressBalls) == 0 {
 		// Provide helpful error
 		balls, _ := store.LoadBalls()
 		activeBalls := 0
 		for _, b := range balls {
-			if b.ActiveState == session.ActiveJuggling || b.ActiveState == session.ActiveDropped {
+			if b.State == session.StateInProgress || b.State == session.StateBlocked {
 				activeBalls++
 			}
 		}
 
 		if activeBalls == 0 {
-			return nil, fmt.Errorf("no active balls found in current project. Use 'juggle <ball-id>' to start juggling")
+			return nil, fmt.Errorf("no active balls found in current project. Use 'juggle <ball-id>' to start one")
 		} else if activeBalls > 1 {
 			return nil, fmt.Errorf("multiple active balls found. Use --ball <id> to specify which one")
 		}
-		return nil, fmt.Errorf("no juggling balls found. Use --ball <id> to specify which ball")
+		return nil, fmt.Errorf("no in-progress balls found. Use --ball <id> to specify which ball")
 	}
 
-	return jugglingBalls[0], nil
+	return inProgressBalls[0], nil
 }
 
 func runTodoAdd(cmd *cobra.Command, args []string) error {

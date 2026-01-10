@@ -199,7 +199,7 @@ func TestLocalFlag(t *testing.T) {
 		// Filter to non-complete balls
 		activeBalls := make([]*session.Session, 0)
 		for _, ball := range allBalls {
-			if ball.ActiveState != session.ActiveComplete {
+			if ball.State != session.StateComplete {
 				activeBalls = append(activeBalls, ball)
 			}
 		}

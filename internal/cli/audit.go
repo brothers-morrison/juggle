@@ -19,29 +19,29 @@ var auditCmd = &cobra.Command{
 	Long: `Audit provides insights into your juggling workflow:
 
 - Completion ratios per project
-- Stale ready balls (>30 days old)
-- State distribution (ready/juggling/dropped/completed)
+- Stale pending balls (>30 days old)
+- State distribution (pending/in_progress/blocked/completed)
 - Actionable recommendations for improving workflow
 
 Use this to identify:
 - Projects with low completion rates
-- Balls that have been ready but never started
-- Patterns in dropped work`,
+- Balls that have been pending but never started
+- Patterns in blocked work`,
 	RunE: runAudit,
 }
 
 // ProjectMetrics holds calculated metrics for a project
 type ProjectMetrics struct {
-	Path              string
-	Name              string
-	ReadyCount        int
-	JugglingCount     int
-	DroppedCount      int
-	CompletedCount    int
-	CompletionRatio   float64
-	StaleReadyCount   int
-	StaleReadyBalls   []*session.Session
-	HasCompletedBalls bool
+	Path               string
+	Name               string
+	PendingCount       int
+	InProgressCount    int
+	BlockedCount       int
+	CompletedCount     int
+	CompletionRatio    float64
+	StalePendingCount  int
+	StalePendingBalls  []*session.Session
+	HasCompletedBalls  bool
 }
 
 const staleDays = 30
@@ -121,28 +121,28 @@ func calculateProjectMetrics(balls []*session.Session) map[string]*ProjectMetric
 		// Initialize project metrics if not exists
 		if _, exists := metricsMap[ball.WorkingDir]; !exists {
 			metricsMap[ball.WorkingDir] = &ProjectMetrics{
-				Path:            ball.WorkingDir,
-				Name:            ball.FolderName(),
-				StaleReadyBalls: make([]*session.Session, 0),
+				Path:              ball.WorkingDir,
+				Name:              ball.FolderName(),
+				StalePendingBalls: make([]*session.Session, 0),
 			}
 		}
 
 		metrics := metricsMap[ball.WorkingDir]
 
-		// Count by active state
-		switch ball.ActiveState {
-		case session.ActiveReady:
-			metrics.ReadyCount++
+		// Count by state
+		switch ball.State {
+		case session.StatePending:
+			metrics.PendingCount++
 			// Check if stale
 			if ball.StartedAt.Before(staleThreshold) {
-				metrics.StaleReadyCount++
-				metrics.StaleReadyBalls = append(metrics.StaleReadyBalls, ball)
+				metrics.StalePendingCount++
+				metrics.StalePendingBalls = append(metrics.StalePendingBalls, ball)
 			}
-		case session.ActiveJuggling:
-			metrics.JugglingCount++
-		case session.ActiveDropped:
-			metrics.DroppedCount++
-		case session.ActiveComplete:
+		case session.StateInProgress:
+			metrics.InProgressCount++
+		case session.StateBlocked:
+			metrics.BlockedCount++
+		case session.StateComplete:
 			metrics.CompletedCount++
 			metrics.HasCompletedBalls = true
 		}
@@ -159,7 +159,7 @@ func calculateProjectMetrics(balls []*session.Session) map[string]*ProjectMetric
 // calculateCompletionRatio computes the completion percentage
 // Formula: completed / (total_non_complete + completed) * 100
 func calculateCompletionRatio(metrics *ProjectMetrics) float64 {
-	totalNonComplete := metrics.ReadyCount + metrics.JugglingCount + metrics.DroppedCount
+	totalNonComplete := metrics.PendingCount + metrics.InProgressCount + metrics.BlockedCount
 	totalBalls := totalNonComplete + metrics.CompletedCount
 
 	if totalBalls == 0 {
@@ -200,26 +200,26 @@ func renderProjectMetrics(metrics *ProjectMetrics) {
 	fmt.Println(projectStyle.Render(metrics.Path + ":"))
 
 	// State counts
-	fmt.Printf("  Ready: %d\n", metrics.ReadyCount)
-	fmt.Printf("  Juggling: %d\n", metrics.JugglingCount)
-	fmt.Printf("  Dropped: %d\n", metrics.DroppedCount)
+	fmt.Printf("  Pending: %d\n", metrics.PendingCount)
+	fmt.Printf("  In Progress: %d\n", metrics.InProgressCount)
+	fmt.Printf("  Blocked: %d\n", metrics.BlockedCount)
 	fmt.Printf("  Completed: %d\n", metrics.CompletedCount)
 
 	// Completion ratio with warning
 	completionStr := formatCompletionRatio(metrics)
 	fmt.Printf("  Completion ratio: %s\n", completionStr)
 
-	// Stale ready balls
-	if metrics.StaleReadyCount > 0 {
+	// Stale pending balls
+	if metrics.StalePendingCount > 0 {
 		warningStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("11")) // Yellow
-		staleMsg := fmt.Sprintf("%d (>%d days old)", metrics.StaleReadyCount, staleDays)
-		fmt.Printf("  Stale ready balls: %s\n", warningStyle.Render(staleMsg))
+		staleMsg := fmt.Sprintf("%d (>%d days old)", metrics.StalePendingCount, staleDays)
+		fmt.Printf("  Stale pending balls: %s\n", warningStyle.Render(staleMsg))
 	}
 }
 
 // formatCompletionRatio formats the completion ratio with appropriate styling
 func formatCompletionRatio(metrics *ProjectMetrics) string {
-	totalBalls := metrics.ReadyCount + metrics.JugglingCount + metrics.DroppedCount + metrics.CompletedCount
+	totalBalls := metrics.PendingCount + metrics.InProgressCount + metrics.BlockedCount + metrics.CompletedCount
 	if totalBalls == 0 {
 		dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8")) // Gray
 		return dimStyle.Render("N/A (no balls)")
@@ -292,9 +292,9 @@ func generateRecommendations(metricsMap map[string]*ProjectMetrics, projectPaths
 			})
 		}
 
-		// Stale ready balls
-		if metrics.StaleReadyCount > 0 {
-			msg := fmt.Sprintf("%d stale ready balls - drop or start them", metrics.StaleReadyCount)
+		// Stale pending balls
+		if metrics.StalePendingCount > 0 {
+			msg := fmt.Sprintf("%d stale pending balls - block or start them", metrics.StalePendingCount)
 			recommendations = append(recommendations, Recommendation{
 				ProjectName: metrics.Name,
 				Message:     msg,
@@ -302,29 +302,29 @@ func generateRecommendations(metricsMap map[string]*ProjectMetrics, projectPaths
 			})
 		}
 
-		// High ready count without completions
-		if metrics.ReadyCount > 10 && !metrics.HasCompletedBalls {
+		// High pending count without completions
+		if metrics.PendingCount > 10 && !metrics.HasCompletedBalls {
 			recommendations = append(recommendations, Recommendation{
 				ProjectName: metrics.Name,
-				Message:     "Many ready balls but none completed - start working through them",
+				Message:     "Many pending balls but none completed - start working through them",
 				Priority:    2,
 			})
 		}
 
-		// High dropped count
-		if metrics.DroppedCount > 5 {
+		// High blocked count
+		if metrics.BlockedCount > 5 {
 			recommendations = append(recommendations, Recommendation{
 				ProjectName: metrics.Name,
-				Message:     fmt.Sprintf("%d dropped balls - review why work is being dropped", metrics.DroppedCount),
+				Message:     fmt.Sprintf("%d blocked balls - review why work is blocked", metrics.BlockedCount),
 				Priority:    1,
 			})
 		}
 
-		// Many juggling but none completed
-		if metrics.JugglingCount > 5 && metrics.CompletedCount == 0 {
+		// Many in progress but none completed
+		if metrics.InProgressCount > 5 && metrics.CompletedCount == 0 {
 			recommendations = append(recommendations, Recommendation{
 				ProjectName: metrics.Name,
-				Message:     "Many balls juggling - consider completing some before starting more",
+				Message:     "Many balls in progress - consider completing some before starting more",
 				Priority:    2,
 			})
 		}

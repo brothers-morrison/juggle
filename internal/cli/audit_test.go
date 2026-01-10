@@ -16,9 +16,9 @@ func TestCalculateCompletionRatio(t *testing.T) {
 		{
 			name: "50% completion",
 			metrics: &ProjectMetrics{
-				ReadyCount:     5,
-				JugglingCount:  3,
-				DroppedCount:   2,
+				PendingCount:     5,
+				InProgressCount:  3,
+				BlockedCount:   2,
 				CompletedCount: 10,
 			},
 			expected: 50.0,
@@ -26,9 +26,9 @@ func TestCalculateCompletionRatio(t *testing.T) {
 		{
 			name: "100% completion",
 			metrics: &ProjectMetrics{
-				ReadyCount:     0,
-				JugglingCount:  0,
-				DroppedCount:   0,
+				PendingCount:     0,
+				InProgressCount:  0,
+				BlockedCount:   0,
 				CompletedCount: 10,
 			},
 			expected: 100.0,
@@ -36,9 +36,9 @@ func TestCalculateCompletionRatio(t *testing.T) {
 		{
 			name: "0% completion",
 			metrics: &ProjectMetrics{
-				ReadyCount:     5,
-				JugglingCount:  3,
-				DroppedCount:   2,
+				PendingCount:     5,
+				InProgressCount:  3,
+				BlockedCount:   2,
 				CompletedCount: 0,
 			},
 			expected: 0.0,
@@ -46,9 +46,9 @@ func TestCalculateCompletionRatio(t *testing.T) {
 		{
 			name: "no balls",
 			metrics: &ProjectMetrics{
-				ReadyCount:     0,
-				JugglingCount:  0,
-				DroppedCount:   0,
+				PendingCount:     0,
+				InProgressCount:  0,
+				BlockedCount:   0,
 				CompletedCount: 0,
 			},
 			expected: 0.0,
@@ -56,9 +56,9 @@ func TestCalculateCompletionRatio(t *testing.T) {
 		{
 			name: "low completion 20%",
 			metrics: &ProjectMetrics{
-				ReadyCount:     20,
-				JugglingCount:  10,
-				DroppedCount:   10,
+				PendingCount:     20,
+				InProgressCount:  10,
+				BlockedCount:   10,
 				CompletedCount: 10,
 			},
 			expected: 20.0,
@@ -66,9 +66,9 @@ func TestCalculateCompletionRatio(t *testing.T) {
 		{
 			name: "high completion 80%",
 			metrics: &ProjectMetrics{
-				ReadyCount:     2,
-				JugglingCount:  1,
-				DroppedCount:   2,
+				PendingCount:     2,
+				InProgressCount:  1,
+				BlockedCount:   2,
 				CompletedCount: 20,
 			},
 			expected: 80.0,
@@ -92,15 +92,15 @@ func TestCalculateProjectMetrics(t *testing.T) {
 
 	balls := []*session.Session{
 		// Project A
-		createTestBall(t, "project-a", "/path/to/a", session.ActiveReady, recentTime),
-		createTestBall(t, "project-a", "/path/to/a", session.ActiveReady, staleTime),
-		createTestBall(t, "project-a", "/path/to/a", session.ActiveJuggling, now),
-		createTestBall(t, "project-a", "/path/to/a", session.ActiveComplete, now),
-		createTestBall(t, "project-a", "/path/to/a", session.ActiveDropped, now),
+		createTestBall(t, "project-a", "/path/to/a", session.StatePending, recentTime),
+		createTestBall(t, "project-a", "/path/to/a", session.StatePending, staleTime),
+		createTestBall(t, "project-a", "/path/to/a", session.StateInProgress, now),
+		createTestBall(t, "project-a", "/path/to/a", session.StateComplete, now),
+		createTestBall(t, "project-a", "/path/to/a", session.StateBlocked, now),
 		// Project B
-		createTestBall(t, "project-b", "/path/to/b", session.ActiveReady, staleTime),
-		createTestBall(t, "project-b", "/path/to/b", session.ActiveReady, staleTime),
-		createTestBall(t, "project-b", "/path/to/b", session.ActiveComplete, now),
+		createTestBall(t, "project-b", "/path/to/b", session.StatePending, staleTime),
+		createTestBall(t, "project-b", "/path/to/b", session.StatePending, staleTime),
+		createTestBall(t, "project-b", "/path/to/b", session.StateComplete, now),
 	}
 
 	metricsMap := calculateProjectMetrics(balls)
@@ -110,20 +110,20 @@ func TestCalculateProjectMetrics(t *testing.T) {
 	if metricsA == nil {
 		t.Fatal("expected metrics for project A")
 	}
-	if metricsA.ReadyCount != 2 {
-		t.Errorf("project A: expected 2 ready, got %d", metricsA.ReadyCount)
+	if metricsA.PendingCount != 2 {
+		t.Errorf("project A: expected 2 pending, got %d", metricsA.PendingCount)
 	}
-	if metricsA.JugglingCount != 1 {
-		t.Errorf("project A: expected 1 juggling, got %d", metricsA.JugglingCount)
+	if metricsA.InProgressCount != 1 {
+		t.Errorf("project A: expected 1 in-progress, got %d", metricsA.InProgressCount)
 	}
 	if metricsA.CompletedCount != 1 {
 		t.Errorf("project A: expected 1 completed, got %d", metricsA.CompletedCount)
 	}
-	if metricsA.DroppedCount != 1 {
-		t.Errorf("project A: expected 1 dropped, got %d", metricsA.DroppedCount)
+	if metricsA.BlockedCount != 1 {
+		t.Errorf("project A: expected 1 blocked, got %d", metricsA.BlockedCount)
 	}
-	if metricsA.StaleReadyCount != 1 {
-		t.Errorf("project A: expected 1 stale ready, got %d", metricsA.StaleReadyCount)
+	if metricsA.StalePendingCount != 1 {
+		t.Errorf("project A: expected 1 stale pending, got %d", metricsA.StalePendingCount)
 	}
 	if !metricsA.HasCompletedBalls {
 		t.Error("project A: expected HasCompletedBalls to be true")
@@ -134,14 +134,14 @@ func TestCalculateProjectMetrics(t *testing.T) {
 	if metricsB == nil {
 		t.Fatal("expected metrics for project B")
 	}
-	if metricsB.ReadyCount != 2 {
-		t.Errorf("project B: expected 2 ready, got %d", metricsB.ReadyCount)
+	if metricsB.PendingCount != 2 {
+		t.Errorf("project B: expected 2 pending, got %d", metricsB.PendingCount)
 	}
 	if metricsB.CompletedCount != 1 {
 		t.Errorf("project B: expected 1 completed, got %d", metricsB.CompletedCount)
 	}
-	if metricsB.StaleReadyCount != 2 {
-		t.Errorf("project B: expected 2 stale ready, got %d", metricsB.StaleReadyCount)
+	if metricsB.StalePendingCount != 2 {
+		t.Errorf("project B: expected 2 stale pending, got %d", metricsB.StalePendingCount)
 	}
 
 	// Verify completion ratios
@@ -169,12 +169,12 @@ func TestGenerateRecommendations(t *testing.T) {
 			metricsMap: map[string]*ProjectMetrics{
 				"/path/to/healthy": {
 					Name:              "healthy",
-					ReadyCount:        2,
-					JugglingCount:     1,
+					PendingCount:        2,
+					InProgressCount:     1,
 					CompletedCount:    10,
 					HasCompletedBalls: true,
 					CompletionRatio:   76.9,
-					StaleReadyCount:   0,
+					StalePendingCount:   0,
 				},
 			},
 			projectPaths:     []string{"/path/to/healthy"},
@@ -186,12 +186,12 @@ func TestGenerateRecommendations(t *testing.T) {
 			metricsMap: map[string]*ProjectMetrics{
 				"/path/to/low": {
 					Name:              "low",
-					ReadyCount:        10,
-					JugglingCount:     5,
+					PendingCount:        10,
+					InProgressCount:     5,
 					CompletedCount:    3,
 					HasCompletedBalls: true,
 					CompletionRatio:   16.7,
-					StaleReadyCount:   0,
+					StalePendingCount:   0,
 				},
 			},
 			projectPaths:     []string{"/path/to/low"},
@@ -199,73 +199,73 @@ func TestGenerateRecommendations(t *testing.T) {
 			expectedContains: []string{"Low completion rate"},
 		},
 		{
-			name: "stale ready balls",
+			name: "stale pending balls",
 			metricsMap: map[string]*ProjectMetrics{
 				"/path/to/stale": {
 					Name:              "stale",
-					ReadyCount:        5,
-					JugglingCount:     1,
+					PendingCount:        5,
+					InProgressCount:     1,
 					CompletedCount:    10,
 					HasCompletedBalls: true,
 					CompletionRatio:   62.5,
-					StaleReadyCount:   3,
+					StalePendingCount:   3,
 				},
 			},
 			projectPaths:     []string{"/path/to/stale"},
 			expectedCount:    1,
-			expectedContains: []string{"3 stale ready balls"},
+			expectedContains: []string{"3 stale pending balls"},
 		},
 		{
 			name: "multiple issues",
 			metricsMap: map[string]*ProjectMetrics{
 				"/path/to/problem": {
 					Name:              "problem",
-					ReadyCount:        15,
-					JugglingCount:     10,
-					DroppedCount:      8,
+					PendingCount:        15,
+					InProgressCount:     10,
+					BlockedCount:      8,
 					CompletedCount:    2,
 					HasCompletedBalls: true,
 					CompletionRatio:   5.7,
-					StaleReadyCount:   5,
+					StalePendingCount:   5,
 				},
 			},
 			projectPaths:     []string{"/path/to/problem"},
-			expectedCount:    3, // low completion, stale balls, high dropped
-			expectedContains: []string{"Low completion rate", "5 stale ready balls", "dropped balls"},
+			expectedCount:    3, // low completion, stale balls, high blocked
+			expectedContains: []string{"Low completion rate", "5 stale pending balls", "blocked balls"},
 		},
 		{
-			name: "many ready without completions",
+			name: "many pending without completions",
 			metricsMap: map[string]*ProjectMetrics{
 				"/path/to/nostart": {
 					Name:              "nostart",
-					ReadyCount:        15,
-					JugglingCount:     0,
+					PendingCount:        15,
+					InProgressCount:     0,
 					CompletedCount:    0,
 					HasCompletedBalls: false,
 					CompletionRatio:   0,
-					StaleReadyCount:   0,
+					StalePendingCount:   0,
 				},
 			},
 			projectPaths:     []string{"/path/to/nostart"},
 			expectedCount:    1,
-			expectedContains: []string{"Many ready balls but none completed"},
+			expectedContains: []string{"Many pending balls but none completed"},
 		},
 		{
-			name: "many juggling without completions",
+			name: "many in-progress without completions",
 			metricsMap: map[string]*ProjectMetrics{
-				"/path/to/juggling": {
-					Name:              "juggling",
-					ReadyCount:        2,
-					JugglingCount:     8,
+				"/path/to/in-progress": {
+					Name:              "in-progress",
+					PendingCount:        2,
+					InProgressCount:     8,
 					CompletedCount:    0,
 					HasCompletedBalls: false,
 					CompletionRatio:   0,
-					StaleReadyCount:   0,
+					StalePendingCount:   0,
 				},
 			},
-			projectPaths:     []string{"/path/to/juggling"},
+			projectPaths:     []string{"/path/to/in-progress"},
 			expectedCount:    1,
-			expectedContains: []string{"Many balls juggling"},
+			expectedContains: []string{"Many balls in progress"},
 		},
 	}
 
@@ -303,7 +303,7 @@ func TestFormatCompletionRatio(t *testing.T) {
 		{
 			name: "no completed balls",
 			metrics: &ProjectMetrics{
-				ReadyCount:        5,
+				PendingCount:        5,
 				HasCompletedBalls: false,
 			},
 			expectedContain: "no completed balls yet",
@@ -311,9 +311,9 @@ func TestFormatCompletionRatio(t *testing.T) {
 		{
 			name: "no balls at all",
 			metrics: &ProjectMetrics{
-				ReadyCount:        0,
-				JugglingCount:     0,
-				DroppedCount:      0,
+				PendingCount:        0,
+				InProgressCount:     0,
+				BlockedCount:      0,
 				CompletedCount:    0,
 				HasCompletedBalls: false,
 			},
@@ -322,7 +322,7 @@ func TestFormatCompletionRatio(t *testing.T) {
 		{
 			name: "low completion with warning",
 			metrics: &ProjectMetrics{
-				ReadyCount:        20,
+				PendingCount:        20,
 				CompletedCount:    5,
 				HasCompletedBalls: true,
 				CompletionRatio:   20.0,
@@ -332,7 +332,7 @@ func TestFormatCompletionRatio(t *testing.T) {
 		{
 			name: "healthy completion no warning",
 			metrics: &ProjectMetrics{
-				ReadyCount:        5,
+				PendingCount:        5,
 				CompletedCount:    20,
 				HasCompletedBalls: true,
 				CompletionRatio:   80.0,
@@ -351,46 +351,46 @@ func TestFormatCompletionRatio(t *testing.T) {
 	}
 }
 
-func TestStaleReadyDetection(t *testing.T) {
+func TestStalePendingDetection(t *testing.T) {
 	now := time.Now()
 	recentTime := now.Add(-10 * 24 * time.Hour)  // 10 days ago - not stale
 	staleTime := now.Add(-35 * 24 * time.Hour)   // 35 days ago - stale
 	veryStaleTime := now.Add(-90 * 24 * time.Hour) // 90 days ago - very stale
 
 	balls := []*session.Session{
-		createTestBall(t, "project", "/path/to/project", session.ActiveReady, recentTime),
-		createTestBall(t, "project", "/path/to/project", session.ActiveReady, staleTime),
-		createTestBall(t, "project", "/path/to/project", session.ActiveReady, veryStaleTime),
-		createTestBall(t, "project", "/path/to/project", session.ActiveJuggling, staleTime), // Not counted as stale (not ready)
+		createTestBall(t, "project", "/path/to/project", session.StatePending, recentTime),
+		createTestBall(t, "project", "/path/to/project", session.StatePending, staleTime),
+		createTestBall(t, "project", "/path/to/project", session.StatePending, veryStaleTime),
+		createTestBall(t, "project", "/path/to/project", session.StateInProgress, staleTime), // Not counted as stale (not pending)
 	}
 
 	metricsMap := calculateProjectMetrics(balls)
 	metrics := metricsMap["/path/to/project"]
 
-	if metrics.ReadyCount != 3 {
-		t.Errorf("expected 3 ready balls, got %d", metrics.ReadyCount)
+	if metrics.PendingCount != 3 {
+		t.Errorf("expected 3 pending balls, got %d", metrics.PendingCount)
 	}
 
-	if metrics.StaleReadyCount != 2 {
-		t.Errorf("expected 2 stale ready balls, got %d", metrics.StaleReadyCount)
+	if metrics.StalePendingCount != 2 {
+		t.Errorf("expected 2 stale pending balls, got %d", metrics.StalePendingCount)
 	}
 
-	if len(metrics.StaleReadyBalls) != 2 {
-		t.Errorf("expected 2 stale ready balls in array, got %d", len(metrics.StaleReadyBalls))
+	if len(metrics.StalePendingBalls) != 2 {
+		t.Errorf("expected 2 stale pending balls in array, got %d", len(metrics.StalePendingBalls))
 	}
 }
 
 // Helper functions
 
-func createTestBall(t *testing.T, name, workingDir string, state session.ActiveState, startedAt time.Time) *session.Session {
+func createTestBall(t *testing.T, name, workingDir string, state session.BallState, startedAt time.Time) *session.Session {
 	t.Helper()
 	return &session.Session{
-		ID:          name + "-1",
-		WorkingDir:  workingDir,
-		Intent:      "Test ball",
-		Priority:    session.PriorityMedium,
-		ActiveState: state,
-		StartedAt:   startedAt,
+		ID:         name + "-1",
+		WorkingDir: workingDir,
+		Intent:     "Test ball",
+		Priority:   session.PriorityMedium,
+		State:      state,
+		StartedAt:  startedAt,
 	}
 }
 

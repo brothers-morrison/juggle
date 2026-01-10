@@ -75,8 +75,6 @@ func listJugglingBalls(cmd *cobra.Command) error {
 	fmt.Printf("\n🎯 Currently Juggling (%d ball%s)\n\n", len(juggling), pluralize(len(juggling)))
 
 	// Use consistent styles from styles.go
-	needsCaughtStyle := StyleNeedsCaught
-	needsThrownStyle := StyleNeedsThrown
 	inAirStyle := StyleInAir
 	cwdHighlight := StyleHighlight
 	projectStyle := StyleProject
@@ -97,22 +95,9 @@ func listJugglingBalls(cmd *cobra.Command) error {
 	}
 
 	for _, ball := range juggling {
-		// Determine style based on juggle state
-		var stateStr string
-		var stateStyle lipgloss.Style
-		if ball.JuggleState != nil {
-			switch *ball.JuggleState {
-			case session.JuggleNeedsCaught:
-				stateStr = "needs-caught"
-				stateStyle = needsCaughtStyle
-			case session.JuggleNeedsThrown:
-				stateStr = "needs-thrown"
-				stateStyle = needsThrownStyle
-			case session.JuggleInAir:
-				stateStr = "in-air"
-				stateStyle = inAirStyle
-			}
-		}
+		// Determine style based on state
+		stateStr := string(ball.State)
+		stateStyle := inAirStyle // in_progress uses in-air style
 
 		// Format columns without styling first (for padding)
 		idStr := ball.ShortID()
@@ -133,10 +118,10 @@ func listJugglingBalls(cmd *cobra.Command) error {
 		statePadded = stateStyle.Render(statePadded)
 		priorityPadded = GetPriorityStyle(priorityStr).Render(priorityPadded)
 
-		// Build the line with optional state message and todo count
+		// Build the line with optional blocked reason and todo count
 		intentDisplay := ball.Intent
-		if ball.StateMessage != "" {
-			intentDisplay = fmt.Sprintf("%s %s", ball.Intent, dimStyle.Render("("+ball.StateMessage+")"))
+		if ball.BlockedReason != "" {
+			intentDisplay = fmt.Sprintf("%s %s", ball.Intent, dimStyle.Render("("+ball.BlockedReason+")"))
 		}
 
 		// Add todo completion summary if todos exist
@@ -224,11 +209,11 @@ func listAllBalls(cmd *cobra.Command) error {
 	droppedStyle := StyleDropped
 	completeStyle := StyleComplete
 
-	stateStyles := map[session.ActiveState]lipgloss.Style{
-		session.ActiveJuggling: jugglingStyle,
-		session.ActiveReady:    readyStyle,
-		session.ActiveDropped:  droppedStyle,
-		session.ActiveComplete: completeStyle,
+	stateStyles := map[session.BallState]lipgloss.Style{
+		session.StateInProgress: jugglingStyle,
+		session.StatePending:    readyStyle,
+		session.StateBlocked:    droppedStyle,
+		session.StateComplete:   completeStyle,
 	}
 
 	// Sort projects for consistent ordering
@@ -236,7 +221,7 @@ func listAllBalls(cmd *cobra.Command) error {
 	for path := range byProject {
 		projectPaths = append(projectPaths, path)
 	}
-	
+
 	// Calculate max ID length across all balls for consistent alignment
 	maxIDLen := 0
 	for _, ball := range allBalls {
@@ -245,29 +230,29 @@ func listAllBalls(cmd *cobra.Command) error {
 			maxIDLen = idLen
 		}
 	}
-	
+
 	// Display each project
 	for _, projectPath := range projectPaths {
 		balls := byProject[projectPath]
 		projectName := filepath.Base(projectPath)
-		
-		fmt.Printf("\n%s (%d ball%s)\n\n", 
-			projectStyle.Render(projectName), 
-			len(balls), 
+
+		fmt.Printf("\n%s (%d ball%s)\n\n",
+			projectStyle.Render(projectName),
+			len(balls),
 			pluralize(len(balls)))
 
 		// Group by state within project
-		byState := make(map[session.ActiveState][]*session.Session)
+		byState := make(map[session.BallState][]*session.Session)
 		for _, ball := range balls {
-			byState[ball.ActiveState] = append(byState[ball.ActiveState], ball)
+			byState[ball.State] = append(byState[ball.State], ball)
 		}
 
 		// Display in state order
-		stateOrder := []session.ActiveState{
-			session.ActiveJuggling,
-			session.ActiveReady,
-			session.ActiveDropped,
-			session.ActiveComplete,
+		stateOrder := []session.BallState{
+			session.StateInProgress,
+			session.StatePending,
+			session.StateBlocked,
+			session.StateComplete,
 		}
 
 		for _, state := range stateOrder {
@@ -279,23 +264,7 @@ func listAllBalls(cmd *cobra.Command) error {
 			for _, ball := range stateBalls {
 				// Determine state string and style
 				stateStr := string(state)
-				var stateStyle lipgloss.Style
-				
-				if state == session.ActiveJuggling && ball.JuggleState != nil {
-					stateStr = string(*ball.JuggleState)
-					// Use juggle state colors
-					switch *ball.JuggleState {
-					case session.JuggleNeedsCaught:
-						stateStyle = StyleNeedsCaught
-					case session.JuggleNeedsThrown:
-						stateStyle = StyleNeedsThrown
-					case session.JuggleInAir:
-						stateStyle = StyleInAir
-					}
-				} else {
-					// Use active state colors
-					stateStyle = stateStyles[state]
-				}
+				stateStyle := stateStyles[state]
 
 				// Format columns without styling first (for padding)
 				idStr := ball.ShortID()
@@ -313,11 +282,11 @@ func listAllBalls(cmd *cobra.Command) error {
 				statePadded = stateStyle.Render(statePadded)
 				priorityPadded = GetPriorityStyle(priorityStr).Render(priorityPadded)
 
-				// Build the line with optional state message and todo count
+				// Build the line with optional blocked reason and todo count
 				intentDisplay := ball.Intent
-				if ball.StateMessage != "" {
+				if ball.BlockedReason != "" {
 					dimStyle := StyleDim
-					intentDisplay = fmt.Sprintf("%s %s", ball.Intent, dimStyle.Render("("+ball.StateMessage+")"))
+					intentDisplay = fmt.Sprintf("%s %s", ball.Intent, dimStyle.Render("("+ball.BlockedReason+")"))
 				}
 
 				// Add todo completion summary if todos exist
@@ -425,9 +394,6 @@ func handleBallCommand(cmd *cobra.Command, args []string) error {
 		return setBallComplete(ball, operationArgs, store)
 	case "blocked":
 		return setBallBlocked(ball, operationArgs, store)
-	// Legacy juggle state commands (kept for backward compatibility)
-	case "needs-thrown", "needs-caught", "in-air":
-		return setBallJuggleState(ball, operation, operationArgs, store)
 	// Legacy active state commands (aliased to new states)
 	case "ready":
 		return setBallState(ball, session.StatePending, operationArgs, store)
@@ -446,105 +412,23 @@ func handleBallCommand(cmd *cobra.Command, args []string) error {
 	}
 }
 
-// activateBall transitions a ready ball to juggling:needs-thrown
+// activateBall transitions a pending ball to in_progress
 func activateBall(ball *session.Session, store *session.Store) error {
-	// If ball is already juggling (or in any non-ready state), show its details
-	if ball.ActiveState != session.ActiveReady {
+	// If ball is already in progress (or any non-pending state), show its details
+	if ball.State != session.StatePending {
 		renderSessionDetails(ball)
 		return nil
 	}
 
-	ball.StartJuggling()
+	ball.Start()
 
 	if err := store.Save(ball); err != nil {
 		return fmt.Errorf("failed to save ball: %w", err)
 	}
 
-	fmt.Printf("✓ Started juggling ball: %s\n", ball.ID)
-	fmt.Printf("  State: juggling:needs-thrown\n")
+	fmt.Printf("✓ Started ball: %s\n", ball.ID)
+	fmt.Printf("  State: in_progress\n")
 	fmt.Printf("  Intent: %s\n", ball.Intent)
-
-	return nil
-}
-
-// setBallJuggleState sets the juggle state with optional message
-func setBallJuggleState(ball *session.Session, state string, args []string, store *session.Store) error {
-	// Auto-transition ready balls to juggling state
-	wasReady := ball.ActiveState == session.ActiveReady
-	if wasReady {
-		ball.StartJuggling()
-	} else if ball.ActiveState != session.ActiveJuggling {
-		return fmt.Errorf("ball cannot transition to juggle state from %s (only ready and juggling states allowed)", ball.ActiveState)
-	}
-
-	message := ""
-	if len(args) > 0 {
-		message = strings.Join(args, " ")
-	}
-
-	var juggleState session.JuggleState
-	switch state {
-	case "needs-thrown":
-		juggleState = session.JuggleNeedsThrown
-	case "in-air":
-		juggleState = session.JuggleInAir
-	case "needs-caught":
-		juggleState = session.JuggleNeedsCaught
-	}
-
-	ball.SetJuggleState(juggleState, message)
-	
-	if err := store.Save(ball); err != nil {
-		return fmt.Errorf("failed to save ball: %w", err)
-	}
-
-	if wasReady {
-		fmt.Printf("✓ Ball %s → juggling:%s (auto-activated from ready)\n", ball.ShortID(), state)
-	} else {
-		fmt.Printf("✓ Ball %s → %s\n", ball.ShortID(), state)
-	}
-	if message != "" {
-		fmt.Printf("  Message: %s\n", message)
-	}
-	
-	return nil
-}
-
-// setBallActiveState sets the active state
-// DEPRECATED: Use setBallState, setBallComplete, or setBallBlocked instead.
-func setBallActiveState(ball *session.Session, state string, args []string, store *session.Store) error {
-	var activeState session.ActiveState
-	switch state {
-	case "ready":
-		activeState = session.ActiveReady
-	case "drop":
-		activeState = session.ActiveDropped
-	case "complete":
-		activeState = session.ActiveComplete
-	}
-
-	if state == "complete" {
-		note := ""
-		if len(args) > 0 {
-			note = strings.Join(args, " ")
-		}
-		ball.MarkComplete(note)
-	} else {
-		ball.SetActiveState(activeState)
-	}
-
-	if err := store.Save(ball); err != nil {
-		return fmt.Errorf("failed to save ball: %w", err)
-	}
-
-	fmt.Printf("✓ Ball %s → %s\n", ball.ShortID(), state)
-
-	// Archive if complete
-	if state == "complete" {
-		if err := store.ArchiveBall(ball); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to archive ball: %v\n", err)
-		}
-	}
 
 	return nil
 }
@@ -855,11 +739,7 @@ func handleBallDelete(ball *session.Session, args []string, store *session.Store
 	fmt.Printf("  ID: %s\n", ball.ID)
 	fmt.Printf("  Intent: %s\n", ball.Intent)
 	fmt.Printf("  Priority: %s\n", ball.Priority)
-	fmt.Printf("  State: %s", ball.ActiveState)
-	if ball.ActiveState == session.ActiveJuggling && ball.JuggleState != nil {
-		fmt.Printf(" (%s)", *ball.JuggleState)
-	}
-	fmt.Printf("\n")
+	fmt.Printf("  State: %s\n", ball.State)
 	if len(ball.Todos) > 0 {
 		fmt.Printf("  Todos: %d items\n", len(ball.Todos))
 	}

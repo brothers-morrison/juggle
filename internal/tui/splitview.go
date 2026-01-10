@@ -51,6 +51,11 @@ var (
 
 // renderSplitView renders the three-panel split view
 func (m Model) renderSplitView() string {
+	// Guard against rendering before window size is received
+	if m.width < minLeftWidth+minRightWidth+10 || m.height < bottomPanelRows+10 {
+		return "Loading..."
+	}
+
 	// Calculate dimensions
 	mainHeight := m.height - bottomPanelRows - 4 // Account for borders and status
 	leftWidth := int(float64(m.width) * leftPanelRatio)

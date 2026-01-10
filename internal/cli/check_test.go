@@ -125,7 +125,7 @@ func TestCheckCommand_SingleJugglingBall(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create ball: %v", err)
 	}
-	ball.StartJuggling()
+	ball.Start()
 
 	if err := store.AppendBall(ball); err != nil {
 		t.Fatalf("failed to save ball: %v", err)
@@ -174,7 +174,7 @@ func TestCheckCommand_MultipleJugglingBalls(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create ball1: %v", err)
 	}
-	ball1.StartJuggling()
+	ball1.Start()
 	if err := store.AppendBall(ball1); err != nil {
 		t.Fatalf("failed to save ball1: %v", err)
 	}
@@ -186,7 +186,7 @@ func TestCheckCommand_MultipleJugglingBalls(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create ball2: %v", err)
 	}
-	ball2.StartJuggling()
+	ball2.Start()
 	if err := store.AppendBall(ball2); err != nil {
 		t.Fatalf("failed to save ball2: %v", err)
 	}
@@ -248,7 +248,7 @@ func TestCheckCommand_MixedStates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create juggling ball: %v", err)
 	}
-	jugglingBall.StartJuggling()
+	jugglingBall.Start()
 	if err := store.AppendBall(jugglingBall); err != nil {
 		t.Fatalf("failed to save juggling ball: %v", err)
 	}

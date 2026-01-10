@@ -15,7 +15,7 @@ func TestBasicSessionLifecycle(t *testing.T) {
 
 	// Verify it exists
 	env.AssertSessionExists(t, sess.ID)
-	env.AssertActiveState(t, sess.ID, session.ActiveReady)
+	env.AssertState(t, sess.ID, session.StatePending)
 }
 
 func TestMultipleSessions(t *testing.T) {
@@ -234,27 +234,24 @@ func TestDeleteNonExistentBall(t *testing.T) {
 	env.AssertSessionExists(t, sess.ID)
 }
 
-func TestReadyBallJuggleStateTransition(t *testing.T) {
+func TestPendingBallStateTransition(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	// Create a session in ready state
-	sess := env.CreateSession(t, "Test ready to juggling transition", session.PriorityMedium)
-	
-	// Verify initial state is ready
-	env.AssertActiveState(t, sess.ID, session.ActiveReady)
+	// Create a session in pending state
+	sess := env.CreateSession(t, "Test pending to in_progress transition", session.PriorityMedium)
 
-	// Simulate what CLI does: call StartJuggling then SetJuggleState
-	// This tests that the auto-transition logic works
-	sess.StartJuggling()
-	sess.SetJuggleState(session.JuggleInAir, "")
-	
+	// Verify initial state is pending
+	env.AssertState(t, sess.ID, session.StatePending)
+
+	// Start the ball (transition to in_progress)
+	sess.Start()
+
 	store := env.GetStore(t)
 	if err := store.UpdateBall(sess); err != nil {
 		t.Fatalf("Failed to save session: %v", err)
 	}
 
-	// Verify final state is juggling:in-air
-	env.AssertActiveState(t, sess.ID, session.ActiveJuggling)
-	env.AssertJuggleState(t, sess.ID, session.JuggleInAir)
+	// Verify final state is in_progress
+	env.AssertState(t, sess.ID, session.StateInProgress)
 }

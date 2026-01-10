@@ -46,23 +46,6 @@ const (
 	StateBlocked    BallState = "blocked"
 )
 
-// Legacy type aliases for backward compatibility during migration
-// TODO: Remove these after all code is updated
-type ActiveState = BallState
-type JuggleState = BallState
-
-// Legacy constants mapped to new states
-const (
-	ActiveReady     = StatePending
-	ActiveJuggling  = StateInProgress
-	ActiveDropped   = StateBlocked // Dropped maps to blocked
-	ActiveComplete  = StateComplete
-
-	// JuggleState constants - all map to in_progress in new model
-	JuggleNeedsThrown JuggleState = "needs-thrown" // Legacy - will be migrated
-	JuggleInAir       JuggleState = "in-air"       // Legacy - will be migrated
-	JuggleNeedsCaught JuggleState = "needs-caught" // Legacy - will be migrated
-)
 
 // Session represents a work session (ball) being tracked
 type Session struct {
@@ -82,12 +65,8 @@ type Session struct {
 	CompletionNote     string      `json:"completion_note,omitempty"`
 	ModelSize          ModelSize   `json:"model_size,omitempty"` // Preferred LLM model size for cost optimization
 
-	// Legacy fields - kept for backward compatibility with existing code
-	// TODO: Remove after full migration
+	// Legacy field for backward compatibility - use AcceptanceCriteria instead
 	Description  string       `json:"-"` // DEPRECATED: Use AcceptanceCriteria instead
-	ActiveState  ActiveState  `json:"-"` // Computed from State for legacy code
-	JuggleState  *JuggleState `json:"-"` // Always nil in new model
-	StateMessage string       `json:"-"` // Maps to BlockedReason for legacy code
 }
 
 // UnmarshalJSON implements custom unmarshaling to handle migration from old format
@@ -173,9 +152,6 @@ func (s *Session) UnmarshalJSON(data []byte) error {
 		s.State = StatePending
 	}
 
-	// Set legacy fields for backward compatibility with existing code
-	s.syncLegacyFields()
-
 	// Handle todos migration: support both []string (old) and []Todo (new)
 	if len(sj.Todos) > 0 {
 		// Try parsing as []Todo first
@@ -200,26 +176,6 @@ func (s *Session) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
-}
-
-// syncLegacyFields populates legacy fields from new State field
-// This allows existing code to continue using ActiveState/JuggleState
-func (s *Session) syncLegacyFields() {
-	switch s.State {
-	case StatePending:
-		s.ActiveState = ActiveReady
-	case StateInProgress:
-		s.ActiveState = ActiveJuggling
-		inAir := JuggleInAir
-		s.JuggleState = &inAir
-	case StateBlocked:
-		s.ActiveState = ActiveDropped
-		s.StateMessage = s.BlockedReason
-	case StateComplete:
-		s.ActiveState = ActiveComplete
-	default:
-		s.ActiveState = ActiveReady
-	}
 }
 
 // sessionJSON is used for custom JSON unmarshaling to handle migration from old format
@@ -269,7 +225,6 @@ func New(workingDir, intent string, priority Priority) (*Session, error) {
 		Todos:        []Todo{},
 		Tags:         []string{},
 	}
-	sess.syncLegacyFields()
 	return sess, nil
 }
 
@@ -306,7 +261,6 @@ func (s *Session) SetState(state BallState) {
 	if state != StateBlocked {
 		s.BlockedReason = ""
 	}
-	s.syncLegacyFields()
 	s.UpdateActivity()
 }
 
@@ -314,34 +268,6 @@ func (s *Session) SetState(state BallState) {
 func (s *Session) SetBlocked(reason string) {
 	s.State = StateBlocked
 	s.BlockedReason = reason
-	s.syncLegacyFields()
-	s.UpdateActivity()
-}
-
-// SetJuggleState sets the juggle state and optional message
-// DEPRECATED: Use SetState instead. Kept for backward compatibility.
-func (s *Session) SetJuggleState(state JuggleState, message string) {
-	// In the new model, all juggle states map to in_progress
-	s.State = StateInProgress
-	s.syncLegacyFields()
-	s.UpdateActivity()
-}
-
-// SetActiveState sets the active state and clears juggle state if not juggling
-// DEPRECATED: Use SetState instead. Kept for backward compatibility.
-func (s *Session) SetActiveState(state ActiveState) {
-	// Map legacy ActiveState to new BallState
-	switch state {
-	case ActiveReady:
-		s.State = StatePending
-	case ActiveJuggling:
-		s.State = StateInProgress
-	case ActiveDropped:
-		s.State = StateBlocked
-	case ActiveComplete:
-		s.State = StateComplete
-	}
-	s.syncLegacyFields()
 	s.UpdateActivity()
 }
 
@@ -352,19 +278,7 @@ func (s *Session) MarkComplete(note string) {
 	s.CompletionNote = note
 	now := time.Now()
 	s.CompletedAt = &now
-	s.syncLegacyFields()
 	s.UpdateActivity()
-}
-
-// StartJuggling transitions a pending session to in_progress
-// DEPRECATED: Use SetState(StateInProgress) instead.
-func (s *Session) StartJuggling() {
-	if s.State == StatePending {
-		s.State = StateInProgress
-		s.StartedAt = time.Now()
-		s.syncLegacyFields()
-		s.UpdateActivity()
-	}
 }
 
 // Start transitions a pending session to in_progress
@@ -372,7 +286,6 @@ func (s *Session) Start() {
 	if s.State == StatePending {
 		s.State = StateInProgress
 		s.StartedAt = time.Now()
-		s.syncLegacyFields()
 		s.UpdateActivity()
 	}
 }
@@ -598,30 +511,6 @@ func ValidatePriority(p string) bool {
 func ValidateBallState(s string) bool {
 	switch BallState(s) {
 	case StatePending, StateInProgress, StateComplete, StateBlocked:
-		return true
-	default:
-		return false
-	}
-}
-
-// ValidateActiveState checks if an active state string is valid
-// DEPRECATED: Use ValidateBallState instead.
-func ValidateActiveState(s string) bool {
-	// Accept both old and new state values for backward compatibility
-	switch s {
-	case "ready", "juggling", "dropped", "complete", // old values
-		"pending", "in_progress", "blocked": // new values
-		return true
-	default:
-		return false
-	}
-}
-
-// ValidateJuggleState checks if a juggle state string is valid
-// DEPRECATED: JuggleState is no longer used.
-func ValidateJuggleState(s string) bool {
-	switch JuggleState(s) {
-	case JuggleNeedsThrown, JuggleInAir, JuggleNeedsCaught:
 		return true
 	default:
 		return false

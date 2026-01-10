@@ -44,16 +44,16 @@ func runSession(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to initialize store: %w", err)
 	}
 
-	balls, err := store.GetJugglingBalls()
+	balls, err := store.GetInProgressBalls()
 	if err != nil {
-		return fmt.Errorf("failed to load juggling balls: %w", err)
+		return fmt.Errorf("failed to load in-progress balls: %w", err)
 	}
 
 	if len(balls) == 0 {
-		return fmt.Errorf("no juggling balls found in current project\n\nStart juggling with: juggle <ball-id>")
+		return fmt.Errorf("no in-progress balls found in current project\n\nStart a ball with: juggle <ball-id>")
 	}
 
-	fmt.Printf("Juggling %d ball(s) in this project:\n\n", len(balls))
+	fmt.Printf("In progress: %d ball(s) in this project:\n\n", len(balls))
 	for _, ball := range balls {
 		renderCurrentSession(ball)
 		fmt.Println()
@@ -64,17 +64,17 @@ func runSession(cmd *cobra.Command, args []string) error {
 func renderCurrentSession(sess *session.Session) {
 	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
 	valueStyle := lipgloss.NewStyle()
-	
+
 	// State color
 	var statusStyle lipgloss.Style
-	switch sess.ActiveState {
-	case session.ActiveJuggling:
+	switch sess.State {
+	case session.StateInProgress:
 		statusStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
-	case session.ActiveDropped:
+	case session.StateBlocked:
 		statusStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
-	case session.ActiveReady:
+	case session.StatePending:
 		statusStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
-	case session.ActiveComplete:
+	case session.StateComplete:
 		statusStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 	default:
 		statusStyle = valueStyle
@@ -84,16 +84,12 @@ func renderCurrentSession(sess *session.Session) {
 	fmt.Println()
 	fmt.Println(labelStyle.Render("ID:"), valueStyle.Render(sess.ID))
 	fmt.Println(labelStyle.Render("Intent:"), valueStyle.Render(sess.Intent))
-	stateStr := string(sess.ActiveState)
-	if sess.JuggleState != nil {
-		stateStr = stateStr + ":" + string(*sess.JuggleState)
-	}
-	fmt.Println(labelStyle.Render("State:"), statusStyle.Render(stateStr))
+	fmt.Println(labelStyle.Render("State:"), statusStyle.Render(string(sess.State)))
 	fmt.Println(labelStyle.Render("Priority:"), valueStyle.Render(string(sess.Priority)))
 
-	if sess.StateMessage != "" {
+	if sess.BlockedReason != "" {
 		messageStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
-		fmt.Println(labelStyle.Render("Message:"), messageStyle.Render(sess.StateMessage))
+		fmt.Println(labelStyle.Render("Blocked:"), messageStyle.Render(sess.BlockedReason))
 	}
 
 	fmt.Println(labelStyle.Render("Started:"), valueStyle.Render(sess.StartedAt.Format("2006-01-02 15:04:05")))

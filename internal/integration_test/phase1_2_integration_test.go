@@ -18,12 +18,12 @@ func TestEndToEndWorkflow(t *testing.T) {
 
 	// === Setup: Create test project with balls in various states ===
 
-	// Create some ready balls
-	_ = env.CreateSession(t, "Ready ball 1", session.PriorityHigh)
-	_ = env.CreateSession(t, "Ready ball 2", session.PriorityMedium)
+	// Create some pending balls
+	_ = env.CreateSession(t, "Pending ball 1", session.PriorityHigh)
+	_ = env.CreateSession(t, "Pending ball 2", session.PriorityMedium)
 
-	// Create a juggling ball
-	juggling1 := env.CreateJugglingBall(t, "Juggling ball 1", session.PriorityHigh, session.JuggleInAir)
+	// Create an in-progress ball
+	inProgress1 := env.CreateInProgressBall(t, "In-progress ball 1", session.PriorityHigh)
 
 	// Create a completed ball
 	completed := env.CreateSession(t, "Completed ball", session.PriorityLow)
@@ -33,11 +33,11 @@ func TestEndToEndWorkflow(t *testing.T) {
 		t.Fatalf("Failed to mark ball complete: %v", err)
 	}
 
-	// Create a dropped ball
-	dropped := env.CreateSession(t, "Dropped ball", session.PriorityLow)
-	dropped.SetActiveState(session.ActiveDropped)
-	if err := store.UpdateBall(dropped); err != nil {
-		t.Fatalf("Failed to mark ball dropped: %v", err)
+	// Create a blocked ball
+	blocked := env.CreateSession(t, "Blocked ball", session.PriorityLow)
+	blocked.SetState(session.StateBlocked)
+	if err := store.UpdateBall(blocked); err != nil {
+		t.Fatalf("Failed to mark ball blocked: %v", err)
 	}
 
 	// === Step 1: Test Audit Command ===
@@ -54,35 +54,35 @@ func TestEndToEndWorkflow(t *testing.T) {
 		}
 
 		// Count balls by state
-		var readyCount, jugglingCount, completedCount, droppedCount int
+		var pendingCount, inProgressCount, completedCount, blockedCount int
 		for _, ball := range balls {
-			switch ball.ActiveState {
-			case session.ActiveReady:
-				readyCount++
-			case session.ActiveJuggling:
-				jugglingCount++
-			case session.ActiveComplete:
+			switch ball.State {
+			case session.StatePending:
+				pendingCount++
+			case session.StateInProgress:
+				inProgressCount++
+			case session.StateComplete:
 				completedCount++
-			case session.ActiveDropped:
-				droppedCount++
+			case session.StateBlocked:
+				blockedCount++
 			}
 		}
 
-		if readyCount != 2 {
-			t.Errorf("Expected 2 ready balls, got %d", readyCount)
+		if pendingCount != 2 {
+			t.Errorf("Expected 2 pending balls, got %d", pendingCount)
 		}
-		if jugglingCount != 1 {
-			t.Errorf("Expected 1 juggling ball, got %d", jugglingCount)
+		if inProgressCount != 1 {
+			t.Errorf("Expected 1 in-progress ball, got %d", inProgressCount)
 		}
 		if completedCount != 1 {
 			t.Errorf("Expected 1 completed ball, got %d", completedCount)
 		}
-		if droppedCount != 1 {
-			t.Errorf("Expected 1 dropped ball, got %d", droppedCount)
+		if blockedCount != 1 {
+			t.Errorf("Expected 1 blocked ball, got %d", blockedCount)
 		}
 
 		// Verify completion ratio calculation
-		totalActive := readyCount + jugglingCount + droppedCount
+		totalActive := pendingCount + inProgressCount + blockedCount
 		totalBalls := totalActive + completedCount
 		expectedRatio := (float64(completedCount) / float64(totalBalls)) * 100
 
@@ -92,64 +92,63 @@ func TestEndToEndWorkflow(t *testing.T) {
 	})
 
 	// === Step 2: Test Check Command with Different Scenarios ===
-	t.Run("CheckCommand_NoJugglingBalls", func(t *testing.T) {
-		// Archive the juggling ball temporarily
-		juggling1.SetActiveState(session.ActiveComplete)
-		if err := store.UpdateBall(juggling1); err != nil {
+	t.Run("CheckCommand_NoInProgressBalls", func(t *testing.T) {
+		// Archive the in-progress ball temporarily
+		inProgress1.SetState(session.StateComplete)
+		if err := store.UpdateBall(inProgress1); err != nil {
 			t.Fatalf("Failed to update ball: %v", err)
 		}
 
-		// Load juggling balls - should be empty
+		// Load in-progress balls - should be empty
 		balls, err := store.LoadBalls()
 		if err != nil {
 			t.Fatalf("Failed to load balls: %v", err)
 		}
 
-		jugglingBalls := filterJugglingBalls(balls)
-		if len(jugglingBalls) != 0 {
-			t.Errorf("Expected 0 juggling balls, got %d", len(jugglingBalls))
+		inProgressBalls := filterInProgressBalls(balls)
+		if len(inProgressBalls) != 0 {
+			t.Errorf("Expected 0 in-progress balls, got %d", len(inProgressBalls))
 		}
 
-		// Restore juggling state
-		juggling1.SetActiveState(session.ActiveJuggling)
-		juggling1.SetJuggleState(session.JuggleInAir, "")
-		if err := store.UpdateBall(juggling1); err != nil {
+		// Restore in-progress state
+		inProgress1.SetState(session.StateInProgress)
+		if err := store.UpdateBall(inProgress1); err != nil {
 			t.Fatalf("Failed to restore ball: %v", err)
 		}
 	})
 
-	t.Run("CheckCommand_SingleJugglingBall", func(t *testing.T) {
+	t.Run("CheckCommand_SingleInProgressBall", func(t *testing.T) {
 		balls, err := store.LoadBalls()
 		if err != nil {
 			t.Fatalf("Failed to load balls: %v", err)
 		}
 
-		jugglingBalls := filterJugglingBalls(balls)
-		if len(jugglingBalls) != 1 {
-			t.Errorf("Expected 1 juggling ball, got %d", len(jugglingBalls))
+		inProgressBalls := filterInProgressBalls(balls)
+		if len(inProgressBalls) != 1 {
+			t.Errorf("Expected 1 in-progress ball, got %d", len(inProgressBalls))
 		}
 
-		if jugglingBalls[0].ID != juggling1.ID {
-			t.Errorf("Wrong juggling ball ID: expected %s, got %s", juggling1.ID, jugglingBalls[0].ID)
+		if inProgressBalls[0].ID != inProgress1.ID {
+			t.Errorf("Wrong in-progress ball ID: expected %s, got %s", inProgress1.ID, inProgressBalls[0].ID)
 		}
 	})
 
-	t.Run("CheckCommand_MultipleJugglingBalls", func(t *testing.T) {
-		// Create another juggling ball
-		juggling2 := env.CreateJugglingBall(t, "Juggling ball 2", session.PriorityMedium, session.JuggleNeedsCaught)
+	t.Run("CheckCommand_MultipleInProgressBalls", func(t *testing.T) {
+		// Create another in-progress ball
+		inProgress2 := env.CreateInProgressBall(t, "In-progress ball 2", session.PriorityMedium)
 
 		balls, err := store.LoadBalls()
 		if err != nil {
 			t.Fatalf("Failed to load balls: %v", err)
 		}
 
-		jugglingBalls := filterJugglingBalls(balls)
-		if len(jugglingBalls) != 2 {
-			t.Errorf("Expected 2 juggling balls, got %d", len(jugglingBalls))
+		inProgressBalls := filterInProgressBalls(balls)
+		if len(inProgressBalls) != 2 {
+			t.Errorf("Expected 2 in-progress balls, got %d", len(inProgressBalls))
 		}
 
 		// Clean up
-		if err := store.DeleteBall(juggling2.ID); err != nil {
+		if err := store.DeleteBall(inProgress2.ID); err != nil {
 			t.Fatalf("Failed to delete test ball: %v", err)
 		}
 	})
@@ -165,13 +164,6 @@ func TestEndToEndWorkflow(t *testing.T) {
 		for _, ball := range balls {
 			if ball.UpdateCount < 0 {
 				t.Errorf("Ball %s has invalid update count: %d", ball.ShortID(), ball.UpdateCount)
-			}
-		}
-
-		// Verify state consistency
-		for _, ball := range balls {
-			if ball.ActiveState == session.ActiveJuggling && ball.JuggleState == nil {
-				t.Errorf("Ball %s is juggling but has nil JuggleState", ball.ShortID())
 			}
 		}
 	})
@@ -378,7 +370,7 @@ func TestPlanCommand(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create ball with multi-word intent: %v", err)
 		}
-		ball.ActiveState = session.ActiveReady
+		ball.State = session.StatePending
 
 		if err := store.AppendBall(ball); err != nil {
 			t.Fatalf("Failed to save ball: %v", err)
@@ -390,8 +382,8 @@ func TestPlanCommand(t *testing.T) {
 		}
 
 		// Verify it's a ready ball (planned)
-		if ball.ActiveState != session.ActiveReady {
-			t.Errorf("Expected ActiveState ready, got %s", ball.ActiveState)
+		if ball.State != session.StatePending {
+			t.Errorf("Expected State pending, got %s", ball.State)
 		}
 
 		// Reload and verify persistence
@@ -413,7 +405,7 @@ func TestPlanCommand(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create ball: %v", err)
 		}
-		ball.ActiveState = session.ActiveReady
+		ball.State = session.StatePending
 
 		if err := store.AppendBall(ball); err != nil {
 			t.Fatalf("Failed to save ball: %v", err)
@@ -432,7 +424,7 @@ func TestPlanCommand(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create ball: %v", err)
 		}
-		ball.ActiveState = session.ActiveReady
+		ball.State = session.StatePending
 
 		if err := store.AppendBall(ball); err != nil {
 			t.Fatalf("Failed to save ball: %v", err)
@@ -451,7 +443,7 @@ func TestPlanCommand(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create ball: %v", err)
 		}
-		ball.ActiveState = session.ActiveReady
+		ball.State = session.StatePending
 
 		if err := store.AppendBall(ball); err != nil {
 			t.Fatalf("Failed to save ball: %v", err)
@@ -465,12 +457,12 @@ func TestPlanCommand(t *testing.T) {
 
 // Helper functions
 
-func filterJugglingBalls(balls []*session.Session) []*session.Session {
-	var juggling []*session.Session
+func filterInProgressBalls(balls []*session.Session) []*session.Session {
+	var inProgress []*session.Session
 	for _, ball := range balls {
-		if ball.ActiveState == session.ActiveJuggling {
-			juggling = append(juggling, ball)
+		if ball.State == session.StateInProgress {
+			inProgress = append(inProgress, ball)
 		}
 	}
-	return juggling
+	return inProgress
 }

@@ -11,17 +11,13 @@ import (
 var nextCmd = &cobra.Command{
 	Use:   "next",
 	Short: "Determine and jump to the ball that needs attention most",
-	Long: `Analyze all juggling balls and jump to the one that needs attention most.
+	Long: `Analyze all in-progress balls and recommend the one that needs attention most.
 
 Priority algorithm:
-1. Balls that need catching (agent finished work, needs verification)
-2. Balls that need throwing (agent needs direction/input)
-3. Balls in-air but idle longest
-4. Higher priority balls
+1. Higher priority balls score higher
+2. Balls idle longer score higher
 
 By default, analyzes balls from all discovered projects. Use --local to restrict to current project only.
-
-If running in Zellij, will automatically switch to the ball's tab.
 
 Examples:
   juggle next           # Find next ball across all projects
@@ -68,11 +64,9 @@ func runNext(cmd *cobra.Command, args []string) error {
 	fmt.Printf("→ Next ball: %s\n", nextBall.ID)
 	fmt.Printf("  Project: %s\n", nextBall.WorkingDir)
 	fmt.Printf("  Intent: %s\n", nextBall.Intent)
-	if nextBall.JuggleState != nil {
-		fmt.Printf("  Juggle State: %s\n", *nextBall.JuggleState)
-	}
-	if nextBall.StateMessage != "" {
-		fmt.Printf("  Message: %s\n", nextBall.StateMessage)
+	fmt.Printf("  State: %s\n", nextBall.State)
+	if nextBall.BlockedReason != "" {
+		fmt.Printf("  Blocked: %s\n", nextBall.BlockedReason)
 	}
 	fmt.Printf("  Priority: %s\n", nextBall.Priority)
 	fmt.Printf("  Idle: %s\n", formatDuration(nextBall.IdleDuration()))
@@ -92,22 +86,7 @@ func determineNextSession(sessions []*session.Session) *session.Session {
 	for _, sess := range sessions {
 		s := scored{sess: sess, score: 0}
 
-		// Priority based on juggle state
-		if sess.JuggleState != nil {
-			switch *sess.JuggleState {
-			case session.JuggleNeedsCaught:
-				// Highest priority: agent finished work, needs verification
-				s.score += 1000
-			case session.JuggleNeedsThrown:
-				// Medium priority: agent needs direction/input
-				s.score += 500
-			case session.JuggleInAir:
-				// Lower priority: agent is working
-				s.score += 100
-			}
-		}
-
-		// Priority weight
+		// Priority weight (higher priority = higher score)
 		s.score += sess.PriorityWeight() * 10
 
 		// Idle time (older = higher score, max 100 points)

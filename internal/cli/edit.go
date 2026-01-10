@@ -113,19 +113,24 @@ func runEdit(cmd *cobra.Command, args []string) error {
 	}
 
 	if editActiveState != "" {
-		// Validate active state
-		validStates := map[string]bool{
-			"ready":     true,
-			"juggling":  true,
-			"dropped":   true,
-			"complete":  true,
+		// Validate state - accept both new and legacy names
+		stateMap := map[string]session.BallState{
+			"pending":     session.StatePending,
+			"in_progress": session.StateInProgress,
+			"blocked":     session.StateBlocked,
+			"complete":    session.StateComplete,
+			// Legacy names
+			"ready":    session.StatePending,
+			"juggling": session.StateInProgress,
+			"dropped":  session.StateBlocked,
 		}
-		if !validStates[editActiveState] {
-			return fmt.Errorf("invalid active state: %s (must be ready|juggling|dropped|complete)", editActiveState)
+		newState, ok := stateMap[editActiveState]
+		if !ok {
+			return fmt.Errorf("invalid state: %s (must be pending|in_progress|blocked|complete)", editActiveState)
 		}
-		foundBall.ActiveState = session.ActiveState(editActiveState)
+		foundBall.SetState(newState)
 		modified = true
-		fmt.Printf("✓ Updated active state: %s\n", editActiveState)
+		fmt.Printf("✓ Updated state: %s\n", foundBall.State)
 	}
 
 	if editTags != "" {
@@ -188,21 +193,15 @@ func runInteractiveEdit(ball *session.Session, store *session.Store) error {
 		ball.Priority = session.Priority(input)
 	}
 
-	// Edit active state
-	fmt.Printf("Active State [%s] (ready|juggling|dropped|complete): ", ball.ActiveState)
+	// Edit state
+	fmt.Printf("State [%s] (pending|in_progress|blocked|complete): ", ball.State)
 	input, _ = reader.ReadString('\n')
 	input = strings.TrimSpace(input)
 	if input != "" {
-		validStates := map[string]bool{
-			"ready":    true,
-			"juggling": true,
-			"dropped":  true,
-			"complete": true,
+		if !session.ValidateBallState(input) {
+			return fmt.Errorf("invalid state: %s", input)
 		}
-		if !validStates[input] {
-			return fmt.Errorf("invalid active state: %s", input)
-		}
-		ball.ActiveState = session.ActiveState(input)
+		ball.SetState(session.BallState(input))
 	}
 
 	// Edit tags
@@ -235,7 +234,7 @@ func runInteractiveEdit(ball *session.Session, store *session.Store) error {
 		fmt.Printf("  Description: %s\n", ball.Description)
 	}
 	fmt.Printf("  Priority: %s\n", ball.Priority)
-	fmt.Printf("  Active State: %s\n", ball.ActiveState)
+	fmt.Printf("  State: %s\n", ball.State)
 	if len(ball.Tags) > 0 {
 		fmt.Printf("  Tags: %s\n", strings.Join(ball.Tags, ", "))
 	}
