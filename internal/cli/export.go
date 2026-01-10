@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/ohare93/juggle/internal/agent"
 	"github.com/ohare93/juggle/internal/session"
 	"github.com/spf13/cobra"
 )
@@ -22,8 +23,8 @@ var (
 
 var exportCmd = &cobra.Command{
 	Use:   "export",
-	Short: "Export balls to JSON, CSV, or Ralph format",
-	Long: `Export session data to JSON, CSV, or Ralph format for analysis or agent use.
+	Short: "Export balls to JSON, CSV, Ralph, or agent format",
+	Long: `Export session data to JSON, CSV, Ralph, or agent format for analysis or agent use.
 
 By default exports all active balls (excluding done) across all discovered projects.
 Use --local to restrict to current project only.
@@ -39,6 +40,13 @@ The Ralph format (--format ralph) is designed for agent loops and includes:
 - <progress> section from the session's progress.txt
 - <tasks> section with balls, their state, priority, and todos
 
+The Agent format (--format agent) is a self-contained prompt for AI agents:
+- <context> section from the session's context
+- <progress> section with last 50 lines of progress.txt
+- <balls> section with all session balls (state, todos, acceptance criteria)
+- <instructions> section with the agent prompt template
+Can be piped directly to 'claude -p'.
+
 Examples:
   # Export all active balls across all projects
   juggler export --format json --output balls.json
@@ -48,6 +56,9 @@ Examples:
 
   # Export session in Ralph format for agent use
   juggler export --session my-feature --format ralph
+
+  # Export session as complete agent prompt
+  juggler export --session my-feature --format agent | claude -p
 
   # Export specific balls by ID (supports full or short IDs)
   juggler export --ball-ids "juggler-5,48" --format json
@@ -61,7 +72,7 @@ Examples:
 }
 
 func init() {
-	exportCmd.Flags().StringVar(&exportFormat, "format", "json", "Export format: json, csv, or ralph")
+	exportCmd.Flags().StringVar(&exportFormat, "format", "json", "Export format: json, csv, ralph, or agent")
 	exportCmd.Flags().StringVar(&exportOutput, "output", "", "Output file path (default: stdout)")
 	exportCmd.Flags().BoolVar(&exportIncludeDone, "include-done", false, "Include archived (done) balls in export")
 	exportCmd.Flags().StringVar(&exportBallIDs, "ball-ids", "", "Filter by specific ball IDs (comma-separated, supports full or short IDs)")
@@ -71,13 +82,13 @@ func init() {
 
 func runExport(cmd *cobra.Command, args []string) error {
 	// Validate format
-	if exportFormat != "json" && exportFormat != "csv" && exportFormat != "ralph" {
-		return fmt.Errorf("invalid format: %s (must be json, csv, or ralph)", exportFormat)
+	if exportFormat != "json" && exportFormat != "csv" && exportFormat != "ralph" && exportFormat != "agent" {
+		return fmt.Errorf("invalid format: %s (must be json, csv, ralph, or agent)", exportFormat)
 	}
 
-	// Ralph format requires --session
-	if exportFormat == "ralph" && exportSession == "" {
-		return fmt.Errorf("ralph format requires --session flag")
+	// Ralph and agent formats require --session
+	if (exportFormat == "ralph" || exportFormat == "agent") && exportSession == "" {
+		return fmt.Errorf("%s format requires --session flag", exportFormat)
 	}
 
 	// Get current directory
@@ -147,8 +158,8 @@ func runExport(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Filter 3: --include-done (always applied, except for ralph format which always includes all)
-	if !exportIncludeDone && exportFormat != "ralph" {
+	// Filter 3: --include-done (always applied, except for ralph/agent formats which always include all)
+	if !exportIncludeDone && exportFormat != "ralph" && exportFormat != "agent" {
 		filteredBalls := make([]*session.Session, 0)
 		for _, ball := range balls {
 			if ball.State != session.StateComplete {
@@ -158,8 +169,8 @@ func runExport(cmd *cobra.Command, args []string) error {
 		balls = filteredBalls
 	}
 
-	// For ralph format, we allow empty balls (session might just have context)
-	if len(balls) == 0 && exportFormat != "ralph" {
+	// For ralph/agent formats, we allow empty balls (session might just have context)
+	if len(balls) == 0 && exportFormat != "ralph" && exportFormat != "agent" {
 		return fmt.Errorf("no balls to export")
 	}
 
@@ -172,6 +183,8 @@ func runExport(cmd *cobra.Command, args []string) error {
 		output, err = exportCSV(balls)
 	case "ralph":
 		output, err = exportRalph(cwd, exportSession, balls)
+	case "agent":
+		output, err = exportAgent(cwd, exportSession, balls)
 	}
 
 	if err != nil {
@@ -531,6 +544,157 @@ func writeBallForRalph(buf *strings.Builder, ball *session.Session) {
 	buf.WriteString(fmt.Sprintf("Intent: %s\n", ball.Intent))
 
 	// Acceptance criteria (preferred over deprecated Description)
+	if len(ball.AcceptanceCriteria) > 0 {
+		buf.WriteString("Acceptance Criteria:\n")
+		for i, ac := range ball.AcceptanceCriteria {
+			buf.WriteString(fmt.Sprintf("  %d. %s\n", i+1, ac))
+		}
+	}
+
+	// Blocked reason if blocked
+	if ball.State == session.StateBlocked && ball.BlockedReason != "" {
+		buf.WriteString(fmt.Sprintf("Blocked: %s\n", ball.BlockedReason))
+	}
+
+	// Todos
+	if len(ball.Todos) > 0 {
+		buf.WriteString("Todos:\n")
+		for i, todo := range ball.Todos {
+			checkbox := "[ ]"
+			if todo.Done {
+				checkbox = "[x]"
+			}
+			buf.WriteString(fmt.Sprintf("  %d. %s %s\n", i+1, checkbox, todo.Text))
+			if todo.Description != "" {
+				buf.WriteString(fmt.Sprintf("     %s\n", todo.Description))
+			}
+		}
+	}
+
+	// Tags
+	if len(ball.Tags) > 0 {
+		buf.WriteString(fmt.Sprintf("Tags: %s\n", strings.Join(ball.Tags, ", ")))
+	}
+}
+
+// exportAgent exports session data in self-contained agent prompt format
+// Format:
+// <context>
+// [session context]
+// </context>
+//
+// <progress>
+// [last 50 lines of progress.txt]
+// </progress>
+//
+// <balls>
+// [balls with state, todos, and acceptance criteria]
+// </balls>
+//
+// <instructions>
+// [agent prompt template]
+// </instructions>
+func exportAgent(projectDir, sessionID string, balls []*session.Session) ([]byte, error) {
+	var buf strings.Builder
+
+	// Load session store to get context and progress
+	sessionStore, err := session.NewSessionStore(projectDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create session store: %w", err)
+	}
+
+	// Try to load the session
+	juggleSession, err := sessionStore.LoadSession(sessionID)
+	if err != nil {
+		// Session might not exist yet, that's okay
+		juggleSession = &session.JuggleSession{
+			ID:          sessionID,
+			Description: "",
+			Context:     "",
+		}
+	}
+
+	// Load progress and limit to last 50 lines
+	progress, _ := sessionStore.LoadProgress(sessionID) // Ignore error, empty progress is fine
+	progress = limitToLastLines(progress, 50)
+
+	// Write <context> section
+	buf.WriteString("<context>\n")
+	if juggleSession.Description != "" {
+		buf.WriteString("# " + juggleSession.Description + "\n\n")
+	}
+	if juggleSession.Context != "" {
+		buf.WriteString(juggleSession.Context)
+		if !strings.HasSuffix(juggleSession.Context, "\n") {
+			buf.WriteString("\n")
+		}
+	}
+	buf.WriteString("</context>\n\n")
+
+	// Write <progress> section
+	buf.WriteString("<progress>\n")
+	if progress != "" {
+		buf.WriteString(progress)
+		if !strings.HasSuffix(progress, "\n") {
+			buf.WriteString("\n")
+		}
+	}
+	buf.WriteString("</progress>\n\n")
+
+	// Write <balls> section
+	buf.WriteString("<balls>\n")
+	for i, ball := range balls {
+		if i > 0 {
+			buf.WriteString("\n")
+		}
+		writeBallForAgent(&buf, ball)
+	}
+	buf.WriteString("</balls>\n\n")
+
+	// Write <instructions> section with agent prompt template
+	buf.WriteString("<instructions>\n")
+	buf.WriteString(agent.GetPromptTemplate())
+	if !strings.HasSuffix(agent.GetPromptTemplate(), "\n") {
+		buf.WriteString("\n")
+	}
+	buf.WriteString("</instructions>\n")
+
+	return []byte(buf.String()), nil
+}
+
+// limitToLastLines returns the last n lines of a string
+func limitToLastLines(s string, n int) string {
+	if s == "" {
+		return ""
+	}
+
+	lines := strings.Split(s, "\n")
+
+	// Remove trailing empty line if present (from trailing newline)
+	if len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+
+	if len(lines) <= n {
+		return strings.Join(lines, "\n")
+	}
+
+	return strings.Join(lines[len(lines)-n:], "\n")
+}
+
+// writeBallForAgent writes a single ball in agent format
+func writeBallForAgent(buf *strings.Builder, ball *session.Session) {
+	// Ball header with ID, state, and priority
+	header := fmt.Sprintf("## %s [%s] (priority: %s)", ball.ID, ball.State, ball.Priority)
+	if ball.ModelSize != "" {
+		header += fmt.Sprintf(" (model: %s)", ball.ModelSize)
+	}
+	buf.WriteString(header + "\n")
+
+	// Intent
+	buf.WriteString(fmt.Sprintf("Intent: %s\n", ball.Intent))
+
+	// Acceptance criteria
 	if len(ball.AcceptanceCriteria) > 0 {
 		buf.WriteString("Acceptance Criteria:\n")
 		for i, ac := range ball.AcceptanceCriteria {
