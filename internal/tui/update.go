@@ -266,9 +266,46 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, listenForWatcherEvents(m.fileWatcher)
 		}
 		return m, nil
+
+	case editorResultMsg:
+		return m.handleEditorResult(msg)
 	}
 
 	return m, nil
+}
+
+// handleEditorResult handles the result from external editor
+func (m Model) handleEditorResult(msg editorResultMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		m.message = "Editor error: " + msg.err.Error()
+		m.addActivity("Editor error: " + msg.err.Error())
+		return m, nil
+	}
+
+	if msg.cancelled {
+		m.message = "Edit cancelled (no changes)"
+		m.addActivity("Edit cancelled for: " + msg.ball.ID)
+		return m, nil
+	}
+
+	// Parse the edited YAML and apply changes
+	if err := yamlToBall(msg.editedYAML, msg.ball); err != nil {
+		m.message = "Parse error: " + err.Error()
+		m.addActivity("Parse error: " + err.Error())
+		return m, nil
+	}
+
+	// Save the updated ball
+	store, err := session.NewStore(msg.ball.WorkingDir)
+	if err != nil {
+		m.message = "Error: " + err.Error()
+		m.addActivity("Store error: " + err.Error())
+		return m, nil
+	}
+
+	m.addActivity("Updated ball: " + msg.ball.ID)
+	m.message = "Updated ball: " + msg.ball.ID
+	return m, updateBall(store, msg.ball)
 }
 
 // handleSplitViewKey handles keyboard input for split view mode
@@ -951,11 +988,9 @@ func (m Model) handleSplitEditItem() (tea.Model, tea.Cmd) {
 		}
 		ball := balls[m.cursor]
 		m.editingBall = ball
-		m.textInput.Placeholder = "Ball intent"
-		m.textInput.SetValue(ball.Intent)
-		m.inputTarget = "intent"
-		m.mode = inputBallView
-		m.addActivity("Editing ball: " + ball.ID)
+		m.addActivity("Opening editor for: " + ball.ID)
+		// Launch external editor for full ball editing
+		return m, openEditorCmd(ball)
 
 	case TodosPanel:
 		todos := m.filterTodos()

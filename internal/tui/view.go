@@ -542,7 +542,7 @@ func (m Model) renderSplitHelpView() string {
 				{"j/k", "Navigate balls"},
 				{"Enter", "Select ball and show todos"},
 				{"a", "Add new ball (tagged to current session)"},
-				{"e", "Edit ball intent"},
+				{"e", "Edit ball in $EDITOR (YAML format)"},
 				{"d", "Delete ball (with confirmation)"},
 				{"t", "Tag ball (add to session)"},
 				{"s", "Start ball (→ in_progress)"},
