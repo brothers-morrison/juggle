@@ -510,6 +510,10 @@ func (m Model) handleSplitViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "i":
 		// Toggle bottom pane between activity log and ball detail
 		return m.handleToggleBottomPane()
+
+	case "P":
+		// Toggle between local project only and all projects
+		return m.handleToggleLocalOnly()
 	}
 
 	return m, nil
@@ -625,6 +629,20 @@ func (m Model) handleToggleBottomPane() (tea.Model, tea.Cmd) {
 		m.addActivity("Showing activity log in bottom pane")
 	}
 	return m, nil
+}
+
+// handleToggleLocalOnly toggles between local project only and all projects
+func (m Model) handleToggleLocalOnly() (tea.Model, tea.Cmd) {
+	m.localOnly = !m.localOnly
+	if m.localOnly {
+		m.addActivity("Showing local project only")
+		m.message = "Showing local project only"
+	} else {
+		m.addActivity("Showing all projects")
+		m.message = "Showing all projects"
+	}
+	// Reload balls with new scope
+	return m, loadBalls(m.store, m.config, m.localOnly)
 }
 
 // getActivityLogMaxOffset calculates the maximum scroll offset for activity log

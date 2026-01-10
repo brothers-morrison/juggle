@@ -259,20 +259,35 @@ func (m Model) renderBallsPanel(width, height int) string {
 
 		stateIcon := getStateIcon(ball.State)
 		var line string
+
+		// Add project prefix when showing all projects
+		projectPrefix := ""
+		if !m.localOnly {
+			// Extract project name from working directory
+			projectName := ball.ID // ID already contains project prefix
+			if idx := strings.LastIndex(ball.WorkingDir, "/"); idx >= 0 {
+				projectName = ball.WorkingDir[idx+1:]
+			}
+			projectPrefix = projectName + ": "
+		}
+
 		if ball.State == session.StateBlocked && ball.BlockedReason != "" {
 			// Show blocked reason inline for blocked balls
-			intent := truncate(ball.Intent, width-25)
-			reason := truncate(ball.BlockedReason, width-len(intent)-15)
-			line = fmt.Sprintf("%s %s [%s]",
+			intent := truncate(ball.Intent, width-25-len(projectPrefix))
+			reason := truncate(ball.BlockedReason, width-len(intent)-15-len(projectPrefix))
+			line = fmt.Sprintf("%s %s%s [%s]",
 				stateIcon,
+				projectPrefix,
 				intent,
 				reason,
 			)
 		} else {
-			line = fmt.Sprintf("%s %-*s %s",
+			availWidth := width - 15 - len(projectPrefix)
+			line = fmt.Sprintf("%s %s%-*s %s",
 				stateIcon,
-				width-15,
-				truncate(ball.Intent, width-15),
+				projectPrefix,
+				availWidth,
+				truncate(ball.Intent, availWidth),
 				string(ball.State),
 			)
 		}
@@ -508,6 +523,15 @@ func (m Model) renderStatusBar() string {
 	}
 
 	status := strings.Join(hints, " | ")
+
+	// Add project scope indicator
+	var scopeIndicator string
+	if m.localOnly {
+		scopeIndicator = "[Local]"
+	} else {
+		scopeIndicator = "[All Projects]"
+	}
+	status = scopeIndicator + " " + status
 
 	// Add filter indicator if active
 	if m.panelSearchActive {
