@@ -64,8 +64,13 @@ func runAudit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Discover all projects
-	projects, err := session.DiscoverProjects(config)
+	store, err := NewStoreForCommand(cwd)
+	if err != nil {
+		return fmt.Errorf("failed to create store: %w", err)
+	}
+
+	// Discover projects (respects --all flag)
+	projects, err := DiscoverProjectsForCommand(config, store)
 	if err != nil {
 		return fmt.Errorf("failed to discover projects: %w", err)
 	}

@@ -320,7 +320,8 @@ func listAllBalls(cmd *cobra.Command) error {
 }
 
 // handleBallCommand routes ball-specific commands
-// findBallByID searches for a ball by ID across all discovered projects
+// findBallByID searches for a ball by ID in discovered projects
+// By default only searches current project; use --all flag for cross-project search
 // Returns the ball and a store configured for that ball's working directory
 func findBallByID(ballID string) (*session.Session, *session.Store, error) {
 	config, err := LoadConfigForCommand()
@@ -328,7 +329,17 @@ func findBallByID(ballID string) (*session.Session, *session.Store, error) {
 		return nil, nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	projects, err := session.DiscoverProjects(config)
+	cwd, err := GetWorkingDir()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get current directory: %w", err)
+	}
+
+	store, err := NewStoreForCommand(cwd)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create store: %w", err)
+	}
+
+	projects, err := DiscoverProjectsForCommand(config, store)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to discover projects: %w", err)
 	}
@@ -342,14 +353,18 @@ func findBallByID(ballID string) (*session.Session, *session.Store, error) {
 	for _, ball := range allBalls {
 		if ball.ID == ballID || ball.ShortID() == ballID {
 			// Create store for this ball's working directory
-			store, err := NewStoreForCommand(ball.WorkingDir)
+			ballStore, err := NewStoreForCommand(ball.WorkingDir)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to create store for ball: %w", err)
 			}
-			return ball, store, nil
+			return ball, ballStore, nil
 		}
 	}
 
+	// If not found and we're in local mode, suggest using --all
+	if !GlobalOpts.AllProjects {
+		return nil, nil, fmt.Errorf("ball not found in current project: %s (use --all to search all projects)", ballID)
+	}
 	return nil, nil, fmt.Errorf("ball not found: %s", ballID)
 }
 

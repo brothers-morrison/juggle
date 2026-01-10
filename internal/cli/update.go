@@ -57,37 +57,10 @@ func init() {
 func runUpdate(cmd *cobra.Command, args []string) error {
 	ballID := args[0]
 
-	// Load config to discover projects
-	config, err := LoadConfigForCommand()
+	// Use findBallByID which respects --all flag
+	foundBall, foundStore, err := findBallByID(ballID)
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
-
-	// Discover all projects
-	projects, err := session.DiscoverProjects(config)
-	if err != nil {
-		return fmt.Errorf("failed to discover projects: %w", err)
-	}
-
-	// Search for the ball across all projects
-	var foundBall *session.Session
-	var foundStore *session.Store
-	for _, projectPath := range projects {
-		store, err := NewStoreForCommand(projectPath)
-		if err != nil {
-			continue
-		}
-
-		ball, err := store.GetBallByID(ballID)
-		if err == nil && ball != nil {
-			foundBall = ball
-			foundStore = store
-			break
-		}
-	}
-
-	if foundBall == nil {
-		return fmt.Errorf("ball %s not found in any project", ballID)
+		return err
 	}
 
 	// If no flags provided, enter interactive mode

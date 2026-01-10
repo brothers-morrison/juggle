@@ -43,10 +43,11 @@ Example workflow:
 
 // GlobalOptions holds global configuration flags for testing and path overrides
 type GlobalOptions struct {
-	ConfigHome string // Override for ~/.juggler directory
-	ProjectDir string // Override for current working directory
-	JugglerDir string // Override for .juggler directory name
-	LocalOnly  bool   // Restrict operations to current project only
+	ConfigHome   string // Override for ~/.juggler directory
+	ProjectDir   string // Override for current working directory
+	JugglerDir   string // Override for .juggler directory name
+	AllProjects  bool   // Enable cross-project discovery (default is local only)
+	LocalOnly    bool   // DEPRECATED: use AllProjects instead (kept for backward compat)
 }
 
 // GlobalOpts holds the parsed global flags (exported for testing)
@@ -89,20 +90,22 @@ func LoadConfigForCommand() (*session.Config, error) {
 	return session.LoadConfigWithOptions(GetConfigOptions())
 }
 
-// DiscoverProjectsForCommand discovers projects respecting the --local flag
-// If --local is set, returns only current project directory
-// Otherwise discovers all projects from config search paths
+// DiscoverProjectsForCommand discovers projects respecting the --all flag
+// By default returns only current project directory (local only)
+// If --all is set, discovers all projects from config search paths
 func DiscoverProjectsForCommand(config *session.Config, store *session.Store) ([]string, error) {
-	if GlobalOpts.LocalOnly {
-		// Local only - return just the current project directory
-		cwd, err := GetWorkingDir()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get current directory: %w", err)
-		}
-		return []string{cwd}, nil
+	// --all enables cross-project discovery
+	// --local is deprecated but still supported (forces local even if --all is set)
+	if GlobalOpts.AllProjects && !GlobalOpts.LocalOnly {
+		// Cross-project - discover all
+		return session.DiscoverProjects(config)
 	}
-	// Cross-project - discover all
-	return session.DiscoverProjects(config)
+	// Default: local only - return just the current project directory
+	cwd, err := GetWorkingDir()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current directory: %w", err)
+	}
+	return []string{cwd}, nil
 }
 
 // Execute runs the root command
@@ -211,7 +214,9 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&GlobalOpts.ConfigHome, "config-home", "", "Override ~/.juggler directory (for testing)")
 	rootCmd.PersistentFlags().StringVar(&GlobalOpts.ProjectDir, "project-dir", "", "Override working directory (for testing)")
 	rootCmd.PersistentFlags().StringVar(&GlobalOpts.JugglerDir, "juggler-dir", ".juggler", "Override .juggler directory name")
-	rootCmd.PersistentFlags().BoolVar(&GlobalOpts.LocalOnly, "local", false, "Restrict operations to current project only")
+	rootCmd.PersistentFlags().BoolVarP(&GlobalOpts.AllProjects, "all", "a", false, "Search across all discovered projects")
+	rootCmd.PersistentFlags().BoolVar(&GlobalOpts.LocalOnly, "local", false, "DEPRECATED: Local is now the default (this flag is a no-op)")
+	rootCmd.PersistentFlags().MarkHidden("local") // Hide deprecated flag
 
 	// Set custom help function
 	defaultHelpFunc = rootCmd.HelpFunc()

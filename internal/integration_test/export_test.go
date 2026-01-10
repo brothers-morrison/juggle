@@ -91,9 +91,11 @@ func TestExportLocal(t *testing.T) {
 		}
 	})
 
-	// Test without --local flag
+	// Test with --all flag for cross-project discovery
 	t.Run("ExportAllProjects", func(t *testing.T) {
+		cli.GlobalOpts.AllProjects = true
 		cli.GlobalOpts.LocalOnly = false
+		defer func() { cli.GlobalOpts.AllProjects = false }()
 
 		projects, err := cli.DiscoverProjectsForCommand(config, store1)
 		if err != nil {
@@ -101,7 +103,7 @@ func TestExportLocal(t *testing.T) {
 		}
 
 		if len(projects) != 2 {
-			t.Errorf("Expected 2 projects without --local, got %d", len(projects))
+			t.Errorf("Expected 2 projects with --all, got %d", len(projects))
 		}
 
 		allBalls, err := session.LoadAllBalls(projects)
@@ -111,7 +113,7 @@ func TestExportLocal(t *testing.T) {
 
 		// Should get balls from both projects
 		if len(allBalls) != 2 {
-			t.Errorf("Expected 2 balls without --local, got %d", len(allBalls))
+			t.Errorf("Expected 2 balls with --all, got %d", len(allBalls))
 		}
 	})
 }

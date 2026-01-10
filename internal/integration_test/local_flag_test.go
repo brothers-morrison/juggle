@@ -51,7 +51,9 @@ func TestLocalFlag(t *testing.T) {
 		SearchPaths: []string{project1, project2},
 	}
 
-	t.Run("DiscoverProjectsForCommand_WithoutLocal", func(t *testing.T) {
+	t.Run("DiscoverProjectsForCommand_DefaultLocal", func(t *testing.T) {
+		// Default is local only (no --all flag)
+		cli.GlobalOpts.AllProjects = false
 		cli.GlobalOpts.LocalOnly = false
 		cli.GlobalOpts.ProjectDir = project1
 
@@ -60,9 +62,30 @@ func TestLocalFlag(t *testing.T) {
 			t.Fatalf("Failed to discover projects: %v", err)
 		}
 
-		// Should discover both projects using config.SearchPaths
+		// Should only return current project by default (local only)
+		if len(projects) != 1 {
+			t.Errorf("Expected 1 project by default (local only), got %d", len(projects))
+		}
+
+		if len(projects) > 0 && projects[0] != project1 {
+			t.Errorf("Expected current project %s, got %s", project1, projects[0])
+		}
+	})
+
+	t.Run("DiscoverProjectsForCommand_WithAll", func(t *testing.T) {
+		// Use --all to enable cross-project discovery
+		cli.GlobalOpts.AllProjects = true
+		cli.GlobalOpts.LocalOnly = false
+		cli.GlobalOpts.ProjectDir = project1
+
+		projects, err := cli.DiscoverProjectsForCommand(config, store1)
+		if err != nil {
+			t.Fatalf("Failed to discover projects: %v", err)
+		}
+
+		// Should discover both projects with --all
 		if len(projects) != 2 {
-			t.Errorf("Expected 2 projects without --local, got %d", len(projects))
+			t.Errorf("Expected 2 projects with --all, got %d", len(projects))
 		}
 
 		// Verify we get both project paths
@@ -78,6 +101,9 @@ func TestLocalFlag(t *testing.T) {
 		if !foundProj1 || !foundProj2 {
 			t.Errorf("Expected to find both projects, got: %v", projects)
 		}
+
+		// Reset for next test
+		cli.GlobalOpts.AllProjects = false
 	})
 
 	t.Run("RootCommand_WithLocal", func(t *testing.T) {

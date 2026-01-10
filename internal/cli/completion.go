@@ -63,7 +63,17 @@ func CompleteArchivedBallIDs(cmd *cobra.Command, args []string, toComplete strin
 		return nil, cobra.ShellCompDirectiveError
 	}
 
-	projects, err := session.DiscoverProjects(config)
+	cwd, err := GetWorkingDir()
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveError
+	}
+
+	store, err := NewStoreForCommand(cwd)
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveError
+	}
+
+	projects, err := DiscoverProjectsForCommand(config, store)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
 	}
