@@ -21,6 +21,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleInputKey(msg)
 		}
 
+		// Handle panel search input
+		if m.mode == panelSearchView {
+			return m.handlePanelSearchKey(msg)
+		}
+
 		// Handle delete confirmation in split view
 		if m.mode == confirmSplitDelete {
 			return m.handleSplitConfirmDelete(msg)
@@ -189,6 +194,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.sessionCursor >= len(m.sessions) {
 			m.sessionCursor = 0
 		}
+		// Pre-select session if initialSessionID was provided
+		if m.initialSessionID != "" && m.selectedSession == nil {
+			for i, sess := range m.sessions {
+				if sess.ID == m.initialSessionID {
+					m.selectedSession = sess
+					m.sessionCursor = i
+					m.addActivity("Pre-selected session: " + sess.ID)
+					break
+				}
+			}
+			// Clear the initialSessionID after attempting selection
+			m.initialSessionID = ""
+		}
 		if m.mode == splitView {
 			m.addActivity("Sessions loaded")
 		}
@@ -346,6 +364,18 @@ func (m Model) handleSplitViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "d":
 		// Delete selected item with confirmation
 		return m.handleSplitDeletePrompt()
+
+	case "/":
+		// Open search/filter for current panel
+		return m.handlePanelSearchStart()
+
+	case "ctrl+u":
+		// Clear the current panel filter
+		m.panelSearchQuery = ""
+		m.panelSearchActive = false
+		m.addActivity("Filter cleared")
+		m.message = "Filter cleared"
+		return m, nil
 	}
 
 	return m, nil
@@ -355,16 +385,22 @@ func (m Model) handleSplitViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleSplitViewNavUp() (tea.Model, tea.Cmd) {
 	switch m.activePanel {
 	case SessionsPanel:
-		if m.sessionCursor > 0 {
+		sessions := m.filterSessions()
+		if m.sessionCursor > 0 && m.sessionCursor < len(sessions) {
 			m.sessionCursor--
+		} else if m.sessionCursor >= len(sessions) && len(sessions) > 0 {
+			m.sessionCursor = len(sessions) - 1
 		}
 	case BallsPanel:
 		if m.cursor > 0 {
 			m.cursor--
 		}
 	case TodosPanel:
-		if m.todoCursor > 0 {
+		todos := m.filterTodos()
+		if m.todoCursor > 0 && m.todoCursor < len(todos) {
 			m.todoCursor--
+		} else if m.todoCursor >= len(todos) && len(todos) > 0 {
+			m.todoCursor = len(todos) - 1
 		}
 	}
 	return m, nil
@@ -374,16 +410,18 @@ func (m Model) handleSplitViewNavUp() (tea.Model, tea.Cmd) {
 func (m Model) handleSplitViewNavDown() (tea.Model, tea.Cmd) {
 	switch m.activePanel {
 	case SessionsPanel:
-		if m.sessionCursor < len(m.sessions)-1 {
+		sessions := m.filterSessions()
+		if m.sessionCursor < len(sessions)-1 {
 			m.sessionCursor++
 		}
 	case BallsPanel:
-		balls := m.getBallsForSession()
+		balls := m.filterBallsForSession()
 		if m.cursor < len(balls)-1 {
 			m.cursor++
 		}
 	case TodosPanel:
-		if m.selectedBall != nil && m.todoCursor < len(m.selectedBall.Todos)-1 {
+		todos := m.filterTodos()
+		if m.todoCursor < len(todos)-1 {
 			m.todoCursor++
 		}
 	}
@@ -395,14 +433,15 @@ func (m Model) handleSplitViewEnter() (tea.Model, tea.Cmd) {
 	switch m.activePanel {
 	case SessionsPanel:
 		// Select session
-		if len(m.sessions) > 0 && m.sessionCursor < len(m.sessions) {
-			m.selectedSession = m.sessions[m.sessionCursor]
+		sessions := m.filterSessions()
+		if len(sessions) > 0 && m.sessionCursor < len(sessions) {
+			m.selectedSession = sessions[m.sessionCursor]
 			m.cursor = 0 // Reset ball cursor for new session
 			m.addActivity("Selected session: " + m.selectedSession.ID)
 		}
 	case BallsPanel:
 		// Select ball and show todos
-		balls := m.getBallsForSession()
+		balls := m.filterBallsForSession()
 		if len(balls) > 0 && m.cursor < len(balls) {
 			m.selectedBall = balls[m.cursor]
 			m.todoCursor = 0
@@ -447,7 +486,7 @@ func (m Model) handleToggleTodo() (tea.Model, tea.Cmd) {
 
 // handleSplitStartBall starts the selected ball in split view
 func (m Model) handleSplitStartBall() (tea.Model, tea.Cmd) {
-	balls := m.getBallsForSession()
+	balls := m.filterBallsForSession()
 	if len(balls) == 0 || m.cursor >= len(balls) {
 		return m, nil
 	}
@@ -467,7 +506,7 @@ func (m Model) handleSplitStartBall() (tea.Model, tea.Cmd) {
 
 // handleSplitCompleteBall completes the selected ball in split view
 func (m Model) handleSplitCompleteBall() (tea.Model, tea.Cmd) {
-	balls := m.getBallsForSession()
+	balls := m.filterBallsForSession()
 	if len(balls) == 0 || m.cursor >= len(balls) {
 		return m, nil
 	}
@@ -487,7 +526,7 @@ func (m Model) handleSplitCompleteBall() (tea.Model, tea.Cmd) {
 
 // handleSplitBlockBall prompts for a blocked reason
 func (m Model) handleSplitBlockBall() (tea.Model, tea.Cmd) {
-	balls := m.getBallsForSession()
+	balls := m.filterBallsForSession()
 	if len(balls) == 0 || m.cursor >= len(balls) {
 		return m, nil
 	}
@@ -738,11 +777,12 @@ func (m Model) handleSplitEditItem() (tea.Model, tea.Cmd) {
 
 	switch m.activePanel {
 	case SessionsPanel:
-		if len(m.sessions) == 0 || m.sessionCursor >= len(m.sessions) {
+		sessions := m.filterSessions()
+		if len(sessions) == 0 || m.sessionCursor >= len(sessions) {
 			m.message = "No session selected"
 			return m, nil
 		}
-		sess := m.sessions[m.sessionCursor]
+		sess := sessions[m.sessionCursor]
 		m.textInput.Placeholder = "Session description"
 		m.textInput.SetValue(sess.Description)
 		m.inputTarget = "session_description"
@@ -750,7 +790,7 @@ func (m Model) handleSplitEditItem() (tea.Model, tea.Cmd) {
 		m.addActivity("Editing session: " + sess.ID)
 
 	case BallsPanel:
-		balls := m.getBallsForSession()
+		balls := m.filterBallsForSession()
 		if len(balls) == 0 || m.cursor >= len(balls) {
 			m.message = "No ball selected"
 			return m, nil
@@ -764,15 +804,16 @@ func (m Model) handleSplitEditItem() (tea.Model, tea.Cmd) {
 		m.addActivity("Editing ball: " + ball.ID)
 
 	case TodosPanel:
-		if m.selectedBall == nil || len(m.selectedBall.Todos) == 0 {
+		todos := m.filterTodos()
+		if m.selectedBall == nil || len(todos) == 0 {
 			m.message = "No todo selected"
 			return m, nil
 		}
-		if m.todoCursor >= len(m.selectedBall.Todos) {
+		if m.todoCursor >= len(todos) {
 			m.message = "No todo selected"
 			return m, nil
 		}
-		todo := m.selectedBall.Todos[m.todoCursor]
+		todo := todos[m.todoCursor]
 		m.textInput.Placeholder = "Todo text"
 		m.textInput.SetValue(todo.Text)
 		m.editingTodo = m.todoCursor
@@ -787,7 +828,8 @@ func (m Model) handleSplitEditItem() (tea.Model, tea.Cmd) {
 func (m Model) handleSplitDeletePrompt() (tea.Model, tea.Cmd) {
 	switch m.activePanel {
 	case SessionsPanel:
-		if len(m.sessions) == 0 || m.sessionCursor >= len(m.sessions) {
+		sessions := m.filterSessions()
+		if len(sessions) == 0 || m.sessionCursor >= len(sessions) {
 			m.message = "No session selected"
 			return m, nil
 		}
@@ -796,7 +838,7 @@ func (m Model) handleSplitDeletePrompt() (tea.Model, tea.Cmd) {
 		m.addActivity("Confirming session deletion...")
 
 	case BallsPanel:
-		balls := m.getBallsForSession()
+		balls := m.filterBallsForSession()
 		if len(balls) == 0 || m.cursor >= len(balls) {
 			m.message = "No ball selected"
 			return m, nil
@@ -806,11 +848,12 @@ func (m Model) handleSplitDeletePrompt() (tea.Model, tea.Cmd) {
 		m.addActivity("Confirming ball deletion...")
 
 	case TodosPanel:
-		if m.selectedBall == nil || len(m.selectedBall.Todos) == 0 {
+		todos := m.filterTodos()
+		if m.selectedBall == nil || len(todos) == 0 {
 			m.message = "No todo selected"
 			return m, nil
 		}
-		if m.todoCursor >= len(m.selectedBall.Todos) {
+		if m.todoCursor >= len(todos) {
 			m.message = "No todo selected"
 			return m, nil
 		}
@@ -1026,11 +1069,12 @@ func (m Model) handleSplitConfirmDelete(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) executeSplitDelete() (tea.Model, tea.Cmd) {
 	switch m.confirmAction {
 	case "delete_session":
-		if m.sessionCursor >= len(m.sessions) {
+		sessions := m.filterSessions()
+		if m.sessionCursor >= len(sessions) {
 			m.mode = splitView
 			return m, nil
 		}
-		sess := m.sessions[m.sessionCursor]
+		sess := sessions[m.sessionCursor]
 		err := m.sessionStore.DeleteSession(sess.ID)
 		if err != nil {
 			m.message = "Error deleting session: " + err.Error()
@@ -1047,7 +1091,7 @@ func (m Model) executeSplitDelete() (tea.Model, tea.Cmd) {
 		return m, loadSessions(m.sessionStore)
 
 	case "delete_ball":
-		balls := m.getBallsForSession()
+		balls := m.filterBallsForSession()
 		if m.cursor >= len(balls) {
 			m.mode = splitView
 			return m, nil
@@ -1075,18 +1119,25 @@ func (m Model) executeSplitDelete() (tea.Model, tea.Cmd) {
 		return m, loadBalls(m.store, m.config, m.localOnly)
 
 	case "delete_todo":
-		if m.selectedBall == nil || m.todoCursor >= len(m.selectedBall.Todos) {
+		todos := m.filterTodos()
+		if m.selectedBall == nil || m.todoCursor >= len(todos) {
 			m.mode = splitView
 			return m, nil
 		}
-		todoText := m.selectedBall.Todos[m.todoCursor].Text
-		// Remove the todo
-		m.selectedBall.Todos = append(
-			m.selectedBall.Todos[:m.todoCursor],
-			m.selectedBall.Todos[m.todoCursor+1:]...,
-		)
+		// Find the actual index in the ball's todos list
+		todoText := todos[m.todoCursor].Text
+		for i, t := range m.selectedBall.Todos {
+			if t.Text == todoText {
+				// Remove the todo at the actual index
+				m.selectedBall.Todos = append(
+					m.selectedBall.Todos[:i],
+					m.selectedBall.Todos[i+1:]...,
+				)
+				break
+			}
+		}
 		// Adjust cursor if needed
-		if m.todoCursor >= len(m.selectedBall.Todos) && m.todoCursor > 0 {
+		if m.todoCursor >= len(m.filterTodos()) && m.todoCursor > 0 {
 			m.todoCursor--
 		}
 		store, err := session.NewStore(m.selectedBall.WorkingDir)
@@ -1103,6 +1154,120 @@ func (m Model) executeSplitDelete() (tea.Model, tea.Cmd) {
 
 	m.mode = splitView
 	return m, nil
+}
+
+// handlePanelSearchStart initiates search/filter mode for the current panel
+func (m Model) handlePanelSearchStart() (tea.Model, tea.Cmd) {
+	m.textInput.Reset()
+	m.textInput.Focus()
+
+	switch m.activePanel {
+	case SessionsPanel:
+		m.textInput.Placeholder = "Filter sessions..."
+	case BallsPanel:
+		m.textInput.Placeholder = "Filter balls..."
+	case TodosPanel:
+		m.textInput.Placeholder = "Filter todos..."
+	}
+
+	// Pre-fill with current filter if any
+	if m.panelSearchQuery != "" {
+		m.textInput.SetValue(m.panelSearchQuery)
+	}
+
+	m.mode = panelSearchView
+	m.addActivity("Search mode activated")
+	return m, nil
+}
+
+// handlePanelSearchKey handles keyboard input in panel search mode
+func (m Model) handlePanelSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		// Cancel search, keep existing filter
+		m.mode = splitView
+		m.textInput.Blur()
+		return m, nil
+
+	case "enter":
+		// Apply the filter
+		value := strings.TrimSpace(m.textInput.Value())
+		m.panelSearchQuery = value
+		m.panelSearchActive = value != ""
+		m.textInput.Blur()
+		m.mode = splitView
+
+		if m.panelSearchActive {
+			m.addActivity("Filter applied: " + value)
+			m.message = "Filter: " + value + " (Ctrl+U to clear)"
+		} else {
+			m.addActivity("Filter cleared")
+			m.message = "Filter cleared"
+		}
+		return m, nil
+
+	default:
+		// Pass to textinput
+		var cmd tea.Cmd
+		m.textInput, cmd = m.textInput.Update(msg)
+		return m, cmd
+	}
+}
+
+// filterSessions returns sessions filtered by the panel search query
+func (m *Model) filterSessions() []*session.JuggleSession {
+	if !m.panelSearchActive || m.panelSearchQuery == "" {
+		return m.sessions
+	}
+
+	query := strings.ToLower(m.panelSearchQuery)
+	filtered := make([]*session.JuggleSession, 0)
+	for _, sess := range m.sessions {
+		if strings.Contains(strings.ToLower(sess.ID), query) ||
+			strings.Contains(strings.ToLower(sess.Description), query) {
+			filtered = append(filtered, sess)
+		}
+	}
+	return filtered
+}
+
+// filterBallsForSession returns balls filtered by session and search query
+func (m *Model) filterBallsForSession() []*session.Session {
+	balls := m.getBallsForSession()
+
+	if !m.panelSearchActive || m.panelSearchQuery == "" {
+		return balls
+	}
+
+	query := strings.ToLower(m.panelSearchQuery)
+	filtered := make([]*session.Session, 0)
+	for _, ball := range balls {
+		if strings.Contains(strings.ToLower(ball.Intent), query) ||
+			strings.Contains(strings.ToLower(ball.ID), query) {
+			filtered = append(filtered, ball)
+		}
+	}
+	return filtered
+}
+
+// filterTodos returns todos filtered by the panel search query
+func (m *Model) filterTodos() []session.Todo {
+	if m.selectedBall == nil {
+		return nil
+	}
+
+	if !m.panelSearchActive || m.panelSearchQuery == "" {
+		return m.selectedBall.Todos
+	}
+
+	query := strings.ToLower(m.panelSearchQuery)
+	filtered := make([]session.Todo, 0)
+	for _, todo := range m.selectedBall.Todos {
+		if strings.Contains(strings.ToLower(todo.Text), query) {
+			filtered = append(filtered, todo)
+		}
+	}
+	return filtered
 }
 
 // handleWatcherEvent handles file system change events

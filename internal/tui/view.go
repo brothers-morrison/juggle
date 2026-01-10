@@ -27,6 +27,8 @@ func (m Model) View() string {
 		return m.renderInputView()
 	case confirmSplitDelete:
 		return m.renderSplitConfirmDelete()
+	case panelSearchView:
+		return m.renderPanelSearchView()
 	default:
 		return "Unknown view"
 	}
@@ -288,6 +290,57 @@ func (m Model) renderSplitConfirmDelete() string {
 		Faint(true).
 		Render("y = confirm | n/Esc = cancel")
 	b.WriteString(help)
+
+	return b.String()
+}
+
+// renderPanelSearchView renders the search/filter input dialog
+func (m Model) renderPanelSearchView() string {
+	var b strings.Builder
+
+	// Title based on active panel
+	var panelName string
+	switch m.activePanel {
+	case SessionsPanel:
+		panelName = "Sessions"
+	case BallsPanel:
+		panelName = "Balls"
+	case TodosPanel:
+		panelName = "Todos"
+	}
+
+	title := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("6")).
+		Render("Filter " + panelName)
+	b.WriteString(title + "\n\n")
+
+	// Show input field
+	inputStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("6")).
+		Padding(0, 1).
+		Width(50)
+	b.WriteString(inputStyle.Render(m.textInput.View()) + "\n\n")
+
+	// Show message if any
+	if m.message != "" {
+		b.WriteString(messageStyle.Render(m.message) + "\n\n")
+	}
+
+	// Help
+	help := lipgloss.NewStyle().
+		Faint(true).
+		Render("Enter = apply filter | Esc = cancel")
+	b.WriteString(help + "\n")
+
+	// Additional help
+	if m.panelSearchQuery != "" {
+		helpClear := lipgloss.NewStyle().
+			Faint(true).
+			Render("Current filter: " + m.panelSearchQuery + " (Ctrl+U to clear in panel)")
+		b.WriteString(helpClear)
+	}
 
 	return b.String()
 }

@@ -11,6 +11,7 @@ import (
 )
 
 var tuiSplitView bool
+var tuiSessionFilter string
 
 var tuiCmd = &cobra.Command{
 	Use:   "tui",
@@ -85,6 +86,11 @@ func runTUI(cmd *cobra.Command, args []string) error {
 
 	var model tui.Model
 
+	// --session implies --split
+	if tuiSessionFilter != "" {
+		tuiSplitView = true
+	}
+
 	if tuiSplitView {
 		// Initialize split view with file watcher
 		sessionStore, err := session.NewSessionStore(workingDir)
@@ -108,7 +114,7 @@ func runTUI(cmd *cobra.Command, args []string) error {
 			w.Start()
 		}
 
-		model = tui.InitialSplitModelWithWatcher(store, sessionStore, config, GlobalOpts.LocalOnly, w)
+		model = tui.InitialSplitModelWithWatcher(store, sessionStore, config, GlobalOpts.LocalOnly, w, tuiSessionFilter)
 	} else {
 		// Initialize legacy TUI model
 		model = tui.InitialModel(store, config, GlobalOpts.LocalOnly)
@@ -127,5 +133,6 @@ func runTUI(cmd *cobra.Command, args []string) error {
 
 func init() {
 	tuiCmd.Flags().BoolVarP(&tuiSplitView, "split", "s", false, "Use split-view layout with sessions, balls, and todos panels")
+	tuiCmd.Flags().StringVar(&tuiSessionFilter, "session", "", "Start with session selected (implies --split)")
 	rootCmd.AddCommand(tuiCmd)
 }

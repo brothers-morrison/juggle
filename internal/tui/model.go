@@ -24,6 +24,7 @@ const (
 	inputTodoView       // Add/edit todo
 	inputBlockedView    // Prompt for blocked reason
 	confirmSplitDelete  // Delete confirmation in split view
+	panelSearchView     // Search/filter within current panel
 )
 
 // InputAction represents what action triggered the input mode
@@ -75,9 +76,12 @@ type Model struct {
 	activityLog []ActivityEntry
 
 	// Filter state
-	filterStates   map[string]bool // State visibility toggles
-	filterPriority string
-	searchQuery    string
+	filterStates      map[string]bool // State visibility toggles
+	filterPriority    string
+	searchQuery       string
+	initialSessionID  string // Pre-select session by ID (from --session flag)
+	panelSearchQuery  string // Current search/filter query within a panel
+	panelSearchActive bool   // Whether search/filter is active
 
 	// UI state
 	width         int
@@ -123,22 +127,23 @@ func InitialModel(store *session.Store, config *session.Config, localOnly bool) 
 
 // InitialSplitModel creates a model for the new split-view mode
 func InitialSplitModel(store *session.Store, sessionStore *session.SessionStore, config *session.Config, localOnly bool) Model {
-	return InitialSplitModelWithWatcher(store, sessionStore, config, localOnly, nil)
+	return InitialSplitModelWithWatcher(store, sessionStore, config, localOnly, nil, "")
 }
 
 // InitialSplitModelWithWatcher creates a model for the new split-view mode with file watching
-func InitialSplitModelWithWatcher(store *session.Store, sessionStore *session.SessionStore, config *session.Config, localOnly bool, w *watcher.Watcher) Model {
+func InitialSplitModelWithWatcher(store *session.Store, sessionStore *session.SessionStore, config *session.Config, localOnly bool, w *watcher.Watcher, initialSessionID string) Model {
 	ti := textinput.New()
 	ti.CharLimit = 256
 	ti.Width = 40
 
 	return Model{
-		store:        store,
-		sessionStore: sessionStore,
-		config:       config,
-		localOnly:    localOnly,
-		mode:         splitView,
-		activePanel:  SessionsPanel,
+		store:            store,
+		sessionStore:     sessionStore,
+		config:           config,
+		localOnly:        localOnly,
+		mode:             splitView,
+		activePanel:      SessionsPanel,
+		initialSessionID: initialSessionID,
 		filterStates: map[string]bool{
 			"pending":     true,
 			"in_progress": true,

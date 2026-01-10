@@ -110,25 +110,36 @@ func (m Model) renderSplitView() string {
 func (m Model) renderSessionsPanel(width, height int) string {
 	var b strings.Builder
 
-	// Title
+	// Get filtered sessions
+	sessions := m.filterSessions()
+
+	// Title with filter indicator
 	title := "Sessions"
+	if m.panelSearchActive && m.activePanel == SessionsPanel {
+		title = fmt.Sprintf("Sessions [%s]", m.panelSearchQuery)
+	}
 	if m.activePanel == SessionsPanel {
-		b.WriteString(activePanelTitleStyle.Render(title) + "\n")
+		b.WriteString(activePanelTitleStyle.Render(truncate(title, width-2)) + "\n")
 	} else {
-		b.WriteString(panelTitleStyle.Render(title) + "\n")
+		b.WriteString(panelTitleStyle.Render(truncate(title, width-2)) + "\n")
 	}
 	b.WriteString(strings.Repeat("─", width) + "\n")
 
-	if len(m.sessions) == 0 {
-		b.WriteString(helpStyle.Render("  No sessions\n"))
-		b.WriteString(helpStyle.Render("  Press 'a' to create"))
+	if len(sessions) == 0 {
+		if m.panelSearchActive {
+			b.WriteString(helpStyle.Render("  No matching sessions\n"))
+			b.WriteString(helpStyle.Render("  Ctrl+U to clear filter"))
+		} else {
+			b.WriteString(helpStyle.Render("  No sessions\n"))
+			b.WriteString(helpStyle.Render("  Press 'a' to create"))
+		}
 	} else {
 		// Calculate available lines for sessions
 		availableLines := height - 3 // Account for title and separator
 
-		for i, sess := range m.sessions {
+		for i, sess := range sessions {
 			if i >= availableLines {
-				remaining := len(m.sessions) - availableLines
+				remaining := len(sessions) - availableLines
 				b.WriteString(helpStyle.Render(fmt.Sprintf("  ... +%d more", remaining)))
 				break
 			}
@@ -160,15 +171,18 @@ func (m Model) renderSessionsPanel(width, height int) string {
 func (m Model) renderBallsPanel(width, height int) string {
 	var b strings.Builder
 
-	// Get balls for current session
-	balls := m.getBallsForSession()
+	// Get filtered balls for current session
+	balls := m.filterBallsForSession()
 
-	// Title
+	// Title with filter indicator
 	var title string
 	if m.selectedSession != nil {
 		title = fmt.Sprintf("Balls: %s", m.selectedSession.ID)
 	} else {
 		title = "Balls: All"
+	}
+	if m.panelSearchActive && m.activePanel == BallsPanel {
+		title = fmt.Sprintf("%s [%s]", title, m.panelSearchQuery)
 	}
 
 	if m.activePanel == BallsPanel {
@@ -179,9 +193,14 @@ func (m Model) renderBallsPanel(width, height int) string {
 	b.WriteString(strings.Repeat("─", width) + "\n")
 
 	if len(balls) == 0 {
-		b.WriteString(helpStyle.Render("  No balls"))
-		if m.selectedSession != nil {
-			b.WriteString(helpStyle.Render(fmt.Sprintf(" in session '%s'", m.selectedSession.ID)))
+		if m.panelSearchActive {
+			b.WriteString(helpStyle.Render("  No matching balls\n"))
+			b.WriteString(helpStyle.Render("  Ctrl+U to clear filter"))
+		} else {
+			b.WriteString(helpStyle.Render("  No balls"))
+			if m.selectedSession != nil {
+				b.WriteString(helpStyle.Render(fmt.Sprintf(" in session '%s'", m.selectedSession.ID)))
+			}
 		}
 		b.WriteString("\n")
 		return b.String()
@@ -297,14 +316,19 @@ func (m Model) renderStatusBar() string {
 
 	switch m.activePanel {
 	case SessionsPanel:
-		hints = []string{"Tab:panels", "j/k:navigate", "Enter:select", "a:add", "?:help", "q:quit"}
+		hints = []string{"Tab:panels", "j/k:navigate", "Enter:select", "a:add", "/:filter", "?:help", "q:quit"}
 	case BallsPanel:
-		hints = []string{"Tab:panels", "j/k:navigate", "Enter:todos", "s:start", "c:complete", "?:help", "q:quit"}
+		hints = []string{"Tab:panels", "j/k:navigate", "Enter:todos", "s:start", "c:complete", "/:filter", "?:help", "q:quit"}
 	case TodosPanel:
-		hints = []string{"Tab:panels", "j/k:navigate", "Esc:back", "Space:toggle", "?:help", "q:quit"}
+		hints = []string{"Tab:panels", "j/k:navigate", "Esc:back", "Space:toggle", "/:filter", "?:help", "q:quit"}
 	}
 
 	status := strings.Join(hints, " | ")
+
+	// Add filter indicator if active
+	if m.panelSearchActive {
+		status = fmt.Sprintf("[Filter: %s] %s", m.panelSearchQuery, status)
+	}
 
 	// Add message if present
 	if m.message != "" {
