@@ -506,6 +506,10 @@ func (m Model) handleSplitViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.handleSessionSwitchNext()
 		}
 		return m, nil
+
+	case "i":
+		// Toggle bottom pane between activity log and ball detail
+		return m.handleToggleBottomPane()
 	}
 
 	return m, nil
@@ -607,6 +611,18 @@ func (m Model) handleSessionSwitchNext() (tea.Model, tea.Cmd) {
 		m.selectedSession = sessions[m.sessionCursor]
 		m.cursor = 0 // Reset ball cursor for new session
 		m.addActivity("Switched to session: " + m.selectedSession.ID)
+	}
+	return m, nil
+}
+
+// handleToggleBottomPane toggles between activity log and ball detail in bottom pane
+func (m Model) handleToggleBottomPane() (tea.Model, tea.Cmd) {
+	if m.bottomPaneMode == BottomPaneActivity {
+		m.bottomPaneMode = BottomPaneDetail
+		m.addActivity("Showing ball details in bottom pane")
+	} else {
+		m.bottomPaneMode = BottomPaneActivity
+		m.addActivity("Showing activity log in bottom pane")
 	}
 	return m, nil
 }

@@ -579,6 +579,7 @@ func (m Model) renderSplitHelpView() string {
 		{
 			title: "Other",
 			items: []helpItem{
+				{"i", "Toggle bottom pane (activity log ↔ ball details)"},
 				{"?", "Toggle this help"},
 				{"R", "Refresh / Reload data"},
 			},

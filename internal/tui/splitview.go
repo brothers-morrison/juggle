@@ -74,7 +74,14 @@ func (m Model) renderSplitView() string {
 	// Render each panel
 	sessionsPanel := m.renderSessionsPanel(leftWidth-2, mainHeight-2)
 	ballsPanel := m.renderBallsPanel(rightWidth-2, mainHeight-2)
-	activityPanel := m.renderActivityPanel(m.width-2, bottomPanelRows-2)
+
+	// Render bottom panel based on mode
+	var bottomPanel string
+	if m.bottomPaneMode == BottomPaneDetail {
+		bottomPanel = m.renderBallDetailPanel(m.width-2, bottomPanelRows-2)
+	} else {
+		bottomPanel = m.renderActivityPanel(m.width-2, bottomPanelRows-2)
+	}
 
 	// Apply panel styling based on active panel
 	var sessionsBorder, ballsBorder lipgloss.Style
@@ -111,7 +118,7 @@ func (m Model) renderSplitView() string {
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		topRow,
-		activityBorder.Render(activityPanel),
+		activityBorder.Render(bottomPanel),
 		statusBar,
 	)
 }
@@ -404,19 +411,100 @@ func (m Model) renderActivityPanel(width, height int) string {
 	return b.String()
 }
 
+// renderBallDetailPanel renders the bottom panel with highlighted ball details
+func (m Model) renderBallDetailPanel(width, height int) string {
+	var b strings.Builder
+
+	// Title
+	title := "Ball Details"
+	if m.activePanel == ActivityPanel {
+		b.WriteString(activePanelTitleStyle.Render(title) + "\n")
+	} else {
+		b.WriteString(panelTitleStyle.Render(title) + "\n")
+	}
+
+	// Get the currently highlighted ball based on active panel
+	var ball *session.Session
+	if m.activePanel == BallsPanel || m.activePanel == TodosPanel {
+		balls := m.filterBallsForSession()
+		if m.cursor < len(balls) {
+			ball = balls[m.cursor]
+		}
+	}
+	if ball == nil && m.selectedBall != nil {
+		ball = m.selectedBall
+	}
+
+	if ball == nil {
+		b.WriteString(helpStyle.Render("  No ball selected - navigate to a ball to see details"))
+		b.WriteString("\n")
+		b.WriteString(helpStyle.Render("  Press 'i' to toggle back to activity log"))
+		return b.String()
+	}
+
+	// Calculate column widths for two-column layout
+	labelWidth := 12
+	availableWidth := width - labelWidth - 4
+
+	// Render ball properties in a compact format
+	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6")).Width(labelWidth)
+	valueStyle := lipgloss.NewStyle()
+
+	// Row 1: ID and State
+	idLabel := labelStyle.Render("ID:")
+	idValue := truncate(ball.ID, 20)
+	stateLabel := labelStyle.Render("State:")
+	stateValue := string(ball.State)
+	if ball.State == session.StateBlocked && ball.BlockedReason != "" {
+		stateValue += " (" + truncate(ball.BlockedReason, 20) + ")"
+	}
+	b.WriteString(fmt.Sprintf("  %s %s    %s %s\n", idLabel, valueStyle.Render(idValue), stateLabel, styleBallByState(ball, stateValue)))
+
+	// Row 2: Priority and Intent
+	priorityLabel := labelStyle.Render("Priority:")
+	priorityValue := string(ball.Priority)
+	intentLabel := labelStyle.Render("Intent:")
+	intentValue := truncate(ball.Intent, availableWidth-30)
+	b.WriteString(fmt.Sprintf("  %s %s    %s %s\n", priorityLabel, valueStyle.Render(priorityValue), intentLabel, valueStyle.Render(intentValue)))
+
+	// Row 3: Tags and Acceptance Criteria count
+	tagsLabel := labelStyle.Render("Tags:")
+	tagsValue := "(none)"
+	if len(ball.Tags) > 0 {
+		tagsValue = truncate(strings.Join(ball.Tags, ", "), 30)
+	}
+	acLabel := labelStyle.Render("Criteria:")
+	acValue := fmt.Sprintf("%d items", len(ball.AcceptanceCriteria))
+	todosLabel := labelStyle.Render("Todos:")
+	doneCount := 0
+	for _, t := range ball.Todos {
+		if t.Done {
+			doneCount++
+		}
+	}
+	todosValue := fmt.Sprintf("%d/%d done", doneCount, len(ball.Todos))
+	b.WriteString(fmt.Sprintf("  %s %s    %s %s    %s %s\n", tagsLabel, valueStyle.Render(tagsValue), acLabel, valueStyle.Render(acValue), todosLabel, valueStyle.Render(todosValue)))
+
+	// Footer hint
+	b.WriteString(helpStyle.Render("  Press 'i' to toggle to activity log | 'e' to edit ball in $EDITOR"))
+
+	return b.String()
+}
+
 // renderStatusBar renders the bottom status bar with keybindings
 func (m Model) renderStatusBar() string {
 	var hints []string
 
+	// Build base hints based on active panel
 	switch m.activePanel {
 	case SessionsPanel:
-		hints = []string{"Tab:panels", "j/k:nav", "a:add", "e:edit", "d:del", "/:filter", "?:help", "q:quit"}
+		hints = []string{"Tab:panels", "j/k:nav", "a:add", "e:edit", "d:del", "/:filter", "i:info", "?:help", "q:quit"}
 	case BallsPanel:
-		hints = []string{"Tab:panels", "j/k:nav", "[/]:session", "Space:back", "Enter:todos", "a:add", "e:edit", "t:tag", "s/c/b:state", "?:help"}
+		hints = []string{"Tab:panels", "j/k:nav", "[/]:session", "Space:back", "Enter:todos", "a:add", "e:edit", "t:tag", "i:info", "?:help"}
 	case TodosPanel:
-		hints = []string{"Tab:panels", "j/k:nav", "Space:toggle", "a:add", "e:edit", "d:del", "Esc:back", "?:help"}
+		hints = []string{"Tab:panels", "j/k:nav", "Space:toggle", "a:add", "e:edit", "d:del", "i:info", "Esc:back", "?:help"}
 	case ActivityPanel:
-		hints = []string{"Tab:panels", "j/k:scroll", "Ctrl+d/u:page", "gg:top", "G:bottom", "?:help", "q:quit"}
+		hints = []string{"Tab:panels", "j/k:scroll", "Ctrl+d/u:page", "gg:top", "G:bottom", "i:info", "?:help", "q:quit"}
 	}
 
 	status := strings.Join(hints, " | ")

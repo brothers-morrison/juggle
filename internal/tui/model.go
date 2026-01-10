@@ -56,6 +56,14 @@ const (
 	ActivityPanel
 )
 
+// BottomPaneMode represents what the bottom pane displays
+type BottomPaneMode int
+
+const (
+	BottomPaneActivity BottomPaneMode = iota // Show activity log
+	BottomPaneDetail                         // Show highlighted ball details
+)
+
 // Special pseudo-session IDs
 const (
 	PseudoSessionAll      = "__all__"
@@ -95,6 +103,9 @@ type Model struct {
 	activityLogOffset int    // Scroll offset for activity log
 	lastKey           string // Last key pressed (for gg detection)
 	helpScrollOffset  int    // Scroll offset for help view
+
+	// Bottom pane mode (toggle between activity log and ball detail)
+	bottomPaneMode BottomPaneMode
 
 	// Filter state
 	filterStates      map[string]bool // State visibility toggles
