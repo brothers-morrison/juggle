@@ -421,9 +421,16 @@ func (m Model) handleSplitViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case " ":
-		// Toggle todo completion in todos panel
-		if m.activePanel == TodosPanel && m.selectedBall != nil && len(m.selectedBall.Todos) > 0 {
-			return m.handleToggleTodo()
+		// Space key: toggle todo in TodosPanel, go back to sessions in BallsPanel
+		switch m.activePanel {
+		case TodosPanel:
+			if m.selectedBall != nil && len(m.selectedBall.Todos) > 0 {
+				return m.handleToggleTodo()
+			}
+		case BallsPanel:
+			// Move focus back to sessions panel
+			m.activePanel = SessionsPanel
+			return m, nil
 		}
 		return m, nil
 
@@ -483,6 +490,20 @@ func (m Model) handleSplitViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Edit tags for selected ball
 		if m.activePanel == BallsPanel {
 			return m.handleTagEditStart()
+		}
+		return m, nil
+
+	case "[":
+		// Switch to previous session while in balls panel
+		if m.activePanel == BallsPanel {
+			return m.handleSessionSwitchPrev()
+		}
+		return m, nil
+
+	case "]":
+		// Switch to next session while in balls panel
+		if m.activePanel == BallsPanel {
+			return m.handleSessionSwitchNext()
 		}
 		return m, nil
 	}
@@ -558,6 +579,38 @@ func (m Model) handleSplitViewNavDown() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// handleSessionSwitchPrev switches to the previous session while in balls panel
+func (m Model) handleSessionSwitchPrev() (tea.Model, tea.Cmd) {
+	sessions := m.filterSessions()
+	if len(sessions) == 0 {
+		return m, nil
+	}
+
+	if m.sessionCursor > 0 {
+		m.sessionCursor--
+		m.selectedSession = sessions[m.sessionCursor]
+		m.cursor = 0 // Reset ball cursor for new session
+		m.addActivity("Switched to session: " + m.selectedSession.ID)
+	}
+	return m, nil
+}
+
+// handleSessionSwitchNext switches to the next session while in balls panel
+func (m Model) handleSessionSwitchNext() (tea.Model, tea.Cmd) {
+	sessions := m.filterSessions()
+	if len(sessions) == 0 {
+		return m, nil
+	}
+
+	if m.sessionCursor < len(sessions)-1 {
+		m.sessionCursor++
+		m.selectedSession = sessions[m.sessionCursor]
+		m.cursor = 0 // Reset ball cursor for new session
+		m.addActivity("Switched to session: " + m.selectedSession.ID)
+	}
+	return m, nil
+}
+
 // getActivityLogMaxOffset calculates the maximum scroll offset for activity log
 func (m Model) getActivityLogMaxOffset() int {
 	visibleLines := bottomPanelRows - 3 // Account for title and borders
@@ -616,11 +669,12 @@ func (m Model) handleActivityLogGoToBottom() (tea.Model, tea.Cmd) {
 func (m Model) handleSplitViewEnter() (tea.Model, tea.Cmd) {
 	switch m.activePanel {
 	case SessionsPanel:
-		// Select session
+		// Select session and move focus to balls panel
 		sessions := m.filterSessions()
 		if len(sessions) > 0 && m.sessionCursor < len(sessions) {
 			m.selectedSession = sessions[m.sessionCursor]
 			m.cursor = 0 // Reset ball cursor for new session
+			m.activePanel = BallsPanel
 			m.addActivity("Selected session: " + m.selectedSession.ID)
 		}
 	case BallsPanel:

@@ -528,7 +528,7 @@ func (m Model) renderSplitHelpView() string {
 			title: "Sessions Panel",
 			items: []helpItem{
 				{"j/k", "Navigate sessions (auto-selects)"},
-				{"Enter", "Select session"},
+				{"Enter", "Select session and go to balls panel"},
 				{"a", "Add new session"},
 				{"e", "Edit session description"},
 				{"d", "Delete session (with confirmation)"},
@@ -540,6 +540,8 @@ func (m Model) renderSplitHelpView() string {
 			title: "Balls Panel",
 			items: []helpItem{
 				{"j/k", "Navigate balls"},
+				{"[ / ]", "Switch session (previous / next)"},
+				{"Space", "Go back to sessions panel"},
 				{"Enter", "Select ball and show todos"},
 				{"a", "Add new ball (tagged to current session)"},
 				{"e", "Edit ball in $EDITOR (YAML format)"},
