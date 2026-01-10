@@ -23,6 +23,7 @@ const (
 	inputBallView       // Add/edit ball
 	inputTodoView       // Add/edit todo
 	inputBlockedView    // Prompt for blocked reason
+	inputTagView        // Add/remove tags
 	confirmSplitDelete  // Delete confirmation in split view
 	panelSearchView     // Search/filter within current panel
 )
@@ -33,6 +34,14 @@ type InputAction int
 const (
 	actionAdd InputAction = iota
 	actionEdit
+)
+
+// TagEditMode represents whether we're adding or removing a tag
+type TagEditMode int
+
+const (
+	tagModeAdd TagEditMode = iota
+	tagModeRemove
 )
 
 // Panel represents which panel is active in split view
@@ -92,10 +101,11 @@ type Model struct {
 
 	// Input state for CRUD operations
 	textInput   textinput.Model
-	inputAction InputAction       // Add or Edit
-	inputTarget string            // What we're editing (e.g., "intent", "description")
-	editingBall *session.Session  // Ball being edited (for edit action)
-	editingTodo int               // Todo index being edited (-1 for new)
+	inputAction InputAction      // Add or Edit
+	inputTarget string           // What we're editing (e.g., "intent", "description")
+	editingBall *session.Session // Ball being edited (for edit action)
+	editingTodo int              // Todo index being edited (-1 for new)
+	tagEditMode TagEditMode      // Whether adding or removing a tag
 
 	// File watcher
 	fileWatcher *watcher.Watcher

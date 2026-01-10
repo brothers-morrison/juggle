@@ -17,7 +17,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		// Handle input modes (text entry)
-		if m.mode == inputSessionView || m.mode == inputBallView || m.mode == inputTodoView || m.mode == inputBlockedView {
+		if m.mode == inputSessionView || m.mode == inputBallView || m.mode == inputTodoView || m.mode == inputBlockedView || m.mode == inputTagView {
 			return m.handleInputKey(msg)
 		}
 
@@ -369,7 +369,7 @@ func (m Model) handleSplitViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "?":
 		// TODO: Show help for split view
-		m.message = "Help: Tab=panels j/k=nav Enter=select a=add e=edit d=delete s=start c=complete b=block q=quit"
+		m.message = "Help: Tab=panels j/k=nav Enter=select a=add e=edit d=delete t=tags s=start c=complete b=block q=quit"
 		return m, nil
 
 	case "a":
@@ -394,6 +394,13 @@ func (m Model) handleSplitViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.panelSearchActive = false
 		m.addActivity("Filter cleared")
 		m.message = "Filter cleared"
+		return m, nil
+
+	case "t":
+		// Edit tags for selected ball
+		if m.activePanel == BallsPanel {
+			return m.handleTagEditStart()
+		}
 		return m, nil
 	}
 
@@ -927,6 +934,8 @@ func (m Model) handleInputSubmit() (tea.Model, tea.Cmd) {
 		return m.submitTodoInput(value)
 	case inputBlockedView:
 		return m.submitBlockedInput(value)
+	case inputTagView:
+		return m.submitTagInput(value)
 	}
 
 	m.mode = splitView
@@ -1324,4 +1333,88 @@ func (m Model) handleWatcherEvent(event watcher.Event) (tea.Model, tea.Cmd) {
 	}
 
 	return m, tea.Batch(cmds...)
+}
+
+// handleTagEditStart opens the tag editor for the selected ball
+func (m Model) handleTagEditStart() (tea.Model, tea.Cmd) {
+	balls := m.filterBallsForSession()
+	if len(balls) == 0 || m.cursor >= len(balls) {
+		m.message = "No ball selected"
+		return m, nil
+	}
+
+	ball := balls[m.cursor]
+	m.editingBall = ball
+	m.tagEditMode = tagModeAdd
+	m.textInput.Reset()
+	m.textInput.Focus()
+	m.textInput.Placeholder = "Enter tag to add (or prefix with - to remove)"
+	m.inputTarget = "tag"
+	m.mode = inputTagView
+	m.addActivity("Editing tags for: " + ball.ID)
+
+	return m, nil
+}
+
+// submitTagInput handles tag add/remove submission
+func (m Model) submitTagInput(value string) (tea.Model, tea.Cmd) {
+	if m.editingBall == nil {
+		m.mode = splitView
+		return m, nil
+	}
+
+	// Check if removing a tag (prefix with -)
+	if strings.HasPrefix(value, "-") {
+		tagToRemove := strings.TrimPrefix(value, "-")
+		tagToRemove = strings.TrimSpace(tagToRemove)
+		if tagToRemove == "" {
+			m.message = "Tag name cannot be empty"
+			return m, nil
+		}
+
+		// Check if tag exists
+		hasTag := false
+		for _, t := range m.editingBall.Tags {
+			if t == tagToRemove {
+				hasTag = true
+				break
+			}
+		}
+
+		if !hasTag {
+			m.message = "Tag not found: " + tagToRemove
+			m.mode = splitView
+			return m, nil
+		}
+
+		m.editingBall.RemoveTag(tagToRemove)
+		m.addActivity("Removed tag: " + tagToRemove + " from " + m.editingBall.ID)
+		m.message = "Removed tag: " + tagToRemove
+	} else {
+		// Adding a tag
+		tagToAdd := strings.TrimSpace(value)
+
+		// Check if tag already exists
+		for _, t := range m.editingBall.Tags {
+			if t == tagToAdd {
+				m.message = "Tag already exists: " + tagToAdd
+				m.mode = splitView
+				return m, nil
+			}
+		}
+
+		m.editingBall.AddTag(tagToAdd)
+		m.addActivity("Added tag: " + tagToAdd + " to " + m.editingBall.ID)
+		m.message = "Added tag: " + tagToAdd
+	}
+
+	store, err := session.NewStore(m.editingBall.WorkingDir)
+	if err != nil {
+		m.message = "Error: " + err.Error()
+		m.mode = splitView
+		return m, nil
+	}
+
+	m.mode = splitView
+	return m, updateBall(store, m.editingBall)
 }

@@ -25,6 +25,8 @@ func (m Model) View() string {
 		return m.renderSplitView()
 	case inputSessionView, inputBallView, inputTodoView, inputBlockedView:
 		return m.renderInputView()
+	case inputTagView:
+		return m.renderTagView()
 	case confirmSplitDelete:
 		return m.renderSplitConfirmDelete()
 	case panelSearchView:
@@ -341,6 +343,72 @@ func (m Model) renderPanelSearchView() string {
 			Render("Current filter: " + m.panelSearchQuery + " (Ctrl+U to clear in panel)")
 		b.WriteString(helpClear)
 	}
+
+	return b.String()
+}
+
+// renderTagView renders the tag editing dialog
+func (m Model) renderTagView() string {
+	var b strings.Builder
+
+	title := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("6")).
+		Render("Edit Tags")
+	b.WriteString(title + "\n\n")
+
+	// Show ball context
+	if m.editingBall != nil {
+		b.WriteString(fmt.Sprintf("Ball: %s\n", m.editingBall.ID))
+		b.WriteString(fmt.Sprintf("Intent: %s\n\n", m.editingBall.Intent))
+
+		// Show current tags
+		if len(m.editingBall.Tags) > 0 {
+			tagsLabel := lipgloss.NewStyle().
+				Bold(true).
+				Render("Current Tags:")
+			b.WriteString(tagsLabel + "\n")
+
+			tagStyle := lipgloss.NewStyle().
+				Foreground(lipgloss.Color("12")).
+				Background(lipgloss.Color("236")).
+				Padding(0, 1)
+
+			for _, tag := range m.editingBall.Tags {
+				b.WriteString("  " + tagStyle.Render(tag) + "\n")
+			}
+			b.WriteString("\n")
+		} else {
+			noTags := lipgloss.NewStyle().
+				Faint(true).
+				Render("No tags")
+			b.WriteString(noTags + "\n\n")
+		}
+	}
+
+	// Show input field
+	inputStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("6")).
+		Padding(0, 1).
+		Width(50)
+	b.WriteString(inputStyle.Render(m.textInput.View()) + "\n\n")
+
+	// Show message if any
+	if m.message != "" {
+		b.WriteString(messageStyle.Render(m.message) + "\n\n")
+	}
+
+	// Help
+	help := lipgloss.NewStyle().
+		Faint(true).
+		Render("Enter = submit | Esc = cancel\n")
+	b.WriteString(help)
+
+	helpAdd := lipgloss.NewStyle().
+		Faint(true).
+		Render("Type tag name to add | Prefix with - to remove (e.g., -mytag)")
+	b.WriteString(helpAdd)
 
 	return b.String()
 }
