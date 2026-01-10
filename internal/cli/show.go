@@ -72,6 +72,13 @@ func renderSessionDetails(sess *session.Session) {
 		fmt.Println(labelStyle.Render("Blocked:"), valueStyle.Render(sess.BlockedReason))
 	}
 
+	if len(sess.AcceptanceCriteria) > 0 {
+		fmt.Println(labelStyle.Render("Acceptance Criteria:"))
+		for i, criterion := range sess.AcceptanceCriteria {
+			fmt.Printf("  %d. %s\n", i+1, criterion)
+		}
+	}
+
 	fmt.Println(labelStyle.Render("Started:"), valueStyle.Render(sess.StartedAt.Format("2006-01-02 15:04:05")))
 	fmt.Println(labelStyle.Render("Last Activity:"), valueStyle.Render(sess.LastActivity.Format("2006-01-02 15:04:05")))
 	fmt.Println(labelStyle.Render("Updates:"), valueStyle.Render(fmt.Sprintf("%d", sess.UpdateCount)))
