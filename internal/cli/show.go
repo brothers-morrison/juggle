@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -8,6 +9,8 @@ import (
 	"github.com/ohare93/juggle/internal/session"
 	"github.com/spf13/cobra"
 )
+
+var showJSONFlag bool
 
 var showCmd = &cobra.Command{
 	Use:   "show <session-id>",
@@ -17,17 +20,46 @@ var showCmd = &cobra.Command{
 	RunE:  runShow,
 }
 
+func init() {
+	showCmd.Flags().BoolVar(&showJSONFlag, "json", false, "Output as JSON")
+}
+
 func runShow(cmd *cobra.Command, args []string) error {
 	ballID := args[0]
 
 	// Use findBallByID which respects --all flag
 	foundBall, _, err := findBallByID(ballID)
 	if err != nil {
+		if showJSONFlag {
+			return printJSONError(err)
+		}
 		return err
+	}
+
+	if showJSONFlag {
+		return printBallJSON(foundBall)
 	}
 
 	renderSessionDetails(foundBall)
 	return nil
+}
+
+// printBallJSON outputs the ball as JSON
+func printBallJSON(ball *session.Session) error {
+	data, err := json.MarshalIndent(ball, "", "  ")
+	if err != nil {
+		return printJSONError(err)
+	}
+	fmt.Println(string(data))
+	return nil
+}
+
+// printJSONError outputs an error in JSON format
+func printJSONError(err error) error {
+	errResp := map[string]string{"error": err.Error()}
+	data, _ := json.Marshal(errResp)
+	fmt.Println(string(data))
+	return nil // Return nil so the error is in JSON, not stderr
 }
 
 func renderSessionDetails(sess *session.Session) {

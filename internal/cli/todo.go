@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 
@@ -9,9 +10,10 @@ import (
 )
 
 var (
-	todoBallID          string
-	todoDescriptionFlag string
-	todoVerboseFlag     bool
+	todoBallID           string
+	todoDescriptionFlag  string
+	todoVerboseFlag      bool
+	todoCompleteJSONFlag bool
 )
 
 var todoCmd = &cobra.Command{
@@ -108,7 +110,8 @@ This command is designed for agent use with positional arguments.
 
 Examples:
   juggle todo complete myapp-5 1
-  juggle todo complete myapp-5 3`,
+  juggle todo complete myapp-5 3
+  juggle todo complete myapp-5 1 --json`,
 	Args: cobra.ExactArgs(2),
 	RunE: runTodoComplete,
 }
@@ -128,6 +131,9 @@ func init() {
 
 	// Add --verbose flag to list command
 	todoListCmd.Flags().BoolVarP(&todoVerboseFlag, "verbose", "v", false, "Show todo descriptions")
+
+	// Add --json flag to complete command
+	todoCompleteCmd.Flags().BoolVar(&todoCompleteJSONFlag, "json", false, "Output as JSON")
 
 	todoCmd.AddCommand(todoAddCmd)
 	todoCmd.AddCommand(todoListCmd)
@@ -517,26 +523,46 @@ func runTodoComplete(cmd *cobra.Command, args []string) error {
 
 	idx, err := strconv.Atoi(idxStr)
 	if err != nil {
-		return fmt.Errorf("invalid index: %s (must be a number)", idxStr)
+		err = fmt.Errorf("invalid index: %s (must be a number)", idxStr)
+		if todoCompleteJSONFlag {
+			return printTodoCompleteJSONError(err)
+		}
+		return err
 	}
 
 	cwd, err := GetWorkingDir()
 	if err != nil {
-		return fmt.Errorf("failed to get current directory: %w", err)
+		err = fmt.Errorf("failed to get current directory: %w", err)
+		if todoCompleteJSONFlag {
+			return printTodoCompleteJSONError(err)
+		}
+		return err
 	}
 
 	store, err := NewStoreForCommand(cwd)
 	if err != nil {
-		return fmt.Errorf("failed to initialize store: %w", err)
+		err = fmt.Errorf("failed to initialize store: %w", err)
+		if todoCompleteJSONFlag {
+			return printTodoCompleteJSONError(err)
+		}
+		return err
 	}
 
 	ball, err := store.GetBallByID(ballID)
 	if err != nil {
-		return fmt.Errorf("ball %s not found", ballID)
+		err = fmt.Errorf("ball %s not found", ballID)
+		if todoCompleteJSONFlag {
+			return printTodoCompleteJSONError(err)
+		}
+		return err
 	}
 
 	if idx < 1 || idx > len(ball.Todos) {
-		return fmt.Errorf("invalid index: %d (must be between 1 and %d)", idx, len(ball.Todos))
+		err = fmt.Errorf("invalid index: %d (must be between 1 and %d)", idx, len(ball.Todos))
+		if todoCompleteJSONFlag {
+			return printTodoCompleteJSONError(err)
+		}
+		return err
 	}
 
 	// Mark todo as done (not toggle - always set to done)
@@ -544,11 +570,46 @@ func runTodoComplete(cmd *cobra.Command, args []string) error {
 	ball.UpdateActivity()
 
 	if err := store.UpdateBall(ball); err != nil {
-		return fmt.Errorf("failed to update ball: %w", err)
+		err = fmt.Errorf("failed to update ball: %w", err)
+		if todoCompleteJSONFlag {
+			return printTodoCompleteJSONError(err)
+		}
+		return err
 	}
 
 	todo := ball.Todos[idx-1]
-	fmt.Printf("Completed todo %d: %s\n", idx, todo.Text)
 
+	if todoCompleteJSONFlag {
+		return printTodoCompleteJSONSuccess(ballID, idx, todo.Text)
+	}
+
+	fmt.Printf("Completed todo %d: %s\n", idx, todo.Text)
 	return nil
+}
+
+// TodoCompleteResponse is the JSON response for todo complete command
+type TodoCompleteResponse struct {
+	Success bool   `json:"success"`
+	BallID  string `json:"ball_id"`
+	Index   int    `json:"index"`
+	Text    string `json:"text"`
+}
+
+func printTodoCompleteJSONSuccess(ballID string, index int, text string) error {
+	resp := TodoCompleteResponse{
+		Success: true,
+		BallID:  ballID,
+		Index:   index,
+		Text:    text,
+	}
+	data, _ := json.Marshal(resp)
+	fmt.Println(string(data))
+	return nil
+}
+
+func printTodoCompleteJSONError(err error) error {
+	errResp := map[string]string{"error": err.Error()}
+	data, _ := json.Marshal(errResp)
+	fmt.Println(string(data))
+	return nil // Return nil so the error is in JSON, not stderr
 }

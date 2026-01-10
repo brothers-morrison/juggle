@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"time"
@@ -8,6 +9,8 @@ import (
 	"github.com/ohare93/juggle/internal/session"
 	"github.com/spf13/cobra"
 )
+
+var progressAppendJSONFlag bool
 
 var progressCmd = &cobra.Command{
 	Use:   "progress",
@@ -30,12 +33,14 @@ Creates progress.txt if it doesn't exist.
 
 Examples:
   juggle progress append my-session "Completed user story US-001"
-  JUGGLER_SESSION_ID=my-session juggle progress append "Fixed auth bug"`,
+  JUGGLER_SESSION_ID=my-session juggle progress append "Fixed auth bug"
+  juggle progress append my-session "Message" --json`,
 	Args: cobra.RangeArgs(1, 2),
 	RunE: runProgressAppend,
 }
 
 func init() {
+	progressAppendCmd.Flags().BoolVar(&progressAppendJSONFlag, "json", false, "Output as JSON")
 	progressCmd.AddCommand(progressAppendCmd)
 	rootCmd.AddCommand(progressCmd)
 }
@@ -51,19 +56,31 @@ func runProgressAppend(cmd *cobra.Command, args []string) error {
 		// Single arg - use env var for session ID
 		sessionID = os.Getenv("JUGGLER_SESSION_ID")
 		if sessionID == "" {
-			return fmt.Errorf("session ID required: provide as first argument or set JUGGLER_SESSION_ID")
+			err := fmt.Errorf("session ID required: provide as first argument or set JUGGLER_SESSION_ID")
+			if progressAppendJSONFlag {
+				return printProgressAppendJSONError(err)
+			}
+			return err
 		}
 		text = args[0]
 	}
 
 	cwd, err := GetWorkingDir()
 	if err != nil {
-		return fmt.Errorf("failed to get current directory: %w", err)
+		err = fmt.Errorf("failed to get current directory: %w", err)
+		if progressAppendJSONFlag {
+			return printProgressAppendJSONError(err)
+		}
+		return err
 	}
 
 	store, err := session.NewSessionStoreWithConfig(cwd, GetStoreConfig())
 	if err != nil {
-		return fmt.Errorf("failed to initialize session store: %w", err)
+		err = fmt.Errorf("failed to initialize session store: %w", err)
+		if progressAppendJSONFlag {
+			return printProgressAppendJSONError(err)
+		}
+		return err
 	}
 
 	// Format timestamped entry
@@ -72,10 +89,45 @@ func runProgressAppend(cmd *cobra.Command, args []string) error {
 
 	// Append to progress file
 	if err := store.AppendProgress(sessionID, entry); err != nil {
-		return fmt.Errorf("failed to append progress: %w", err)
+		err = fmt.Errorf("failed to append progress: %w", err)
+		if progressAppendJSONFlag {
+			return printProgressAppendJSONError(err)
+		}
+		return err
+	}
+
+	if progressAppendJSONFlag {
+		return printProgressAppendJSONSuccess(sessionID, text, timestamp)
 	}
 
 	// Success message for agent confirmation
 	fmt.Printf("Appended to session %s progress.txt\n", sessionID)
 	return nil
+}
+
+// ProgressAppendResponse is the JSON response for progress append command
+type ProgressAppendResponse struct {
+	Success   bool   `json:"success"`
+	SessionID string `json:"session_id"`
+	Text      string `json:"text"`
+	Timestamp string `json:"timestamp"`
+}
+
+func printProgressAppendJSONSuccess(sessionID, text, timestamp string) error {
+	resp := ProgressAppendResponse{
+		Success:   true,
+		SessionID: sessionID,
+		Text:      text,
+		Timestamp: timestamp,
+	}
+	data, _ := json.Marshal(resp)
+	fmt.Println(string(data))
+	return nil
+}
+
+func printProgressAppendJSONError(err error) error {
+	errResp := map[string]string{"error": err.Error()}
+	data, _ := json.Marshal(errResp)
+	fmt.Println(string(data))
+	return nil // Return nil so the error is in JSON, not stderr
 }

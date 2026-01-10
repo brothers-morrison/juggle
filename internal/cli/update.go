@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -17,6 +18,7 @@ var (
 	updateCriteria    []string
 	updateTags        string
 	updateBlockReason string
+	updateJSONFlag    bool
 )
 
 var updateCmd = &cobra.Command{
@@ -46,6 +48,7 @@ func init() {
 	updateCmd.Flags().StringArrayVar(&updateCriteria, "criteria", nil, "Set acceptance criteria (can be specified multiple times)")
 	updateCmd.Flags().StringVar(&updateTags, "tags", "", "Update tags (comma-separated)")
 	updateCmd.Flags().StringVar(&updateBlockReason, "reason", "", "Blocked reason (required when setting state to blocked)")
+	updateCmd.Flags().BoolVar(&updateJSONFlag, "json", false, "Output updated ball as JSON")
 
 	// Add completion for flags
 	updateCmd.RegisterFlagCompletionFunc("priority", CompletePriorities)
@@ -60,11 +63,14 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	// Use findBallByID which respects --all flag
 	foundBall, foundStore, err := findBallByID(ballID)
 	if err != nil {
+		if updateJSONFlag {
+			return printJSONError(err)
+		}
 		return err
 	}
 
-	// If no flags provided, enter interactive mode
-	if updateIntent == "" && updatePriority == "" && updateState == "" && updateCriteria == nil && updateTags == "" {
+	// If no flags provided (except --json), enter interactive mode
+	if updateIntent == "" && updatePriority == "" && updateState == "" && updateCriteria == nil && updateTags == "" && !updateJSONFlag {
 		return runInteractiveUpdate(foundBall, foundStore)
 	}
 
@@ -74,16 +80,24 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	if updateIntent != "" {
 		foundBall.Intent = updateIntent
 		modified = true
-		fmt.Printf("✓ Updated intent: %s\n", updateIntent)
+		if !updateJSONFlag {
+			fmt.Printf("✓ Updated intent: %s\n", updateIntent)
+		}
 	}
 
 	if updatePriority != "" {
 		if !session.ValidatePriority(updatePriority) {
-			return fmt.Errorf("invalid priority: %s (must be low|medium|high|urgent)", updatePriority)
+			err := fmt.Errorf("invalid priority: %s (must be low|medium|high|urgent)", updatePriority)
+			if updateJSONFlag {
+				return printJSONError(err)
+			}
+			return err
 		}
 		foundBall.Priority = session.Priority(updatePriority)
 		modified = true
-		fmt.Printf("✓ Updated priority: %s\n", updatePriority)
+		if !updateJSONFlag {
+			fmt.Printf("✓ Updated priority: %s\n", updatePriority)
+		}
 	}
 
 	if updateState != "" {
@@ -96,19 +110,31 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		}
 		newState, ok := stateMap[updateState]
 		if !ok {
-			return fmt.Errorf("invalid state: %s (must be pending|in_progress|blocked|complete)", updateState)
+			err := fmt.Errorf("invalid state: %s (must be pending|in_progress|blocked|complete)", updateState)
+			if updateJSONFlag {
+				return printJSONError(err)
+			}
+			return err
 		}
 
 		// If setting to blocked, require a reason
 		if newState == session.StateBlocked {
 			if updateBlockReason == "" {
-				return fmt.Errorf("blocked reason required: use --reason flag when setting state to blocked")
+				err := fmt.Errorf("blocked reason required: use --reason flag when setting state to blocked")
+				if updateJSONFlag {
+					return printJSONError(err)
+				}
+				return err
 			}
 			foundBall.SetBlocked(updateBlockReason)
-			fmt.Printf("✓ Updated state: blocked (reason: %s)\n", updateBlockReason)
+			if !updateJSONFlag {
+				fmt.Printf("✓ Updated state: blocked (reason: %s)\n", updateBlockReason)
+			}
 		} else {
 			foundBall.SetState(newState)
-			fmt.Printf("✓ Updated state: %s\n", foundBall.State)
+			if !updateJSONFlag {
+				fmt.Printf("✓ Updated state: %s\n", foundBall.State)
+			}
 		}
 		modified = true
 	}
@@ -116,7 +142,9 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	if updateCriteria != nil {
 		foundBall.SetAcceptanceCriteria(updateCriteria)
 		modified = true
-		fmt.Printf("✓ Updated acceptance criteria (%d items)\n", len(updateCriteria))
+		if !updateJSONFlag {
+			fmt.Printf("✓ Updated acceptance criteria (%d items)\n", len(updateCriteria))
+		}
 	}
 
 	if updateTags != "" {
@@ -127,17 +155,38 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		}
 		foundBall.Tags = tags
 		modified = true
-		fmt.Printf("✓ Updated tags: %s\n", strings.Join(tags, ", "))
+		if !updateJSONFlag {
+			fmt.Printf("✓ Updated tags: %s\n", strings.Join(tags, ", "))
+		}
 	}
 
 	if modified {
 		foundBall.UpdateActivity()
 		if err := foundStore.UpdateBall(foundBall); err != nil {
+			if updateJSONFlag {
+				return printJSONError(err)
+			}
 			return fmt.Errorf("failed to update ball: %w", err)
 		}
+		if updateJSONFlag {
+			return printBallJSON(foundBall)
+		}
 		fmt.Printf("\n✓ Ball %s updated successfully\n", ballID)
+	} else if updateJSONFlag {
+		// Even with no modifications, output the ball in JSON mode
+		return printBallJSON(foundBall)
 	}
 
+	return nil
+}
+
+// printUpdateJSON outputs the updated ball as JSON (uses show.go's helper)
+func printUpdateJSON(ball *session.Session) error {
+	data, err := json.MarshalIndent(ball, "", "  ")
+	if err != nil {
+		return printJSONError(err)
+	}
+	fmt.Println(string(data))
 	return nil
 }
 
