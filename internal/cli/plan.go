@@ -32,6 +32,7 @@ func init() {
 	planCmd.Flags().StringVarP(&descriptionFlag, "description", "d", "", "Additional context or details")
 	planCmd.Flags().StringVarP(&priorityFlag, "priority", "p", "medium", "Priority: low, medium, high, urgent")
 	planCmd.Flags().StringSliceVarP(&tagsFlag, "tags", "t", []string{}, "Tags for categorization")
+	planCmd.Flags().StringVarP(&sessionFlag, "session", "s", "", "Session ID to link this ball to (adds session ID as tag)")
 }
 
 func runPlan(cmd *cobra.Command, args []string) error {
@@ -98,6 +99,11 @@ func runPlan(cmd *cobra.Command, args []string) error {
 	// Add tags if provided
 	for _, tag := range tagsFlag {
 		ball.AddTag(tag)
+	}
+
+	// Add session ID as tag if --session flag provided
+	if sessionFlag != "" {
+		ball.AddTag(sessionFlag)
 	}
 
 	// Save the ball

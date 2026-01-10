@@ -345,3 +345,110 @@ func TestSessionStore_LoadSession_NotFound(t *testing.T) {
 		t.Error("expected error loading non-existent session")
 	}
 }
+
+func TestLoadBallsBySession(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create a ball store
+	ballStore, err := NewStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create ball store: %v", err)
+	}
+
+	// Create balls with different tags (simulating session membership)
+	ball1, _ := New(tmpDir, "Ball 1 - belongs to session-a", PriorityMedium)
+	ball1.AddTag("session-a")
+	if err := ballStore.AppendBall(ball1); err != nil {
+		t.Fatalf("failed to save ball1: %v", err)
+	}
+
+	ball2, _ := New(tmpDir, "Ball 2 - belongs to session-a and session-b", PriorityMedium)
+	ball2.AddTag("session-a")
+	ball2.AddTag("session-b")
+	if err := ballStore.AppendBall(ball2); err != nil {
+		t.Fatalf("failed to save ball2: %v", err)
+	}
+
+	ball3, _ := New(tmpDir, "Ball 3 - belongs to session-b", PriorityMedium)
+	ball3.AddTag("session-b")
+	if err := ballStore.AppendBall(ball3); err != nil {
+		t.Fatalf("failed to save ball3: %v", err)
+	}
+
+	ball4, _ := New(tmpDir, "Ball 4 - no session", PriorityMedium)
+	if err := ballStore.AppendBall(ball4); err != nil {
+		t.Fatalf("failed to save ball4: %v", err)
+	}
+
+	projectPaths := []string{tmpDir}
+
+	// Test session-a: should have ball1 and ball2
+	sessionABalls, err := LoadBallsBySession(projectPaths, "session-a")
+	if err != nil {
+		t.Fatalf("failed to load balls for session-a: %v", err)
+	}
+	if len(sessionABalls) != 2 {
+		t.Errorf("expected 2 balls for session-a, got %d", len(sessionABalls))
+	}
+
+	// Test session-b: should have ball2 and ball3
+	sessionBBalls, err := LoadBallsBySession(projectPaths, "session-b")
+	if err != nil {
+		t.Fatalf("failed to load balls for session-b: %v", err)
+	}
+	if len(sessionBBalls) != 2 {
+		t.Errorf("expected 2 balls for session-b, got %d", len(sessionBBalls))
+	}
+
+	// Test non-existent session: should return empty
+	noSessionBalls, err := LoadBallsBySession(projectPaths, "session-c")
+	if err != nil {
+		t.Fatalf("failed to load balls for session-c: %v", err)
+	}
+	if len(noSessionBalls) != 0 {
+		t.Errorf("expected 0 balls for session-c, got %d", len(noSessionBalls))
+	}
+}
+
+func TestLoadBallsBySession_MultipleSessions(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create a ball store
+	ballStore, err := NewStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create ball store: %v", err)
+	}
+
+	// Create a ball that belongs to multiple sessions
+	ball, _ := New(tmpDir, "Multi-session ball", PriorityMedium)
+	ball.AddTag("session-1")
+	ball.AddTag("session-2")
+	ball.AddTag("session-3")
+	if err := ballStore.AppendBall(ball); err != nil {
+		t.Fatalf("failed to save ball: %v", err)
+	}
+
+	projectPaths := []string{tmpDir}
+
+	// Verify ball appears in all three sessions
+	for _, sessionID := range []string{"session-1", "session-2", "session-3"} {
+		balls, err := LoadBallsBySession(projectPaths, sessionID)
+		if err != nil {
+			t.Fatalf("failed to load balls for %s: %v", sessionID, err)
+		}
+		if len(balls) != 1 {
+			t.Errorf("expected 1 ball for %s, got %d", sessionID, len(balls))
+		}
+		if len(balls) > 0 && balls[0].ID != ball.ID {
+			t.Errorf("expected ball ID %s for %s, got %s", ball.ID, sessionID, balls[0].ID)
+		}
+	}
+}

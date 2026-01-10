@@ -91,6 +91,29 @@ func LoadReadyBalls(projectPaths []string) ([]*Session, error) {
 	return LoadPendingBalls(projectPaths)
 }
 
+// LoadBallsBySession returns all balls that have the given session ID as a tag.
+// Since session ID equals tag, balls with the session ID in their Tags field
+// are considered to belong to that session. Balls can belong to multiple
+// sessions via multiple tags.
+func LoadBallsBySession(projectPaths []string, sessionID string) ([]*Session, error) {
+	allBalls, err := LoadAllBalls(projectPaths)
+	if err != nil {
+		return nil, err
+	}
+
+	sessionBalls := make([]*Session, 0)
+	for _, ball := range allBalls {
+		for _, tag := range ball.Tags {
+			if tag == sessionID {
+				sessionBalls = append(sessionBalls, ball)
+				break
+			}
+		}
+	}
+
+	return sessionBalls, nil
+}
+
 // ProjectInfo holds information about a project and its balls
 type ProjectInfo struct {
 	Path            string
