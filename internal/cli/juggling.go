@@ -416,10 +416,23 @@ func handleBallCommand(cmd *cobra.Command, args []string) error {
 	operationArgs := args[2:]
 
 	switch operation {
+	// New simplified state commands
+	case "pending":
+		return setBallState(ball, session.StatePending, operationArgs, store)
+	case "in-progress":
+		return setBallState(ball, session.StateInProgress, operationArgs, store)
+	case "complete":
+		return setBallComplete(ball, operationArgs, store)
+	case "blocked":
+		return setBallBlocked(ball, operationArgs, store)
+	// Legacy juggle state commands (kept for backward compatibility)
 	case "needs-thrown", "needs-caught", "in-air":
 		return setBallJuggleState(ball, operation, operationArgs, store)
-	case "ready", "drop", "complete":
-		return setBallActiveState(ball, operation, operationArgs, store)
+	// Legacy active state commands (aliased to new states)
+	case "ready":
+		return setBallState(ball, session.StatePending, operationArgs, store)
+	case "drop":
+		return setBallBlocked(ball, operationArgs, store)
 	case "todo", "todos":
 		return handleBallTodo(ball, operationArgs, store)
 	case "tag", "tags":
@@ -498,6 +511,7 @@ func setBallJuggleState(ball *session.Session, state string, args []string, stor
 }
 
 // setBallActiveState sets the active state
+// DEPRECATED: Use setBallState, setBallComplete, or setBallBlocked instead.
 func setBallActiveState(ball *session.Session, state string, args []string, store *session.Store) error {
 	var activeState session.ActiveState
 	switch state {
@@ -518,20 +532,79 @@ func setBallActiveState(ball *session.Session, state string, args []string, stor
 	} else {
 		ball.SetActiveState(activeState)
 	}
-	
+
 	if err := store.Save(ball); err != nil {
 		return fmt.Errorf("failed to save ball: %w", err)
 	}
 
 	fmt.Printf("✓ Ball %s → %s\n", ball.ShortID(), state)
-	
+
 	// Archive if complete
 	if state == "complete" {
 		if err := store.ArchiveBall(ball); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to archive ball: %v\n", err)
 		}
 	}
-	
+
+	return nil
+}
+
+// setBallState sets the ball to a new state (pending, in_progress)
+func setBallState(ball *session.Session, state session.BallState, args []string, store *session.Store) error {
+	ball.SetState(state)
+
+	if err := store.Save(ball); err != nil {
+		return fmt.Errorf("failed to save ball: %w", err)
+	}
+
+	fmt.Printf("✓ Ball %s → %s\n", ball.ShortID(), state)
+	return nil
+}
+
+// setBallComplete marks the ball as complete with optional note and archives it
+func setBallComplete(ball *session.Session, args []string, store *session.Store) error {
+	note := ""
+	if len(args) > 0 {
+		note = strings.Join(args, " ")
+	}
+	ball.MarkComplete(note)
+
+	if err := store.Save(ball); err != nil {
+		return fmt.Errorf("failed to save ball: %w", err)
+	}
+
+	fmt.Printf("✓ Ball %s → complete\n", ball.ShortID())
+	if note != "" {
+		fmt.Printf("  Note: %s\n", note)
+	}
+
+	// Archive completed ball
+	if err := store.ArchiveBall(ball); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to archive ball: %v\n", err)
+	}
+
+	return nil
+}
+
+// setBallBlocked marks the ball as blocked with a reason
+func setBallBlocked(ball *session.Session, args []string, store *session.Store) error {
+	reason := ""
+	if len(args) > 0 {
+		reason = strings.Join(args, " ")
+	}
+
+	if reason == "" {
+		return fmt.Errorf("blocked reason required: juggle <ball-id> blocked <reason>")
+	}
+
+	ball.SetBlocked(reason)
+
+	if err := store.Save(ball); err != nil {
+		return fmt.Errorf("failed to save ball: %w", err)
+	}
+
+	fmt.Printf("✓ Ball %s → blocked\n", ball.ShortID())
+	fmt.Printf("  Reason: %s\n", reason)
 	return nil
 }
 
