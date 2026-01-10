@@ -51,6 +51,7 @@ const (
 	SessionsPanel Panel = iota
 	BallsPanel
 	TodosPanel
+	ActivityPanel
 )
 
 // Special pseudo-session IDs
@@ -88,7 +89,9 @@ type Model struct {
 	activePanel Panel
 
 	// Activity log
-	activityLog []ActivityEntry
+	activityLog       []ActivityEntry
+	activityLogOffset int    // Scroll offset for activity log
+	lastKey           string // Last key pressed (for gg detection)
 
 	// Filter state
 	filterStates      map[string]bool // State visibility toggles
@@ -200,8 +203,18 @@ func (m *Model) addActivity(msg string) {
 	// Keep last 100 entries
 	if len(m.activityLog) >= 100 {
 		m.activityLog = m.activityLog[1:]
+		// Adjust offset when we remove an entry
+		if m.activityLogOffset > 0 {
+			m.activityLogOffset--
+		}
 	}
 	m.activityLog = append(m.activityLog, entry)
+
+	// Auto-scroll to bottom unless actively viewing the activity panel
+	// (user might be scrolled up to read history)
+	if m.activePanel != ActivityPanel {
+		m.activityLogOffset = m.getActivityLogMaxOffset()
+	}
 }
 
 // SelectedSessionID returns the ID of the currently selected session (if any)

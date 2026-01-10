@@ -279,9 +279,11 @@ func (m Model) handleSplitViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.selectedBall != nil && len(m.selectedBall.Todos) > 0 {
 				m.activePanel = TodosPanel
 			} else {
-				m.activePanel = SessionsPanel
+				m.activePanel = ActivityPanel
 			}
 		case TodosPanel:
+			m.activePanel = ActivityPanel
+		case ActivityPanel:
 			m.activePanel = SessionsPanel
 		}
 		return m, nil
@@ -291,15 +293,17 @@ func (m Model) handleSplitViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.message = ""
 		switch m.activePanel {
 		case SessionsPanel:
+			m.activePanel = ActivityPanel
+		case BallsPanel:
+			m.activePanel = SessionsPanel
+		case TodosPanel:
+			m.activePanel = BallsPanel
+		case ActivityPanel:
 			if m.selectedBall != nil && len(m.selectedBall.Todos) > 0 {
 				m.activePanel = TodosPanel
 			} else {
 				m.activePanel = BallsPanel
 			}
-		case BallsPanel:
-			m.activePanel = SessionsPanel
-		case TodosPanel:
-			m.activePanel = BallsPanel
 		}
 		return m, nil
 
@@ -310,6 +314,45 @@ func (m Model) handleSplitViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "down", "j":
 		m.message = ""
 		return m.handleSplitViewNavDown()
+
+	case "ctrl+d":
+		// Page down in activity log
+		if m.activePanel == ActivityPanel {
+			return m.handleActivityLogPageDown()
+		}
+		return m, nil
+
+	case "ctrl+u":
+		// Page up in activity log (or clear filter in other panels)
+		if m.activePanel == ActivityPanel {
+			return m.handleActivityLogPageUp()
+		}
+		// Clear the current panel filter
+		m.panelSearchQuery = ""
+		m.panelSearchActive = false
+		m.addActivity("Filter cleared")
+		m.message = "Filter cleared"
+		return m, nil
+
+	case "g":
+		// Handle gg for go to top of activity log
+		if m.activePanel == ActivityPanel {
+			if m.lastKey == "g" {
+				m.lastKey = ""
+				return m.handleActivityLogGoToTop()
+			}
+			m.lastKey = "g"
+			return m, nil
+		}
+		return m, nil
+
+	case "G":
+		// Go to bottom of activity log
+		if m.activePanel == ActivityPanel {
+			m.lastKey = ""
+			return m.handleActivityLogGoToBottom()
+		}
+		return m, nil
 
 	case "enter":
 		return m.handleSplitViewEnter()
@@ -388,14 +431,6 @@ func (m Model) handleSplitViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Open search/filter for current panel
 		return m.handlePanelSearchStart()
 
-	case "ctrl+u":
-		// Clear the current panel filter
-		m.panelSearchQuery = ""
-		m.panelSearchActive = false
-		m.addActivity("Filter cleared")
-		m.message = "Filter cleared"
-		return m, nil
-
 	case "t":
 		// Edit tags for selected ball
 		if m.activePanel == BallsPanel {
@@ -409,6 +444,7 @@ func (m Model) handleSplitViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleSplitViewNavUp handles up navigation in split view
 func (m Model) handleSplitViewNavUp() (tea.Model, tea.Cmd) {
+	m.lastKey = "" // Clear gg state
 	switch m.activePanel {
 	case SessionsPanel:
 		sessions := m.filterSessions()
@@ -433,12 +469,18 @@ func (m Model) handleSplitViewNavUp() (tea.Model, tea.Cmd) {
 		} else if m.todoCursor >= len(todos) && len(todos) > 0 {
 			m.todoCursor = len(todos) - 1
 		}
+	case ActivityPanel:
+		// Scroll up one line in activity log
+		if m.activityLogOffset > 0 {
+			m.activityLogOffset--
+		}
 	}
 	return m, nil
 }
 
 // handleSplitViewNavDown handles down navigation in split view
 func (m Model) handleSplitViewNavDown() (tea.Model, tea.Cmd) {
+	m.lastKey = "" // Clear gg state
 	switch m.activePanel {
 	case SessionsPanel:
 		sessions := m.filterSessions()
@@ -458,7 +500,67 @@ func (m Model) handleSplitViewNavDown() (tea.Model, tea.Cmd) {
 		if m.todoCursor < len(todos)-1 {
 			m.todoCursor++
 		}
+	case ActivityPanel:
+		// Scroll down one line in activity log
+		maxOffset := m.getActivityLogMaxOffset()
+		if m.activityLogOffset < maxOffset {
+			m.activityLogOffset++
+		}
 	}
+	return m, nil
+}
+
+// getActivityLogMaxOffset calculates the maximum scroll offset for activity log
+func (m Model) getActivityLogMaxOffset() int {
+	visibleLines := bottomPanelRows - 3 // Account for title and borders
+	if visibleLines < 1 {
+		visibleLines = 1
+	}
+	maxOffset := len(m.activityLog) - visibleLines
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	return maxOffset
+}
+
+// handleActivityLogPageDown scrolls down half a page in the activity log
+func (m Model) handleActivityLogPageDown() (tea.Model, tea.Cmd) {
+	m.lastKey = "" // Clear gg state
+	pageSize := (bottomPanelRows - 3) / 2
+	if pageSize < 1 {
+		pageSize = 1
+	}
+	maxOffset := m.getActivityLogMaxOffset()
+	m.activityLogOffset += pageSize
+	if m.activityLogOffset > maxOffset {
+		m.activityLogOffset = maxOffset
+	}
+	return m, nil
+}
+
+// handleActivityLogPageUp scrolls up half a page in the activity log
+func (m Model) handleActivityLogPageUp() (tea.Model, tea.Cmd) {
+	m.lastKey = "" // Clear gg state
+	pageSize := (bottomPanelRows - 3) / 2
+	if pageSize < 1 {
+		pageSize = 1
+	}
+	m.activityLogOffset -= pageSize
+	if m.activityLogOffset < 0 {
+		m.activityLogOffset = 0
+	}
+	return m, nil
+}
+
+// handleActivityLogGoToTop scrolls to the top of the activity log
+func (m Model) handleActivityLogGoToTop() (tea.Model, tea.Cmd) {
+	m.activityLogOffset = 0
+	return m, nil
+}
+
+// handleActivityLogGoToBottom scrolls to the bottom of the activity log
+func (m Model) handleActivityLogGoToBottom() (tea.Model, tea.Cmd) {
+	m.activityLogOffset = m.getActivityLogMaxOffset()
 	return m, nil
 }
 

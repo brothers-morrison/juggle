@@ -90,7 +90,12 @@ func (m Model) renderSplitView() string {
 		ballsBorder = panelBorderStyle.Width(rightWidth).Height(mainHeight)
 	}
 
-	activityBorder := panelBorderStyle.Width(m.width).Height(bottomPanelRows)
+	var activityBorder lipgloss.Style
+	if m.activePanel == ActivityPanel {
+		activityBorder = activePanelBorderStyle.Width(m.width).Height(bottomPanelRows)
+	} else {
+		activityBorder = panelBorderStyle.Width(m.width).Height(bottomPanelRows)
+	}
 
 	// Build the layout
 	topRow := lipgloss.JoinHorizontal(
@@ -348,24 +353,52 @@ func (m Model) renderBallsPanel(width, height int) string {
 func (m Model) renderActivityPanel(width, height int) string {
 	var b strings.Builder
 
-	b.WriteString(panelTitleStyle.Render("Activity Log") + "\n")
+	// Title with active indicator
+	title := "Activity Log"
+	if m.activePanel == ActivityPanel {
+		// Show scroll position and hints when active
+		if len(m.activityLog) > height {
+			title = fmt.Sprintf("Activity Log [%d/%d]", m.activityLogOffset+1, len(m.activityLog))
+		}
+		b.WriteString(activePanelTitleStyle.Render(title) + "\n")
+	} else {
+		b.WriteString(panelTitleStyle.Render(title) + "\n")
+	}
 
 	if len(m.activityLog) == 0 {
 		b.WriteString(activityLogStyle.Render("  No activity yet"))
 		return b.String()
 	}
 
-	// Show most recent entries that fit
-	startIdx := len(m.activityLog) - height
-	if startIdx < 0 {
-		startIdx = 0
+	// Calculate visible range using scroll offset
+	visibleLines := height - 1 // Account for title
+	if visibleLines < 1 {
+		visibleLines = 1
 	}
 
-	for i := startIdx; i < len(m.activityLog); i++ {
+	startIdx := m.activityLogOffset
+	endIdx := startIdx + visibleLines
+	if endIdx > len(m.activityLog) {
+		endIdx = len(m.activityLog)
+	}
+
+	// Show scroll indicator at top if not at beginning
+	if startIdx > 0 && m.activePanel == ActivityPanel {
+		b.WriteString(helpStyle.Render(fmt.Sprintf("  ↑ %d more entries above", startIdx)) + "\n")
+		endIdx-- // Reduce visible entries to make room for indicator
+	}
+
+	for i := startIdx; i < endIdx; i++ {
 		entry := m.activityLog[i]
 		timeStr := entry.Time.Format("15:04:05")
 		line := fmt.Sprintf("  %s %s", timeStr, truncate(entry.Message, width-12))
 		b.WriteString(activityLogStyle.Render(line) + "\n")
+	}
+
+	// Show scroll indicator at bottom if more entries
+	remaining := len(m.activityLog) - endIdx
+	if remaining > 0 && m.activePanel == ActivityPanel {
+		b.WriteString(helpStyle.Render(fmt.Sprintf("  ↓ %d more entries below", remaining)))
 	}
 
 	return b.String()
@@ -382,6 +415,8 @@ func (m Model) renderStatusBar() string {
 		hints = []string{"Tab:panels", "j/k:navigate", "Enter:todos", "s:start", "c:complete", "/:filter", "?:help", "q:quit"}
 	case TodosPanel:
 		hints = []string{"Tab:panels", "j/k:navigate", "Esc:back", "Space:toggle", "/:filter", "?:help", "q:quit"}
+	case ActivityPanel:
+		hints = []string{"Tab:panels", "j/k:scroll", "Ctrl+d/u:page", "gg:top", "G:bottom", "?:help", "q:quit"}
 	}
 
 	status := strings.Join(hints, " | ")
