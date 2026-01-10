@@ -16,7 +16,8 @@ const (
 	detailView
 	helpView
 	confirmDeleteView
-	splitView // New three-panel split view
+	splitView     // New three-panel split view
+	splitHelpView // Comprehensive help view for split mode
 
 	// Input modes for CRUD operations
 	inputSessionView     // Add/edit session
@@ -93,6 +94,7 @@ type Model struct {
 	activityLog       []ActivityEntry
 	activityLogOffset int    // Scroll offset for activity log
 	lastKey           string // Last key pressed (for gg detection)
+	helpScrollOffset  int    // Scroll offset for help view
 
 	// Filter state
 	filterStates      map[string]bool // State visibility toggles

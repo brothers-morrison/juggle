@@ -36,6 +36,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleSplitConfirmDelete(msg)
 		}
 
+		// Handle split help view
+		if m.mode == splitHelpView {
+			return m.handleSplitHelpKey(msg)
+		}
+
 		// Handle split view specific keys first
 		if m.mode == splitView {
 			return m.handleSplitViewKey(msg)
@@ -416,8 +421,9 @@ func (m Model) handleSplitViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		)
 
 	case "?":
-		// TODO: Show help for split view
-		m.message = "Help: Tab=panels j/k=nav Enter=select a=add e=edit d=delete t=tags s=start c=complete b=block q=quit"
+		// Show comprehensive help view
+		m.helpScrollOffset = 0 // Reset scroll position
+		m.mode = splitHelpView
 		return m, nil
 
 	case "a":
@@ -1485,6 +1491,61 @@ func (m Model) handleWatcherEvent(event watcher.Event) (tea.Model, tea.Cmd) {
 	}
 
 	return m, tea.Batch(cmds...)
+}
+
+// handleSplitHelpKey handles keyboard input in split help view
+func (m Model) handleSplitHelpKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "?", "esc":
+		// Close help view
+		m.mode = splitView
+		return m, nil
+
+	case "j", "down":
+		// Scroll down
+		m.helpScrollOffset++
+		return m, nil
+
+	case "k", "up":
+		// Scroll up
+		if m.helpScrollOffset > 0 {
+			m.helpScrollOffset--
+		}
+		return m, nil
+
+	case "ctrl+d":
+		// Page down
+		m.helpScrollOffset += 10
+		return m, nil
+
+	case "ctrl+u":
+		// Page up
+		m.helpScrollOffset -= 10
+		if m.helpScrollOffset < 0 {
+			m.helpScrollOffset = 0
+		}
+		return m, nil
+
+	case "g":
+		// Handle gg for go to top
+		if m.lastKey == "g" {
+			m.lastKey = ""
+			m.helpScrollOffset = 0
+			return m, nil
+		}
+		m.lastKey = "g"
+		return m, nil
+
+	case "G":
+		// Go to bottom (set to large number, will be clamped in render)
+		m.lastKey = ""
+		m.helpScrollOffset = 1000 // Large number, will be clamped
+		return m, nil
+	}
+
+	// Reset gg detection for any other key
+	m.lastKey = ""
+	return m, nil
 }
 
 // handleSessionSelectorKey handles keyboard input in session selector mode

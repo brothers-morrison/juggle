@@ -23,6 +23,8 @@ func (m Model) View() string {
 		return m.renderConfirmDeleteView()
 	case splitView:
 		return m.renderSplitView()
+	case splitHelpView:
+		return m.renderSplitHelpView()
 	case inputSessionView, inputBallView, inputTodoView, inputBlockedView:
 		return m.renderInputView()
 	case inputTagView:
@@ -494,6 +496,165 @@ func (m Model) renderTagView() string {
 		Faint(true).
 		Render("Type tag name to add | Prefix with - to remove (e.g., -mytag)")
 	b.WriteString(helpAdd)
+
+	return b.String()
+}
+
+// renderSplitHelpView renders the comprehensive help view for split mode
+func (m Model) renderSplitHelpView() string {
+	var b strings.Builder
+
+	title := titleStyle.Render("Juggler TUI - Complete Keybindings Reference")
+	b.WriteString(title + "\n\n")
+
+	// Build all help sections
+	sections := []struct {
+		title string
+		items []helpItem
+	}{
+		{
+			title: "Global Navigation",
+			items: []helpItem{
+				{"Tab / l", "Next panel (Sessions → Balls → Todos → Activity)"},
+				{"Shift+Tab / h", "Previous panel"},
+				{"j / ↓", "Move down / Scroll down"},
+				{"k / ↑", "Move up / Scroll up"},
+				{"Enter", "Select item / Expand"},
+				{"Esc", "Back / Deselect / Close"},
+				{"q / Ctrl+C", "Quit application"},
+			},
+		},
+		{
+			title: "Sessions Panel",
+			items: []helpItem{
+				{"j/k", "Navigate sessions (auto-selects)"},
+				{"Enter", "Select session"},
+				{"a", "Add new session"},
+				{"e", "Edit session description"},
+				{"d", "Delete session (with confirmation)"},
+				{"/", "Filter sessions"},
+				{"Ctrl+U", "Clear filter"},
+			},
+		},
+		{
+			title: "Balls Panel",
+			items: []helpItem{
+				{"j/k", "Navigate balls"},
+				{"Enter", "Select ball and show todos"},
+				{"a", "Add new ball (tagged to current session)"},
+				{"e", "Edit ball intent"},
+				{"d", "Delete ball (with confirmation)"},
+				{"t", "Tag ball (add to session)"},
+				{"s", "Start ball (→ in_progress)"},
+				{"c", "Complete ball (→ complete, archives)"},
+				{"b", "Block ball (prompts for reason)"},
+				{"/", "Filter balls"},
+				{"Ctrl+U", "Clear filter"},
+			},
+		},
+		{
+			title: "Todos Panel",
+			items: []helpItem{
+				{"j/k", "Navigate todos"},
+				{"Enter / Space", "Toggle todo completion"},
+				{"a", "Add new todo"},
+				{"e", "Edit todo text"},
+				{"d", "Delete todo (with confirmation)"},
+				{"/", "Filter todos"},
+				{"Ctrl+U", "Clear filter"},
+			},
+		},
+		{
+			title: "Activity Log Panel",
+			items: []helpItem{
+				{"j/k", "Scroll one line"},
+				{"Ctrl+D", "Page down (half screen)"},
+				{"Ctrl+U", "Page up (half screen)"},
+				{"gg", "Go to top"},
+				{"G", "Go to bottom"},
+			},
+		},
+		{
+			title: "Other",
+			items: []helpItem{
+				{"?", "Toggle this help"},
+				{"R", "Refresh / Reload data"},
+			},
+		},
+		{
+			title: "Input Dialogs",
+			items: []helpItem{
+				{"Enter", "Submit / Confirm"},
+				{"Esc", "Cancel"},
+			},
+		},
+		{
+			title: "Delete Confirmation",
+			items: []helpItem{
+				{"y", "Confirm delete"},
+				{"n / Esc", "Cancel delete"},
+			},
+		},
+	}
+
+	// Build content lines
+	var lines []string
+	for _, section := range sections {
+		lines = append(lines, titleStyle.Render(section.title))
+		for _, item := range section.items {
+			keyStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6")).Width(15)
+			line := fmt.Sprintf("  %s  %s", keyStyle.Render(item.key), item.desc)
+			lines = append(lines, line)
+		}
+		lines = append(lines, "") // Empty line between sections
+	}
+
+	// Calculate visible area
+	availableHeight := m.height - 5 // Account for title and footer
+	if availableHeight < 5 {
+		availableHeight = 5
+	}
+
+	totalLines := len(lines)
+	maxOffset := totalLines - availableHeight
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+
+	// Clamp scroll offset
+	if m.helpScrollOffset > maxOffset {
+		m.helpScrollOffset = maxOffset
+	}
+	if m.helpScrollOffset < 0 {
+		m.helpScrollOffset = 0
+	}
+
+	// Show scroll indicator at top if not at beginning
+	if m.helpScrollOffset > 0 {
+		b.WriteString(helpStyle.Render(fmt.Sprintf("  ↑ %d more lines above", m.helpScrollOffset)) + "\n")
+		availableHeight--
+	}
+
+	// Render visible lines
+	endIdx := m.helpScrollOffset + availableHeight
+	if endIdx > totalLines {
+		endIdx = totalLines
+	}
+
+	for i := m.helpScrollOffset; i < endIdx; i++ {
+		b.WriteString(lines[i] + "\n")
+	}
+
+	// Show scroll indicator at bottom if more content
+	remaining := totalLines - endIdx
+	if remaining > 0 {
+		b.WriteString(helpStyle.Render(fmt.Sprintf("  ↓ %d more lines below", remaining)) + "\n")
+	}
+
+	// Footer
+	b.WriteString("\n")
+	footerStyle := lipgloss.NewStyle().Faint(true)
+	b.WriteString(footerStyle.Render("j/k = scroll | ? or Esc = close help"))
 
 	return b.String()
 }

@@ -410,11 +410,11 @@ func (m Model) renderStatusBar() string {
 
 	switch m.activePanel {
 	case SessionsPanel:
-		hints = []string{"Tab:panels", "j/k:navigate", "Enter:select", "a:add", "/:filter", "?:help", "q:quit"}
+		hints = []string{"Tab:panels", "j/k:nav", "a:add", "e:edit", "d:del", "/:filter", "?:help", "q:quit"}
 	case BallsPanel:
-		hints = []string{"Tab:panels", "j/k:navigate", "Enter:todos", "s:start", "c:complete", "/:filter", "?:help", "q:quit"}
+		hints = []string{"Tab:panels", "j/k:nav", "Enter:todos", "a:add", "e:edit", "t:tag", "s:start", "c:done", "b:block", "?:help"}
 	case TodosPanel:
-		hints = []string{"Tab:panels", "j/k:navigate", "Esc:back", "Space:toggle", "/:filter", "?:help", "q:quit"}
+		hints = []string{"Tab:panels", "j/k:nav", "Space:toggle", "a:add", "e:edit", "d:del", "Esc:back", "?:help"}
 	case ActivityPanel:
 		hints = []string{"Tab:panels", "j/k:scroll", "Ctrl+d/u:page", "gg:top", "G:bottom", "?:help", "q:quit"}
 	}
@@ -423,7 +423,7 @@ func (m Model) renderStatusBar() string {
 
 	// Add filter indicator if active
 	if m.panelSearchActive {
-		status = fmt.Sprintf("[Filter: %s] %s", m.panelSearchQuery, status)
+		status = fmt.Sprintf("[Filter: %s Ctrl+U:clear] %s", m.panelSearchQuery, status)
 	}
 
 	// Add message if present
