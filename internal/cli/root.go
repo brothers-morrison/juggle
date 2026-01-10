@@ -230,4 +230,5 @@ func init() {
 	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(deleteCmd)
 	rootCmd.AddCommand(auditCmd)
+	rootCmd.AddCommand(sessionsCmd)
 }
