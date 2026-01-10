@@ -53,6 +53,26 @@ func updateBall(store *session.Store, ball *session.Session) tea.Cmd {
 	}
 }
 
+type ballArchivedMsg struct {
+	ball *session.Session
+	err  error
+}
+
+// updateAndArchiveBall updates the ball and then archives it
+func updateAndArchiveBall(store *session.Store, ball *session.Session) tea.Cmd {
+	return func() tea.Msg {
+		// First update the ball to persist state changes
+		if err := store.UpdateBall(ball); err != nil {
+			return ballArchivedMsg{err: err}
+		}
+		// Then archive it (moves from balls.jsonl to archive/balls.jsonl)
+		if err := store.ArchiveBall(ball); err != nil {
+			return ballArchivedMsg{err: err}
+		}
+		return ballArchivedMsg{ball: ball}
+	}
+}
+
 // Sessions loading for split view
 type sessionsLoadedMsg struct {
 	sessions []*session.JuggleSession

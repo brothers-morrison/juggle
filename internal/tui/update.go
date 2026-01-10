@@ -227,6 +227,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Reload balls
 		return m, loadBalls(m.store, m.config, m.localOnly)
 
+	case ballArchivedMsg:
+		if msg.err != nil {
+			m.message = "Error: " + msg.err.Error()
+			if m.mode == splitView {
+				m.addActivity("Error archiving: " + msg.err.Error())
+			}
+		} else {
+			m.message = "Ball archived successfully"
+			if m.mode == splitView {
+				m.addActivity("Archived ball: " + msg.ball.ID)
+			}
+			// Clear selection if we archived the selected ball
+			if m.selectedBall != nil && m.selectedBall.ID == msg.ball.ID {
+				m.selectedBall = nil
+			}
+		}
+		// Reload balls
+		return m, loadBalls(m.store, m.config, m.localOnly)
+
 	case watcherEventMsg:
 		return m.handleWatcherEvent(msg.event)
 
@@ -504,7 +523,7 @@ func (m Model) handleSplitStartBall() (tea.Model, tea.Cmd) {
 	return m, updateBall(store, ball)
 }
 
-// handleSplitCompleteBall completes the selected ball in split view
+// handleSplitCompleteBall completes the selected ball in split view and archives it
 func (m Model) handleSplitCompleteBall() (tea.Model, tea.Cmd) {
 	balls := m.filterBallsForSession()
 	if len(balls) == 0 || m.cursor >= len(balls) {
@@ -513,7 +532,7 @@ func (m Model) handleSplitCompleteBall() (tea.Model, tea.Cmd) {
 
 	ball := balls[m.cursor]
 	ball.SetState(session.StateComplete)
-	m.addActivity("Completed ball: " + ball.ID)
+	m.addActivity("Completing ball: " + ball.ID)
 
 	store, err := session.NewStore(ball.WorkingDir)
 	if err != nil {
@@ -521,7 +540,8 @@ func (m Model) handleSplitCompleteBall() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	return m, updateBall(store, ball)
+	// Update and archive the completed ball
+	return m, updateAndArchiveBall(store, ball)
 }
 
 // handleSplitBlockBall prompts for a blocked reason
@@ -570,7 +590,8 @@ func (m *Model) handleCompleteBall() (tea.Model, tea.Cmd) {
 		m.message = "Error creating store: " + err.Error()
 		return m, nil
 	}
-	return m, updateBall(store, ball)
+	// Update and archive the completed ball
+	return m, updateAndArchiveBall(store, ball)
 }
 
 func (m *Model) handleDropBall() (tea.Model, tea.Cmd) {

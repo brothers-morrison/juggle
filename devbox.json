@@ -9,6 +9,9 @@
       "echo 'Welcome to devbox!' > /dev/null"
     ],
     "scripts": {
+      "build": [
+        "go build -o juggle ./cmd/juggle"
+      ],
       "test": [
         "go test -v ./internal/integration_test/..."
       ],
