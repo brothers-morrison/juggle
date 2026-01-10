@@ -152,9 +152,17 @@ func (m Model) renderSessionsPanel(width, height int) string {
 			// Count balls for this session
 			ballCount := m.countBallsForSession(sess.ID)
 
+			// Format display name for pseudo-sessions
+			displayName := sess.ID
+			if sess.ID == PseudoSessionAll {
+				displayName = "★ All"
+			} else if sess.ID == PseudoSessionUntagged {
+				displayName = "○ Untagged"
+			}
+
 			line := fmt.Sprintf("%-*s (%d)",
 				width-6,
-				truncate(sess.ID, width-6),
+				truncate(displayName, width-6),
 				ballCount,
 			)
 
@@ -182,9 +190,17 @@ func (m Model) renderBallsPanel(width, height int) string {
 	// Title with filter indicator
 	var title string
 	if m.selectedSession != nil {
-		title = fmt.Sprintf("Balls: %s", m.selectedSession.ID)
+		// Use display names for pseudo-sessions
+		switch m.selectedSession.ID {
+		case PseudoSessionAll:
+			title = "Balls: All"
+		case PseudoSessionUntagged:
+			title = "Balls: Untagged"
+		default:
+			title = fmt.Sprintf("Balls: %s", m.selectedSession.ID)
+		}
 	} else {
-		title = "Balls: All"
+		title = "Balls: (none selected)"
 	}
 	if m.panelSearchActive && m.activePanel == BallsPanel {
 		title = fmt.Sprintf("%s [%s]", title, m.panelSearchQuery)
@@ -385,16 +401,43 @@ func (m Model) renderStatusBar() string {
 
 // countBallsForSession counts balls that belong to a session
 func (m Model) countBallsForSession(sessionID string) int {
-	count := 0
-	for _, ball := range m.filteredBalls {
-		for _, tag := range ball.Tags {
-			if tag == sessionID {
+	// Handle pseudo-sessions
+	switch sessionID {
+	case PseudoSessionAll:
+		return len(m.filteredBalls)
+	case PseudoSessionUntagged:
+		// Count balls with no session tags
+		count := 0
+		sessionIDs := make(map[string]bool)
+		for _, sess := range m.sessions {
+			sessionIDs[sess.ID] = true
+		}
+		for _, ball := range m.filteredBalls {
+			hasSessionTag := false
+			for _, tag := range ball.Tags {
+				if sessionIDs[tag] {
+					hasSessionTag = true
+					break
+				}
+			}
+			if !hasSessionTag {
 				count++
-				break
 			}
 		}
+		return count
+	default:
+		// Regular session - count balls with matching tag
+		count := 0
+		for _, ball := range m.filteredBalls {
+			for _, tag := range ball.Tags {
+				if tag == sessionID {
+					count++
+					break
+				}
+			}
+		}
+		return count
 	}
-	return count
 }
 
 // getStateIcon returns an icon for the ball state

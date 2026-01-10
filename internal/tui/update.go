@@ -414,8 +414,13 @@ func (m Model) handleSplitViewNavUp() (tea.Model, tea.Cmd) {
 		sessions := m.filterSessions()
 		if m.sessionCursor > 0 && m.sessionCursor < len(sessions) {
 			m.sessionCursor--
+			// Scroll-to-select: automatically select the session when navigating
+			m.selectedSession = sessions[m.sessionCursor]
+			m.cursor = 0 // Reset ball cursor for new session
 		} else if m.sessionCursor >= len(sessions) && len(sessions) > 0 {
 			m.sessionCursor = len(sessions) - 1
+			m.selectedSession = sessions[m.sessionCursor]
+			m.cursor = 0
 		}
 	case BallsPanel:
 		if m.cursor > 0 {
@@ -439,6 +444,9 @@ func (m Model) handleSplitViewNavDown() (tea.Model, tea.Cmd) {
 		sessions := m.filterSessions()
 		if m.sessionCursor < len(sessions)-1 {
 			m.sessionCursor++
+			// Scroll-to-select: automatically select the session when navigating
+			m.selectedSession = sessions[m.sessionCursor]
+			m.cursor = 0 // Reset ball cursor for new session
 		}
 	case BallsPanel:
 		balls := m.filterBallsForSession()
@@ -811,6 +819,11 @@ func (m Model) handleSplitEditItem() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		sess := sessions[m.sessionCursor]
+		// Prevent editing pseudo-sessions
+		if sess.ID == PseudoSessionAll || sess.ID == PseudoSessionUntagged {
+			m.message = "Cannot edit built-in session"
+			return m, nil
+		}
 		m.textInput.Placeholder = "Session description"
 		m.textInput.SetValue(sess.Description)
 		m.inputTarget = "session_description"
@@ -859,6 +872,12 @@ func (m Model) handleSplitDeletePrompt() (tea.Model, tea.Cmd) {
 		sessions := m.filterSessions()
 		if len(sessions) == 0 || m.sessionCursor >= len(sessions) {
 			m.message = "No session selected"
+			return m, nil
+		}
+		// Prevent deleting pseudo-sessions
+		sess := sessions[m.sessionCursor]
+		if sess.ID == PseudoSessionAll || sess.ID == PseudoSessionUntagged {
+			m.message = "Cannot delete built-in session"
 			return m, nil
 		}
 		m.confirmAction = "delete_session"
@@ -961,11 +980,19 @@ func (m Model) submitSessionInput(value string) (tea.Model, tea.Cmd) {
 		m.message = "Created session: " + value
 	} else {
 		// Edit session description
-		if m.sessionCursor >= len(m.sessions) {
+		// Note: use filterSessions() since sessionCursor indexes into filtered list
+		sessions := m.filterSessions()
+		if m.sessionCursor >= len(sessions) {
 			m.mode = splitView
 			return m, nil
 		}
-		sess := m.sessions[m.sessionCursor]
+		sess := sessions[m.sessionCursor]
+		// Double-check we're not editing a pseudo-session (shouldn't happen due to guard in handleSplitEditItem)
+		if sess.ID == PseudoSessionAll || sess.ID == PseudoSessionUntagged {
+			m.message = "Cannot edit built-in session"
+			m.mode = splitView
+			return m, nil
+		}
 		err := m.sessionStore.UpdateSessionDescription(sess.ID, value)
 		if err != nil {
 			m.message = "Error updating session: " + err.Error()
@@ -1105,6 +1132,12 @@ func (m Model) executeSplitDelete() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		sess := sessions[m.sessionCursor]
+		// Double-check we're not deleting a pseudo-session (shouldn't happen due to guard in handleSplitDeletePrompt)
+		if sess.ID == PseudoSessionAll || sess.ID == PseudoSessionUntagged {
+			m.message = "Cannot delete built-in session"
+			m.mode = splitView
+			return m, nil
+		}
 		err := m.sessionStore.DeleteSession(sess.ID)
 		if err != nil {
 			m.message = "Error deleting session: " + err.Error()
@@ -1245,14 +1278,26 @@ func (m Model) handlePanelSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // filterSessions returns sessions filtered by the panel search query
+// It prepends pseudo-sessions ("All" and "Untagged") at the top
 func (m *Model) filterSessions() []*session.JuggleSession {
+	// Create pseudo-sessions
+	pseudoSessions := []*session.JuggleSession{
+		{ID: PseudoSessionAll, Description: "All balls across all sessions"},
+		{ID: PseudoSessionUntagged, Description: "Balls with no session tags"},
+	}
+
+	// Combine pseudo-sessions with real sessions
+	allSessions := make([]*session.JuggleSession, 0, len(pseudoSessions)+len(m.sessions))
+	allSessions = append(allSessions, pseudoSessions...)
+	allSessions = append(allSessions, m.sessions...)
+
 	if !m.panelSearchActive || m.panelSearchQuery == "" {
-		return m.sessions
+		return allSessions
 	}
 
 	query := strings.ToLower(m.panelSearchQuery)
 	filtered := make([]*session.JuggleSession, 0)
-	for _, sess := range m.sessions {
+	for _, sess := range allSessions {
 		if strings.Contains(strings.ToLower(sess.ID), query) ||
 			strings.Contains(strings.ToLower(sess.Description), query) {
 			filtered = append(filtered, sess)

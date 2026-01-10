@@ -53,6 +53,12 @@ const (
 	TodosPanel
 )
 
+// Special pseudo-session IDs
+const (
+	PseudoSessionAll      = "__all__"
+	PseudoSessionUntagged = "__untagged__"
+)
+
 // ActivityEntry represents a log entry in the activity log
 type ActivityEntry struct {
 	Time    time.Time
@@ -212,14 +218,42 @@ func (m *Model) getBallsForSession() []*session.Session {
 		return m.filteredBalls
 	}
 
-	sessionBalls := make([]*session.Session, 0)
-	for _, ball := range m.filteredBalls {
-		for _, tag := range ball.Tags {
-			if tag == m.selectedSession.ID {
-				sessionBalls = append(sessionBalls, ball)
-				break
+	// Handle pseudo-sessions
+	switch m.selectedSession.ID {
+	case PseudoSessionAll:
+		// Return all balls
+		return m.filteredBalls
+	case PseudoSessionUntagged:
+		// Return balls with no session tags (no tags that match any real session)
+		untaggedBalls := make([]*session.Session, 0)
+		sessionIDs := make(map[string]bool)
+		for _, sess := range m.sessions {
+			sessionIDs[sess.ID] = true
+		}
+		for _, ball := range m.filteredBalls {
+			hasSessionTag := false
+			for _, tag := range ball.Tags {
+				if sessionIDs[tag] {
+					hasSessionTag = true
+					break
+				}
+			}
+			if !hasSessionTag {
+				untaggedBalls = append(untaggedBalls, ball)
 			}
 		}
+		return untaggedBalls
+	default:
+		// Regular session - return balls with matching tag
+		sessionBalls := make([]*session.Session, 0)
+		for _, ball := range m.filteredBalls {
+			for _, tag := range ball.Tags {
+				if tag == m.selectedSession.ID {
+					sessionBalls = append(sessionBalls, ball)
+					break
+				}
+			}
+		}
+		return sessionBalls
 	}
-	return sessionBalls
 }
