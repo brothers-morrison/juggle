@@ -255,9 +255,8 @@ func runClaude(prompt string, trust bool) (string, error) {
 	// Build command arguments
 	// Start with autonomous mode flags
 	args := []string{
-		"--disable-slash-commands",   // Disable skills
-		"--setting-sources", "",      // Skip CLAUDE.md loading
-		"--append-system-prompt", autonomousSystemPrompt, // Autonomous instructions
+		"--disable-slash-commands",
+		"--append-system-prompt", autonomousSystemPrompt,
 	}
 
 	if trust {
