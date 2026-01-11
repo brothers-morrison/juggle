@@ -49,9 +49,11 @@ func TestAgentLoop_CompleteSignalExitsLoop(t *testing.T) {
 	// Create a session
 	env.CreateSession(t, "test-session", "Test session for agent")
 
-	// Create a ball tagged with the session
+	// Create a ball tagged with the session that is ALREADY COMPLETE
+	// (COMPLETE signal only exits when all balls are in terminal state)
 	ball := env.CreateBall(t, "Test ball", session.PriorityMedium)
 	ball.Tags = []string{"test-session"}
+	ball.State = session.StateComplete // Ball must be complete for COMPLETE signal to exit
 	store := env.GetStore(t)
 	if err := store.UpdateBall(ball); err != nil {
 		t.Fatalf("Failed to update ball: %v", err)
@@ -81,7 +83,7 @@ func TestAgentLoop_CompleteSignalExitsLoop(t *testing.T) {
 		t.Fatalf("Agent run failed: %v", err)
 	}
 
-	// Verify runner was only called once (loop exited on COMPLETE)
+	// Verify runner was only called once (loop exited on COMPLETE because ball is complete)
 	if len(mock.Calls) != 1 {
 		t.Errorf("Expected 1 call to runner (exited on COMPLETE), got %d", len(mock.Calls))
 	}
@@ -472,5 +474,196 @@ func TestAgentLoop_SessionNotFound(t *testing.T) {
 
 	if !strings.Contains(err.Error(), "not found") {
 		t.Errorf("Expected 'not found' error, got: %v", err)
+	}
+}
+
+func TestAgentLoop_PrematureCOMPLETE_Continues(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Create a session
+	env.CreateSession(t, "test-session", "Test session for agent")
+
+	// Create TWO balls tagged with the session - one pending, one in_progress
+	ball1 := env.CreateBall(t, "Pending ball", session.PriorityMedium)
+	ball1.Tags = []string{"test-session"}
+	ball1.State = session.StatePending
+	store := env.GetStore(t)
+	if err := store.UpdateBall(ball1); err != nil {
+		t.Fatalf("Failed to update ball1: %v", err)
+	}
+
+	ball2 := env.CreateInProgressBall(t, "In progress ball", session.PriorityMedium)
+	ball2.Tags = []string{"test-session"}
+	if err := store.UpdateBall(ball2); err != nil {
+		t.Fatalf("Failed to update ball2: %v", err)
+	}
+
+	// Setup mock runner that returns COMPLETE prematurely, then no signal
+	// The first COMPLETE should be ignored because balls are still pending/in_progress
+	mock := agent.NewMockRunner(
+		&agent.RunResult{
+			Output:   "Done!\n<promise>COMPLETE</promise>",
+			Complete: true,
+		},
+		&agent.RunResult{
+			Output: "Continuing work...",
+		},
+		&agent.RunResult{
+			Output: "More work...",
+		},
+	)
+	agent.SetRunner(mock)
+	defer agent.ResetRunner()
+
+	// Run the agent loop
+	config := cli.AgentLoopConfig{
+		SessionID:     "test-session",
+		ProjectDir:    env.ProjectDir,
+		MaxIterations: 3,
+		Trust:         false,
+		IterDelay:     0,
+	}
+
+	result, err := cli.RunAgentLoop(config)
+	if err != nil {
+		t.Fatalf("Agent run failed: %v", err)
+	}
+
+	// Verify runner was called 3 times (premature COMPLETE was ignored, hit max iterations)
+	if len(mock.Calls) != 3 {
+		t.Errorf("Expected 3 calls to runner (premature COMPLETE ignored), got %d", len(mock.Calls))
+	}
+
+	// Should NOT be marked complete since balls are still pending/in_progress
+	if result.Complete {
+		t.Error("Expected result.Complete=false (premature COMPLETE should be ignored)")
+	}
+}
+
+func TestAgentLoop_AllBlockedOrComplete_ExitsLoop(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Create a session
+	env.CreateSession(t, "test-session", "Test session for agent")
+
+	// Create balls in terminal states: one complete, one blocked
+	ball1 := env.CreateBall(t, "Complete ball", session.PriorityMedium)
+	ball1.Tags = []string{"test-session"}
+	ball1.State = session.StateComplete
+	store := env.GetStore(t)
+	if err := store.UpdateBall(ball1); err != nil {
+		t.Fatalf("Failed to update ball1: %v", err)
+	}
+
+	ball2 := env.CreateBall(t, "Blocked ball", session.PriorityMedium)
+	ball2.Tags = []string{"test-session"}
+	ball2.State = session.StateBlocked
+	ball2.BlockedReason = "Waiting on external dependency"
+	if err := store.UpdateBall(ball2); err != nil {
+		t.Fatalf("Failed to update ball2: %v", err)
+	}
+
+	// Setup mock runner that returns COMPLETE
+	mock := agent.NewMockRunner(
+		&agent.RunResult{
+			Output:   "<promise>COMPLETE</promise>",
+			Complete: true,
+		},
+	)
+	agent.SetRunner(mock)
+	defer agent.ResetRunner()
+
+	// Run the agent loop
+	config := cli.AgentLoopConfig{
+		SessionID:     "test-session",
+		ProjectDir:    env.ProjectDir,
+		MaxIterations: 5,
+		Trust:         false,
+		IterDelay:     0,
+	}
+
+	result, err := cli.RunAgentLoop(config)
+	if err != nil {
+		t.Fatalf("Agent run failed: %v", err)
+	}
+
+	// Verify runner was only called once (all balls are in terminal state)
+	if len(mock.Calls) != 1 {
+		t.Errorf("Expected 1 call to runner (all terminal), got %d", len(mock.Calls))
+	}
+
+	// Should be marked complete
+	if !result.Complete {
+		t.Error("Expected result.Complete=true (all balls in terminal state)")
+	}
+
+	// Verify counts
+	if result.BallsComplete != 1 {
+		t.Errorf("Expected BallsComplete=1, got %d", result.BallsComplete)
+	}
+	if result.BallsBlocked != 1 {
+		t.Errorf("Expected BallsBlocked=1, got %d", result.BallsBlocked)
+	}
+	if result.BallsTotal != 2 {
+		t.Errorf("Expected BallsTotal=2, got %d", result.BallsTotal)
+	}
+}
+
+func TestAgentLoop_TerminalStateExitsWithoutCOMPLETESignal(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Create a session
+	env.CreateSession(t, "test-session", "Test session for agent")
+
+	// Create a ball that's already blocked (terminal state)
+	ball := env.CreateBall(t, "Blocked ball", session.PriorityMedium)
+	ball.Tags = []string{"test-session"}
+	ball.State = session.StateBlocked
+	ball.BlockedReason = "External blocker"
+	store := env.GetStore(t)
+	if err := store.UpdateBall(ball); err != nil {
+		t.Fatalf("Failed to update ball: %v", err)
+	}
+
+	// Setup mock runner that does NOT return COMPLETE signal
+	mock := agent.NewMockRunner(
+		&agent.RunResult{
+			Output: "Checked the session, all blocked.",
+		},
+	)
+	agent.SetRunner(mock)
+	defer agent.ResetRunner()
+
+	// Run the agent loop
+	config := cli.AgentLoopConfig{
+		SessionID:     "test-session",
+		ProjectDir:    env.ProjectDir,
+		MaxIterations: 5,
+		Trust:         false,
+		IterDelay:     0,
+	}
+
+	result, err := cli.RunAgentLoop(config)
+	if err != nil {
+		t.Fatalf("Agent run failed: %v", err)
+	}
+
+	// Should exit after first iteration because all balls are in terminal state
+	// even without COMPLETE signal from agent
+	if len(mock.Calls) != 1 {
+		t.Errorf("Expected 1 call to runner (all terminal, no signal needed), got %d", len(mock.Calls))
+	}
+
+	// Should be marked complete
+	if !result.Complete {
+		t.Error("Expected result.Complete=true (all balls in terminal state)")
+	}
+
+	// All balls are blocked (not complete)
+	if result.BallsBlocked != 1 {
+		t.Errorf("Expected BallsBlocked=1, got %d", result.BallsBlocked)
 	}
 }

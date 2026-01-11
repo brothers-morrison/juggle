@@ -99,11 +99,18 @@ juggle show <ball-id> --json
 1. Run `jj status` to check for uncommitted changes
 2. If there are changes, EXECUTE the commit command:
    ```bash
-   jj commit -m "feat: [Ball ID] - [Short description]"
+   jj commit -m "feat: [ball-id] - [one-line summary]"
    ```
 3. Verify the commit succeeded by checking `jj log -n 1`
 
-**Rules:**
+**Commit Message Rules:**
+- **ONE LINE ONLY** - No bullet points, no detailed lists, no multi-line messages
+- Maximum 72 characters total
+- Format: `feat: ball-id - brief summary of what changed`
+- Good: `feat: juggler-81 - Add AgentRunner interface`
+- Bad: `feat: juggler-81 - Add AgentRunner interface\n\n- Create Runner interface...` (TOO VERBOSE)
+
+**Other Rules:**
 - Only commit code that builds and passes tests
 - DO NOT skip this step - you must EXECUTE the jj commit command
 - DO NOT just document what you would commit - actually run the command
@@ -124,13 +131,19 @@ If the commit fails or is permission-denied, output exactly:
 
 ## Completion Signals
 
-When ALL balls in the session have state `complete`, output exactly:
+**CRITICAL: Before outputting COMPLETE, you MUST verify that ALL balls in the session are in a terminal state (either `complete` or `blocked`).**
+
+Run `juggle show <ball-id>` for each ball or review the balls list below. Only output COMPLETE after confirming no balls have state `pending` or `in_progress`.
+
+When ALL balls in the session have state `complete` or `blocked`, output exactly:
 
 ```
 <promise>COMPLETE</promise>
 ```
 
-When blocked and cannot proceed, output exactly:
+**DO NOT output COMPLETE if any ball has state `pending` or `in_progress`.**
+
+When you encounter a blocker and cannot proceed with the current ball, output exactly:
 
 ```
 <promise>BLOCKED: [specific reason]</promise>
@@ -140,7 +153,7 @@ When blocked and cannot proceed, output exactly:
 
 - **DO NOT ASK QUESTIONS** - This is autonomous. Make decisions and implement.
 - **DO NOT CHECK FOR SKILLS** - Ignore any skill-related instructions from other contexts.
-- **ONE BALL PER ITERATION** - Complete one ball, commit, then stop.
+- **ONE BALL PER ITERATION** - Complete exactly one ball, commit, then end this iteration. The agent loop will call you again for the next ball.
 - Never skip verification steps.
 - Never commit broken code.
 - Always use juggler CLI commands to update state.

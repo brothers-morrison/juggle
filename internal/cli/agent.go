@@ -64,6 +64,7 @@ type AgentResult struct {
 	Blocked       bool      `json:"blocked"`
 	BlockedReason string    `json:"blocked_reason,omitempty"`
 	BallsComplete int       `json:"balls_complete"`
+	BallsBlocked  int       `json:"balls_blocked"`
 	BallsTotal    int       `json:"balls_total"`
 	StartedAt     time.Time `json:"started_at"`
 	EndedAt       time.Time `json:"ended_at"`
@@ -120,8 +121,18 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 
 		// Check for completion signals (already parsed by Runner)
 		if runResult.Complete {
-			result.Complete = true
-			break
+			// VALIDATE: Check if all balls are actually in terminal state (complete or blocked)
+			terminal, complete, blocked, total := checkBallsTerminal(config.ProjectDir, config.SessionID)
+			if total > 0 && terminal == total {
+				result.Complete = true
+				result.BallsComplete = complete
+				result.BallsBlocked = blocked
+				result.BallsTotal = total
+				break
+			}
+			// Signal was premature - log warning and continue
+			fmt.Printf("⚠️  Agent signaled COMPLETE but only %d/%d balls are in terminal state (%d complete, %d blocked). Continuing...\n",
+				terminal, total, complete, blocked)
 		}
 
 		if runResult.Blocked {
@@ -130,12 +141,13 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 			break
 		}
 
-		// Check if all balls are complete
-		complete, total := checkBallsComplete(config.ProjectDir, config.SessionID)
+		// Check if all balls are in terminal state (complete or blocked)
+		terminal, complete, blocked, total := checkBallsTerminal(config.ProjectDir, config.SessionID)
 		result.BallsComplete = complete
+		result.BallsBlocked = blocked
 		result.BallsTotal = total
 
-		if total > 0 && complete == total {
+		if total > 0 && terminal == total {
 			result.Complete = true
 			break
 		}
@@ -190,7 +202,7 @@ func runAgentRun(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	fmt.Println("=== Summary ===")
 	fmt.Printf("Iterations: %d\n", result.Iterations)
-	fmt.Printf("Balls completed: %d/%d\n", result.BallsComplete, result.BallsTotal)
+	fmt.Printf("Balls: %d complete, %d blocked, %d total\n", result.BallsComplete, result.BallsBlocked, result.BallsTotal)
 	fmt.Printf("Time elapsed: %s\n", elapsed.Round(time.Second))
 
 	if result.Complete {
@@ -260,30 +272,30 @@ func generateAgentPrompt(projectDir, sessionID string) (string, error) {
 	return string(output), nil
 }
 
-// checkBallsComplete returns count of complete balls and total balls for session
-func checkBallsComplete(projectDir, sessionID string) (complete, total int) {
+// checkBallsTerminal returns counts of balls in terminal states (complete or blocked) and total balls for session
+func checkBallsTerminal(projectDir, sessionID string) (terminal, complete, blocked, total int) {
 	// Load config
 	config, err := LoadConfigForCommand()
 	if err != nil {
-		return 0, 0
+		return 0, 0, 0, 0
 	}
 
 	// Create store
 	store, err := NewStoreForCommand(projectDir)
 	if err != nil {
-		return 0, 0
+		return 0, 0, 0, 0
 	}
 
 	// Discover projects
 	projects, err := DiscoverProjectsForCommand(config, store)
 	if err != nil {
-		return 0, 0
+		return 0, 0, 0, 0
 	}
 
 	// Load all balls
 	allBalls, err := session.LoadAllBalls(projects)
 	if err != nil {
-		return 0, 0
+		return 0, 0, 0, 0
 	}
 
 	// Count balls with session tag
@@ -293,11 +305,15 @@ func checkBallsComplete(projectDir, sessionID string) (complete, total int) {
 				total++
 				if ball.State == session.StateComplete {
 					complete++
+					terminal++
+				} else if ball.State == session.StateBlocked {
+					blocked++
+					terminal++
 				}
 				break
 			}
 		}
 	}
 
-	return complete, total
+	return terminal, complete, blocked, total
 }
