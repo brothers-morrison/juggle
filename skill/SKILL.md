@@ -1,0 +1,192 @@
+---
+name: juggler
+description: Task management for tracking concurrent work sessions ("balls") across projects. Use when working on a project with a .juggler/ directory, when user mentions juggler balls/sessions, or when planning tasks before agent loops. Helps create well-structured tasks with acceptance criteria and update state during execution.
+---
+
+# Juggler
+
+Juggler is structured task storage (like `prd.json`) for concurrent work sessions. Each task ("ball") has state, acceptance criteria, and belongs to a session for grouping.
+
+## Core Concepts
+
+### Balls = Tasks
+
+A ball is a unit of work with:
+- **Intent**: What you're trying to accomplish
+- **Acceptance Criteria**: Verifiable conditions that define "done"
+- **State**: pending → in_progress → complete (or blocked)
+- **Tags**: Links to sessions and categories
+
+### Sessions = Groupings
+
+A session groups related balls and provides:
+- **Context**: Background info, constraints, architecture notes (read by agents)
+- **Progress**: Append-only log of what happened (memory across loop iterations)
+
+Sessions give agents memory between iterations - context is the "brief" and progress is the "journal".
+
+## Writing Good Acceptance Criteria
+
+Acceptance criteria define when a ball is DONE. Write them so an agent (or human) can verify completion objectively.
+
+**Good acceptance criteria are:**
+- Verifiable: Can be checked with a command or inspection
+- Specific: No ambiguity about what "done" means
+- Include verification: Tests pass, builds succeed, etc.
+
+**Examples:**
+
+```bash
+# Good - specific and verifiable
+juggle plan "Add login endpoint" \
+  -c "POST /api/login accepts email+password JSON body" \
+  -c "Returns 200 with JWT token on valid credentials" \
+  -c "Returns 401 with error message on invalid credentials" \
+  -c "Unit tests cover success and failure cases" \
+  -c "go test ./... passes"
+
+# Bad - vague and unverifiable
+juggle plan "Add login endpoint" \
+  -c "Login should work" \
+  -c "Good error handling" \
+  -c "Tests"
+```
+
+**Always include a verification criterion** like:
+- `go test ./... passes`
+- `npm run test passes`
+- `cargo build succeeds`
+- `linter reports no errors`
+
+## Planning Tasks (Before Loops)
+
+### 1. Create a Session
+
+```bash
+# Create session with description
+juggle sessions create auth-feature -m "User authentication system"
+
+# Create with initial context (agent-friendly)
+juggle sessions create auth-feature -m "User authentication" \
+  --context "Use JWT tokens. Follow existing patterns in api/handlers/."
+```
+
+### 2. Add Session Context
+
+Context provides background that agents need. Include constraints, architecture decisions, and relevant file locations.
+
+```bash
+# Set context directly (agent-friendly)
+juggle sessions context auth-feature --set "Background: Building auth for the API.
+Constraints: Must use existing User model in models/user.go.
+Patterns: Follow handler patterns in api/handlers/.
+Tests: All new code needs unit tests."
+
+# Or edit interactively
+juggle sessions context auth-feature --edit
+```
+
+### 3. Create Balls with Acceptance Criteria
+
+Link balls to sessions with the `--session` flag. Use `-c` for each acceptance criterion.
+
+```bash
+# Create ball in session with criteria
+juggle plan "Add login endpoint" --session auth-feature \
+  -c "POST /api/login accepts {email, password}" \
+  -c "Returns JWT token on success" \
+  -c "Returns 401 on invalid credentials" \
+  -c "go test ./... passes"
+
+# Create standalone ball (no session)
+juggle plan "Fix header styling" \
+  -c "Header text is centered" \
+  -c "npm run build succeeds"
+```
+
+## Updating State (During Loops)
+
+During execution, agents update ball state and log progress.
+
+### Update Ball State
+
+```bash
+# Mark ball as in progress
+juggle update myapp-5 --state in_progress
+
+# Mark ball as complete
+juggle update myapp-5 --state complete
+
+# Mark ball as blocked with reason
+juggle update myapp-5 --state blocked --reason "Waiting for API spec"
+
+# Use --json flag for structured output (agent-friendly)
+juggle update myapp-5 --state complete --json
+```
+
+### Log Progress
+
+Progress entries are timestamped and persist across loop iterations. Use them for:
+- Recording what was accomplished
+- Noting decisions made
+- Flagging issues for next iteration
+
+```bash
+# Append progress entry
+juggle progress append auth-feature "Implemented login endpoint with tests"
+
+# Multiple entries
+juggle progress append auth-feature "Added JWT validation middleware"
+juggle progress append auth-feature "Discovered: need to handle token refresh"
+```
+
+### View Current State
+
+```bash
+# Show ball details
+juggle show myapp-5
+
+# Show session with linked balls
+juggle sessions show auth-feature
+
+# List all balls
+juggle list
+```
+
+## Ball States
+
+| State | Meaning |
+|-------|---------|
+| `pending` | Planned, not yet started |
+| `in_progress` | Currently being worked on |
+| `blocked` | Stuck (reason in `blocked_reason` field) |
+| `complete` | Done and archived |
+
+## Command Reference
+
+### Planning Commands
+
+| Command | Description |
+|---------|-------------|
+| `juggle sessions create <id> -m "desc"` | Create session |
+| `juggle sessions create <id> --context "text"` | Create with initial context |
+| `juggle sessions context <id> --set "text"` | Set session context |
+| `juggle sessions context <id> --edit` | Edit context in $EDITOR |
+| `juggle plan "intent" -c "criterion"` | Create ball with criteria |
+| `juggle plan "intent" --session <id>` | Create ball in session |
+
+### State Update Commands
+
+| Command | Description |
+|---------|-------------|
+| `juggle update <id> --state <state>` | Update ball state |
+| `juggle update <id> --state blocked --reason "why"` | Block with reason |
+| `juggle progress append <session> "text"` | Log progress entry |
+| `juggle show <id> [--json]` | View ball details |
+| `juggle sessions show <id>` | View session with balls |
+
+## File Locations
+
+- Balls: `.juggler/balls.jsonl`
+- Sessions: `.juggler/sessions/<id>/session.json`
+- Progress: `.juggler/sessions/<id>/progress.txt`
