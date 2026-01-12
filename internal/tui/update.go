@@ -2624,9 +2624,9 @@ func (m Model) handleLaunchAgent() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Prevent launching on pseudo-sessions
-	if m.selectedSession.ID == PseudoSessionAll || m.selectedSession.ID == PseudoSessionUntagged {
-		m.message = "Cannot launch agent on built-in session"
+	// Prevent launching on untagged pseudo-session (but allow "All" which maps to meta-session "all")
+	if m.selectedSession.ID == PseudoSessionUntagged {
+		m.message = "Cannot launch agent on untagged session"
 		return m, nil
 	}
 
@@ -2641,6 +2641,10 @@ func (m Model) handleAgentLaunchConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "y", "Y":
 		// Confirm launch
 		sessionID := m.selectedSession.ID
+		// Map PseudoSessionAll to "all" meta-session for agent command
+		if sessionID == PseudoSessionAll {
+			sessionID = "all"
+		}
 		m.mode = splitView
 		m.addActivity("Launching agent for: " + sessionID)
 		m.message = "Starting agent for: " + sessionID
