@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/ohare93/juggle/internal/session"
 	"github.com/spf13/cobra"
@@ -14,26 +13,21 @@ var rootCmd = &cobra.Command{
 	Short: "Manage multiple tasks being juggled simultaneously",
 	SilenceUsage: true,
 	SilenceErrors: true,
-	Long: `Juggle helps you manage multiple concurrent tasks (balls) with AI agents.
-Track task progress across projects with a simple state model.
+	Long: `Juggle tracks concurrent work items (balls) across projects.
 
-Getting started:
-  juggle start          Create and start a new task immediately
-  juggle plan           Plan work for later
-  juggle                See active tasks (no args)
-  juggle tui            Launch interactive split-view interface
+Quick start:
+  juggle plan              Plan a new ball interactively
+  juggle                   Show balls in progress
+  juggle tui               Interactive terminal UI
+  juggle sessions start X  Start working on session X
 
-Ball states:
-  pending      Task is planned but not started
-  in_progress  Task is actively being worked on
-  blocked      Task is blocked (with reason)
-  complete     Task finished and archived
+Ball operations:
+  juggle <id>              Start a pending ball / show details
+  juggle <id> blocked "X"  Mark blocked with reason
+  juggle <id> complete     Mark complete and archive
+  juggle update <id> ...   Update ball properties
 
-Example workflow:
-  juggle start "Add login feature"   # Create and start
-  juggle blocked "Waiting for API"   # Mark blocked with reason
-  juggle in-progress                 # Resume work
-  juggle complete                    # Finish and archive`,
+Ball states: pending → in_progress → complete (or blocked)`,
 	RunE:                       runRootCommand,
 	Args:                       cobra.ArbitraryArgs,
 	DisableFlagParsing:         false,
@@ -127,83 +121,50 @@ var defaultHelpFunc func(*cobra.Command, []string)
 // customHelpFunc returns a custom help function for root command
 func customHelpFunc(cmd *cobra.Command, args []string) {
 	// Only use custom help for root command; use default for others
-	if cmd.Name() != "juggler" {
+	if cmd.Name() != "juggle" {
 		defaultHelpFunc(cmd, args)
 		return
 	}
-	
-	// Custom help output with better session command formatting
+
+	// Print Long description which has getting started info
 	fmt.Println(cmd.Long)
 	fmt.Println()
-	
+
 	fmt.Println("Usage:")
-	fmt.Println("  juggler [command]")
+	fmt.Println("  juggle [command]")
+	fmt.Println("  juggle <ball-id> [operation]")
 	fmt.Println()
-	
-	// Session Commands section with special formatting
-	fmt.Println("Session Commands:")
-	fmt.Println("  juggler session [subcommand]  (aliases: ball, project, repo, current)")
+
+	// Commands grouped by category
+	fmt.Println("Common Commands:")
+	fmt.Println("  plan           Plan a new ball interactively")
+	fmt.Println("  balls          List all balls")
+	fmt.Println("  sessions       Manage sessions (ball groupings)")
+	fmt.Println("  tui            Launch interactive terminal UI")
+	fmt.Println("  update <id>    Update a ball's properties")
 	fmt.Println()
-	fmt.Println("    When called without subcommands, shows current session details.")
-	fmt.Println("    Session operations can be called directly or via 'session' command:")
-	fmt.Println()
-	fmt.Println("      block (b)          Mark current session as blocked")
-	fmt.Println("      unblock (ub)       Clear blocker from current session")
-	fmt.Println("      done (d, complete) Mark current session as complete")
-	fmt.Println("      tag (tags)         Manage tags for a session")
-	fmt.Println()
-	fmt.Println("    Examples: juggler block, juggler session block, juggler ball done")
-	fmt.Println()
-	
-	// All Commands
+
 	fmt.Println("All Commands:")
 	for _, c := range cmd.Commands() {
 		if c.Name() != "help" && c.Name() != "completion" {
-			aliases := ""
-			if len(c.Aliases) > 0 {
-				aliases = " (" + strings.Join(c.Aliases, ", ") + ")"
-			}
-			fmt.Printf("  %-20s %s\n", c.Name()+aliases, c.Short)
+			fmt.Printf("  %-14s %s\n", c.Name(), c.Short)
 		}
 	}
 	fmt.Println()
-	
+
 	fmt.Println("Flags:")
-	fmt.Println("  -h, --help   help for juggler")
+	fmt.Println("  -a, --all    Search across all projects")
+	fmt.Println("  -h, --help   Help for juggle")
 	fmt.Println()
-	fmt.Println("Use \"juggler [command] --help\" for more information about a command.")
+	fmt.Println("Use \"juggle [command] --help\" for more information about a command.")
 }
 
 
 
 // customSessionHelpFunc returns a custom help function for session command
+// Currently unused but kept for potential future session command enhancements
 func customSessionHelpFunc(cmd *cobra.Command, args []string) {
-	fmt.Println(cmd.Long)
-	fmt.Println()
-	
-	fmt.Println("Usage:")
-	fmt.Println("  juggler session [subcommand]  (aliases: ball, project, repo, current)")
-	fmt.Println()
-	
-	fmt.Println("When called without subcommands, shows current session details.")
-	fmt.Println()
-	
-	fmt.Println("Available Subcommands:")
-	fmt.Println("  block (b)          Mark current session as blocked")
-	fmt.Println("  unblock (ub)       Clear blocker from current session")
-	fmt.Println("  done (d, complete) Mark current session as complete")
-	fmt.Println("  tag (tags)         Manage tags for a session")
-	fmt.Println()
-	
-	fmt.Println("Note: All subcommands can also be called directly:")
-	fmt.Println("  juggler block     = juggler session block")
-	fmt.Println("  juggler ball done = juggler session done")
-	fmt.Println()
-	
-	fmt.Println("Flags:")
-	fmt.Println("  -h, --help   help for session")
-	fmt.Println()
-	fmt.Println("Use \"juggler session [subcommand] --help\" for more information about a subcommand.")
+	defaultHelpFunc(cmd, args)
 }
 
 func init() {
