@@ -3398,3 +3398,600 @@ func TestStatusBarFilterIndicatorPresent(t *testing.T) {
 		t.Error("Expected scope indicator to be present")
 	}
 }
+
+// =============================================================================
+// Panel Navigation Tests (juggler-66)
+// =============================================================================
+
+// TestEnterOnSessionMovesFocusToBallsPanel verifies that pressing Enter on a session
+// moves focus from SessionsPanel to BallsPanel
+func TestEnterOnSessionMovesFocusToBallsPanel(t *testing.T) {
+	sessions := []*session.JuggleSession{
+		{ID: PseudoSessionAll, Description: "All balls"},
+		{ID: "session1", Description: "Session 1"},
+	}
+
+	model := Model{
+		mode:          splitView,
+		activePanel:   SessionsPanel,
+		sessionCursor: 0,
+		sessions:      sessions,
+		filteredBalls: []*session.Ball{},
+		height:        30,
+		width:         80,
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+		activityLog: make([]ActivityEntry, 0),
+	}
+
+	// Press Enter to select session
+	newModel, _ := model.handleSplitViewEnter()
+	model = newModel.(Model)
+
+	// Should have moved focus to balls panel
+	if model.activePanel != BallsPanel {
+		t.Errorf("Expected activePanel to be BallsPanel after Enter, got %v", model.activePanel)
+	}
+
+	// Should have selected the session
+	if model.selectedSession == nil {
+		t.Error("Expected selectedSession to be set after Enter")
+	}
+	if model.selectedSession != nil && model.selectedSession.ID != PseudoSessionAll {
+		t.Errorf("Expected selectedSession to be %s, got %s", PseudoSessionAll, model.selectedSession.ID)
+	}
+}
+
+// TestEnterOnSessionWithDifferentCursor verifies Enter works with non-zero cursor position
+// Note: filterSessions() prepends PseudoSessionAll and PseudoSessionUntagged, so:
+//   cursor 0 = __all__, cursor 1 = __untagged__, cursor 2+ = real sessions
+func TestEnterOnSessionWithDifferentCursor(t *testing.T) {
+	sessions := []*session.JuggleSession{
+		{ID: "session1", Description: "Session 1"},
+		{ID: "session2", Description: "Session 2"},
+	}
+
+	model := Model{
+		mode:          splitView,
+		activePanel:   SessionsPanel,
+		sessionCursor: 3, // Fourth in filtered list = session2 (after __all__, __untagged__, session1)
+		sessions:      sessions,
+		filteredBalls: []*session.Ball{},
+		height:        30,
+		width:         80,
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+		activityLog: make([]ActivityEntry, 0),
+	}
+
+	// Press Enter to select session
+	newModel, _ := model.handleSplitViewEnter()
+	model = newModel.(Model)
+
+	// Should have moved focus to balls panel
+	if model.activePanel != BallsPanel {
+		t.Errorf("Expected activePanel to be BallsPanel after Enter, got %v", model.activePanel)
+	}
+
+	// Should have selected session2
+	if model.selectedSession == nil {
+		t.Error("Expected selectedSession to be set after Enter")
+	}
+	if model.selectedSession != nil && model.selectedSession.ID != "session2" {
+		t.Errorf("Expected selectedSession to be session2, got %s", model.selectedSession.ID)
+	}
+}
+
+// TestSpaceKeyMovesFocusToSessionsPanel verifies that pressing Space in BallsPanel
+// moves focus back to SessionsPanel
+func TestSpaceKeyMovesFocusToSessionsPanel(t *testing.T) {
+	sessions := []*session.JuggleSession{
+		{ID: "session1", Description: "Session 1"},
+	}
+
+	model := Model{
+		mode:            splitView,
+		activePanel:     BallsPanel,
+		sessionCursor:   0,
+		selectedSession: sessions[0],
+		sessions:        sessions,
+		filteredBalls:   []*session.Ball{},
+		height:          30,
+		width:           80,
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+		activityLog: make([]ActivityEntry, 0),
+	}
+
+	// Verify we start in BallsPanel
+	if model.activePanel != BallsPanel {
+		t.Fatalf("Expected starting activePanel to be BallsPanel, got %v", model.activePanel)
+	}
+
+	// Simulate pressing Space key
+	keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}}
+	newModel, _ := model.Update(keyMsg)
+	model = newModel.(Model)
+
+	// Should have moved focus to sessions panel
+	if model.activePanel != SessionsPanel {
+		t.Errorf("Expected activePanel to be SessionsPanel after Space, got %v", model.activePanel)
+	}
+}
+
+// TestSpaceKeyOnlyWorksInBallsPanel verifies Space doesn't change panel in other panels
+func TestSpaceKeyOnlyWorksInBallsPanel(t *testing.T) {
+	model := Model{
+		mode:          splitView,
+		activePanel:   SessionsPanel,
+		sessions:      []*session.JuggleSession{},
+		filteredBalls: []*session.Ball{},
+		height:        30,
+		width:         80,
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+		activityLog: make([]ActivityEntry, 0),
+	}
+
+	// Simulate pressing Space key in SessionsPanel
+	keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}}
+	newModel, _ := model.Update(keyMsg)
+	model = newModel.(Model)
+
+	// Should still be in SessionsPanel (Space does nothing there)
+	if model.activePanel != SessionsPanel {
+		t.Errorf("Expected activePanel to remain SessionsPanel, got %v", model.activePanel)
+	}
+}
+
+// TestBracketLeftSwitchesToPrevSession verifies [ key switches to previous session in BallsPanel
+// Note: filterSessions() prepends __all__ and __untagged__, so indices are:
+//   0 = __all__, 1 = __untagged__, 2 = session1, 3 = session2, 4 = session3
+func TestBracketLeftSwitchesToPrevSession(t *testing.T) {
+	sessions := []*session.JuggleSession{
+		{ID: "session1", Description: "Session 1"},
+		{ID: "session2", Description: "Session 2"},
+		{ID: "session3", Description: "Session 3"},
+	}
+
+	model := Model{
+		mode:            splitView,
+		activePanel:     BallsPanel,
+		sessionCursor:   4,           // At session3 (index 4 in filtered list)
+		selectedSession: sessions[2], // session3 selected
+		sessions:        sessions,
+		filteredBalls:   []*session.Ball{},
+		height:          30,
+		width:           80,
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+		activityLog: make([]ActivityEntry, 0),
+	}
+
+	// Press [ to switch to previous session
+	newModel, _ := model.handleSessionSwitchPrev()
+	model = newModel.(Model)
+
+	// Should have moved to session2 (index 3)
+	if model.sessionCursor != 3 {
+		t.Errorf("Expected sessionCursor to be 3, got %d", model.sessionCursor)
+	}
+	if model.selectedSession.ID != "session2" {
+		t.Errorf("Expected selectedSession to be session2, got %s", model.selectedSession.ID)
+	}
+
+	// Should stay in BallsPanel
+	if model.activePanel != BallsPanel {
+		t.Errorf("Expected activePanel to remain BallsPanel, got %v", model.activePanel)
+	}
+}
+
+// TestBracketRightSwitchesToNextSession verifies ] key switches to next session in BallsPanel
+// Note: filterSessions() prepends __all__ and __untagged__, so indices are:
+//   0 = __all__, 1 = __untagged__, 2 = session1, 3 = session2, 4 = session3
+func TestBracketRightSwitchesToNextSession(t *testing.T) {
+	sessions := []*session.JuggleSession{
+		{ID: "session1", Description: "Session 1"},
+		{ID: "session2", Description: "Session 2"},
+		{ID: "session3", Description: "Session 3"},
+	}
+
+	model := Model{
+		mode:            splitView,
+		activePanel:     BallsPanel,
+		sessionCursor:   2,           // At session1 (index 2 in filtered list)
+		selectedSession: sessions[0], // session1 selected
+		sessions:        sessions,
+		filteredBalls:   []*session.Ball{},
+		height:          30,
+		width:           80,
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+		activityLog: make([]ActivityEntry, 0),
+	}
+
+	// Press ] to switch to next session
+	newModel, _ := model.handleSessionSwitchNext()
+	model = newModel.(Model)
+
+	// Should have moved to session2 (index 3)
+	if model.sessionCursor != 3 {
+		t.Errorf("Expected sessionCursor to be 3, got %d", model.sessionCursor)
+	}
+	if model.selectedSession.ID != "session2" {
+		t.Errorf("Expected selectedSession to be session2, got %s", model.selectedSession.ID)
+	}
+
+	// Should stay in BallsPanel
+	if model.activePanel != BallsPanel {
+		t.Errorf("Expected activePanel to remain BallsPanel, got %v", model.activePanel)
+	}
+}
+
+// TestBracketLeftAtBoundary verifies [ key at first session doesn't go negative
+func TestBracketLeftAtBoundary(t *testing.T) {
+	sessions := []*session.JuggleSession{
+		{ID: "session1", Description: "Session 1"},
+		{ID: "session2", Description: "Session 2"},
+	}
+
+	model := Model{
+		mode:            splitView,
+		activePanel:     BallsPanel,
+		sessionCursor:   0,           // At first session
+		selectedSession: sessions[0], // session1 selected
+		sessions:        sessions,
+		filteredBalls:   []*session.Ball{},
+		height:          30,
+		width:           80,
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+		activityLog: make([]ActivityEntry, 0),
+	}
+
+	// Press [ at first session
+	newModel, _ := model.handleSessionSwitchPrev()
+	model = newModel.(Model)
+
+	// Should stay at session1 (can't go negative)
+	if model.sessionCursor != 0 {
+		t.Errorf("Expected sessionCursor to stay at 0, got %d", model.sessionCursor)
+	}
+	if model.selectedSession.ID != "session1" {
+		t.Errorf("Expected selectedSession to remain session1, got %s", model.selectedSession.ID)
+	}
+}
+
+// TestBracketRightAtBoundary verifies ] key at last session doesn't overflow
+// Note: filterSessions() prepends __all__ and __untagged__, so:
+//   0 = __all__, 1 = __untagged__, 2 = session1, 3 = session2 (last)
+func TestBracketRightAtBoundary(t *testing.T) {
+	sessions := []*session.JuggleSession{
+		{ID: "session1", Description: "Session 1"},
+		{ID: "session2", Description: "Session 2"},
+	}
+
+	model := Model{
+		mode:            splitView,
+		activePanel:     BallsPanel,
+		sessionCursor:   3,           // At session2 (last, index 3 in filtered list)
+		selectedSession: sessions[1], // session2 selected
+		sessions:        sessions,
+		filteredBalls:   []*session.Ball{},
+		height:          30,
+		width:           80,
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+		activityLog: make([]ActivityEntry, 0),
+	}
+
+	// Press ] at last session
+	newModel, _ := model.handleSessionSwitchNext()
+	model = newModel.(Model)
+
+	// Should stay at session2 (can't go beyond last)
+	if model.sessionCursor != 3 {
+		t.Errorf("Expected sessionCursor to stay at 3, got %d", model.sessionCursor)
+	}
+	if model.selectedSession.ID != "session2" {
+		t.Errorf("Expected selectedSession to remain session2, got %s", model.selectedSession.ID)
+	}
+}
+
+// TestSessionSwitchResetsBallCursor verifies cursor resets when switching sessions
+// Note: filterSessions() prepends __all__ and __untagged__, so:
+//   0 = __all__, 1 = __untagged__, 2 = session1, 3 = session2
+func TestSessionSwitchResetsBallCursor(t *testing.T) {
+	sessions := []*session.JuggleSession{
+		{ID: "session1", Description: "Session 1"},
+		{ID: "session2", Description: "Session 2"},
+	}
+
+	model := Model{
+		mode:            splitView,
+		activePanel:     BallsPanel,
+		sessionCursor:   2,           // At session1 (index 2 in filtered list)
+		selectedSession: sessions[0], // session1 selected
+		cursor:          5,           // Ball cursor at position 5
+		sessions:        sessions,
+		filteredBalls:   []*session.Ball{},
+		height:          30,
+		width:           80,
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+		activityLog: make([]ActivityEntry, 0),
+	}
+
+	// Press ] to switch to next session
+	newModel, _ := model.handleSessionSwitchNext()
+	model = newModel.(Model)
+
+	// Ball cursor should be reset to 0
+	if model.cursor != 0 {
+		t.Errorf("Expected cursor to reset to 0 on session switch, got %d", model.cursor)
+	}
+}
+
+// TestSessionSwitchUpdatesActivity verifies activity log entry is added on session switch
+// Note: filterSessions() prepends __all__ and __untagged__, so:
+//   0 = __all__, 1 = __untagged__, 2 = session1, 3 = session2
+func TestSessionSwitchUpdatesActivity(t *testing.T) {
+	sessions := []*session.JuggleSession{
+		{ID: "session1", Description: "Session 1"},
+		{ID: "session2", Description: "Session 2"},
+	}
+
+	model := Model{
+		mode:            splitView,
+		activePanel:     BallsPanel,
+		sessionCursor:   2,           // At session1 (index 2 in filtered list)
+		selectedSession: sessions[0], // session1 selected
+		sessions:        sessions,
+		filteredBalls:   []*session.Ball{},
+		height:          30,
+		width:           80,
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+		activityLog: make([]ActivityEntry, 0),
+	}
+
+	// Press ] to switch to next session
+	newModel, _ := model.handleSessionSwitchNext()
+	model = newModel.(Model)
+
+	// Activity log should have an entry about the switch
+	if len(model.activityLog) == 0 {
+		t.Error("Expected activity log entry after session switch")
+	}
+	if len(model.activityLog) > 0 && !strings.Contains(model.activityLog[len(model.activityLog)-1].Message, "session2") {
+		t.Errorf("Expected activity log to mention session2, got %s", model.activityLog[len(model.activityLog)-1].Message)
+	}
+}
+
+// TestBracketKeysOnlyWorkInBallsPanel verifies [ and ] only work in BallsPanel
+func TestBracketKeysOnlyWorkInBallsPanel(t *testing.T) {
+	sessions := []*session.JuggleSession{
+		{ID: "session1", Description: "Session 1"},
+		{ID: "session2", Description: "Session 2"},
+	}
+
+	model := Model{
+		mode:            splitView,
+		activePanel:     SessionsPanel, // Not in BallsPanel
+		sessionCursor:   0,
+		selectedSession: sessions[0],
+		sessions:        sessions,
+		filteredBalls:   []*session.Ball{},
+		height:          30,
+		width:           80,
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+		activityLog: make([]ActivityEntry, 0),
+	}
+
+	// Simulate pressing ] key in SessionsPanel
+	keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{']'}}
+	newModel, _ := model.Update(keyMsg)
+	model = newModel.(Model)
+
+	// Session should not have changed
+	if model.sessionCursor != 0 {
+		t.Errorf("Expected sessionCursor to remain 0 in SessionsPanel, got %d", model.sessionCursor)
+	}
+}
+
+// TestEnterResetsBallCursorAndScrollOffset verifies Enter resets both cursor and scroll offset
+func TestEnterResetsBallCursorAndScrollOffset(t *testing.T) {
+	sessions := []*session.JuggleSession{
+		{ID: "session1", Description: "Session 1"},
+	}
+
+	model := Model{
+		mode:              splitView,
+		activePanel:       SessionsPanel,
+		sessionCursor:     0,
+		cursor:            10, // Ball cursor at position 10
+		ballsScrollOffset: 5,  // Scrolled down
+		sessions:          sessions,
+		filteredBalls:     []*session.Ball{},
+		height:            30,
+		width:             80,
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+		activityLog: make([]ActivityEntry, 0),
+	}
+
+	// Press Enter to select session
+	newModel, _ := model.handleSplitViewEnter()
+	model = newModel.(Model)
+
+	// Both cursor and scroll offset should be reset
+	if model.cursor != 0 {
+		t.Errorf("Expected cursor to reset to 0, got %d", model.cursor)
+	}
+	if model.ballsScrollOffset != 0 {
+		t.Errorf("Expected ballsScrollOffset to reset to 0, got %d", model.ballsScrollOffset)
+	}
+}
+
+// TestCompleteEnterSpaceWorkflow tests the full Enter-to-balls, Space-to-sessions workflow
+// Note: filterSessions() prepends __all__ and __untagged__, so:
+//   0 = __all__, 1 = __untagged__, 2 = session1, 3 = session2
+func TestCompleteEnterSpaceWorkflow(t *testing.T) {
+	sessions := []*session.JuggleSession{
+		{ID: "session1", Description: "Session 1"},
+		{ID: "session2", Description: "Session 2"},
+	}
+
+	model := Model{
+		mode:          splitView,
+		activePanel:   SessionsPanel,
+		sessionCursor: 2, // session1 (index 2 in filtered list)
+		sessions:      sessions,
+		filteredBalls: []*session.Ball{},
+		height:        30,
+		width:         80,
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+		activityLog: make([]ActivityEntry, 0),
+	}
+
+	// Step 1: Press Enter to go to BallsPanel
+	newModel, _ := model.handleSplitViewEnter()
+	model = newModel.(Model)
+
+	if model.activePanel != BallsPanel {
+		t.Fatalf("Step 1: Expected activePanel to be BallsPanel, got %v", model.activePanel)
+	}
+	if model.selectedSession == nil || model.selectedSession.ID != "session1" {
+		t.Fatalf("Step 1: Expected session1 to be selected, got %v", model.selectedSession)
+	}
+
+	// Step 2: Press Space to go back to SessionsPanel
+	keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}}
+	newModel, _ = model.Update(keyMsg)
+	model = newModel.(Model)
+
+	if model.activePanel != SessionsPanel {
+		t.Fatalf("Step 2: Expected activePanel to be SessionsPanel, got %v", model.activePanel)
+	}
+
+	// Session selection should be preserved
+	if model.selectedSession == nil || model.selectedSession.ID != "session1" {
+		t.Errorf("Step 2: Expected session1 to remain selected after Space")
+	}
+}
+
+// TestCompleteSessionSwitchWorkflow tests full session switching workflow with []
+// Note: filterSessions() prepends __all__ and __untagged__, so:
+//   0 = __all__, 1 = __untagged__, 2 = session1, 3 = session2, 4 = session3
+func TestCompleteSessionSwitchWorkflow(t *testing.T) {
+	sessions := []*session.JuggleSession{
+		{ID: "session1", Description: "Session 1"},
+		{ID: "session2", Description: "Session 2"},
+		{ID: "session3", Description: "Session 3"},
+	}
+
+	model := Model{
+		mode:            splitView,
+		activePanel:     BallsPanel,
+		sessionCursor:   3,           // session2 (index 3 in filtered list)
+		selectedSession: sessions[1], // session2
+		cursor:          5,
+		sessions:        sessions,
+		filteredBalls:   []*session.Ball{},
+		height:          30,
+		width:           80,
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+		activityLog: make([]ActivityEntry, 0),
+	}
+
+	// Press ] to go to session3
+	newModel, _ := model.handleSessionSwitchNext()
+	model = newModel.(Model)
+
+	if model.selectedSession.ID != "session3" {
+		t.Fatalf("Step 1: Expected session3, got %s", model.selectedSession.ID)
+	}
+	if model.cursor != 0 {
+		t.Fatalf("Step 1: Expected cursor reset to 0, got %d", model.cursor)
+	}
+
+	// Press [ to go back to session2
+	newModel, _ = model.handleSessionSwitchPrev()
+	model = newModel.(Model)
+
+	if model.selectedSession.ID != "session2" {
+		t.Fatalf("Step 2: Expected session2, got %s", model.selectedSession.ID)
+	}
+
+	// Press [ again to go to session1
+	newModel, _ = model.handleSessionSwitchPrev()
+	model = newModel.(Model)
+
+	if model.selectedSession.ID != "session1" {
+		t.Fatalf("Step 3: Expected session1, got %s", model.selectedSession.ID)
+	}
+
+	// Verify we stayed in BallsPanel throughout
+	if model.activePanel != BallsPanel {
+		t.Errorf("Expected to remain in BallsPanel throughout, got %v", model.activePanel)
+	}
+}
