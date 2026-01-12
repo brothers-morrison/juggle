@@ -443,13 +443,13 @@ func TestAgentLoop_TrustFlagPassedToRunner(t *testing.T) {
 		t.Fatalf("Agent run failed: %v", err)
 	}
 
-	// Verify trust was passed to runner
+	// Verify trust was passed to runner (PermissionBypass mode)
 	if len(mock.Calls) == 0 {
 		t.Fatal("No calls made to runner")
 	}
 
-	if !mock.Calls[0].Trust {
-		t.Error("Expected Trust=true to be passed to runner")
+	if mock.Calls[0].Permission != agent.PermissionBypass {
+		t.Errorf("Expected Permission=PermissionBypass, got %s", mock.Calls[0].Permission)
 	}
 }
 

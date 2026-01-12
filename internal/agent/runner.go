@@ -13,6 +13,37 @@ import (
 	"time"
 )
 
+// RunMode defines how Claude should be executed
+type RunMode string
+
+const (
+	// ModeHeadless runs with -p flag, autonomous system prompt, captures output
+	ModeHeadless RunMode = "headless"
+	// ModeInteractive runs without -p flag, inherits terminal for full TUI
+	ModeInteractive RunMode = "interactive"
+)
+
+// PermissionMode defines Claude's permission level
+type PermissionMode string
+
+const (
+	// PermissionAcceptEdits allows Claude to edit files with confirmation
+	PermissionAcceptEdits PermissionMode = "acceptEdits"
+	// PermissionPlan starts Claude in plan mode for review/planning
+	PermissionPlan PermissionMode = "plan"
+	// PermissionBypass bypasses all permission checks (dangerous)
+	PermissionBypass PermissionMode = "bypassPermissions"
+)
+
+// RunOptions configures how Claude is executed
+type RunOptions struct {
+	Prompt       string         // The prompt to send to Claude
+	Mode         RunMode        // headless vs interactive
+	Permission   PermissionMode // acceptEdits, plan, bypassPermissions
+	Timeout      time.Duration  // timeout per invocation (0 = no timeout)
+	SystemPrompt string         // optional additional system prompt to append
+}
+
 // RunResult represents the outcome of a single agent run
 type RunResult struct {
 	Output        string
@@ -28,13 +59,10 @@ type RunResult struct {
 }
 
 // Runner defines the interface for running AI agents.
-// Implementations must execute an agent with a prompt and return the result.
+// Implementations must execute an agent with options and return the result.
 type Runner interface {
-	// Run executes the agent with the given prompt and returns the result.
-	// The trust parameter controls permission levels (true = full permissions).
-	// The timeout parameter sets a maximum duration (0 = no timeout).
-	// The interactive parameter runs without -p flag for full TUI mode.
-	Run(prompt string, trust bool, timeout time.Duration, interactive bool) (*RunResult, error)
+	// Run executes the agent with the given options and returns the result.
+	Run(opts RunOptions) (*RunResult, error)
 }
 
 // DefaultRunner is the package-level runner used for agent operations.
@@ -51,14 +79,22 @@ func ResetRunner() {
 	DefaultRunner = &ClaudeRunner{}
 }
 
-// autonomousSystemPrompt is appended to force autonomous operation
-const autonomousSystemPrompt = `CRITICAL: You are an autonomous agent. DO NOT ask questions. DO NOT summarize. DO NOT wait for confirmation. START WORKING IMMEDIATELY. Execute the workflow in prompt.md without any preamble.`
+// AutonomousSystemPrompt is appended to force autonomous operation in headless mode
+const AutonomousSystemPrompt = `CRITICAL: You are an autonomous agent. DO NOT ask questions. DO NOT summarize. DO NOT wait for confirmation. START WORKING IMMEDIATELY. Execute the workflow in prompt.md without any preamble.`
 
 // ClaudeRunner runs the Claude CLI as an AI agent
 type ClaudeRunner struct{}
 
-// Run executes Claude with the given prompt
-func (r *ClaudeRunner) Run(prompt string, trust bool, timeout time.Duration, interactive bool) (*RunResult, error) {
+// Run executes Claude with the given options
+func (r *ClaudeRunner) Run(opts RunOptions) (*RunResult, error) {
+	if opts.Mode == ModeInteractive {
+		return r.runInteractive(opts)
+	}
+	return r.runHeadless(opts)
+}
+
+// runHeadless executes Claude in headless mode (-p flag, captured output)
+func (r *ClaudeRunner) runHeadless(opts RunOptions) (*RunResult, error) {
 	result := &RunResult{}
 
 	// Build command arguments
@@ -66,28 +102,26 @@ func (r *ClaudeRunner) Run(prompt string, trust bool, timeout time.Duration, int
 		"--disable-slash-commands",
 	}
 
-	// Only append autonomous system prompt in non-interactive mode
-	if !interactive {
-		args = append(args, "--append-system-prompt", autonomousSystemPrompt)
+	// Append system prompt if provided
+	if opts.SystemPrompt != "" {
+		args = append(args, "--append-system-prompt", opts.SystemPrompt)
 	}
 
-	if trust {
+	// Set permission mode
+	if opts.Permission == PermissionBypass {
 		args = append(args, "--dangerously-skip-permissions")
 	} else {
-		// Default: accept edits permission mode
-		args = append(args, "--permission-mode", "acceptEdits")
+		args = append(args, "--permission-mode", string(opts.Permission))
 	}
 
-	// Add prompt input flag only in non-interactive mode
-	if !interactive {
-		args = append(args, "-p", "-")
-	}
+	// Headless mode: read prompt from stdin
+	args = append(args, "-p", "-")
 
 	// Create context with timeout if specified
 	var ctx context.Context
 	var cancel context.CancelFunc
-	if timeout > 0 {
-		ctx, cancel = context.WithTimeout(context.Background(), timeout)
+	if opts.Timeout > 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), opts.Timeout)
 		defer cancel()
 	} else {
 		ctx = context.Background()
@@ -96,53 +130,37 @@ func (r *ClaudeRunner) Run(prompt string, trust bool, timeout time.Duration, int
 	cmd := exec.CommandContext(ctx, "claude", args...)
 
 	var outputBuf strings.Builder
-	var err error
 
-	if interactive {
-		// Interactive mode: pass prompt as argument, inherit terminal
-		args = append(args, prompt)
-		cmd.Args = append([]string{"claude"}, args...)
-
-		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-
-		// Start command
-		if err := cmd.Start(); err != nil {
-			return nil, fmt.Errorf("failed to start claude: %w", err)
-		}
-	} else {
-		// Non-interactive mode: pipe prompt through stdin
-		stdin, err := cmd.StdinPipe()
-		if err != nil {
-			return nil, fmt.Errorf("failed to create stdin pipe: %w", err)
-		}
-
-		stdout, err := cmd.StdoutPipe()
-		if err != nil {
-			return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
-		}
-
-		stderr, err := cmd.StderrPipe()
-		if err != nil {
-			return nil, fmt.Errorf("failed to create stderr pipe: %w", err)
-		}
-
-		// Start command
-		if err := cmd.Start(); err != nil {
-			return nil, fmt.Errorf("failed to start claude: %w", err)
-		}
-
-		// Write prompt to stdin
-		go func() {
-			defer stdin.Close()
-			io.WriteString(stdin, prompt)
-		}()
-
-		// Stream output to console and capture
-		go streamOutput(stdout, &outputBuf, os.Stdout)
-		go streamOutput(stderr, &outputBuf, os.Stderr)
+	// Pipe prompt through stdin
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stdin pipe: %w", err)
 	}
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
+
+	// Start command
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start claude: %w", err)
+	}
+
+	// Write prompt to stdin
+	go func() {
+		defer stdin.Close()
+		io.WriteString(stdin, opts.Prompt)
+	}()
+
+	// Stream output to console and capture
+	go streamOutput(stdout, &outputBuf, os.Stdout)
+	go streamOutput(stderr, &outputBuf, os.Stderr)
 
 	// Wait for command to complete
 	err = cmd.Wait()
@@ -152,7 +170,7 @@ func (r *ClaudeRunner) Run(prompt string, trust bool, timeout time.Duration, int
 		// Check if this was a timeout
 		if ctx.Err() == context.DeadlineExceeded {
 			result.TimedOut = true
-			result.Error = fmt.Errorf("iteration timed out after %v", timeout)
+			result.Error = fmt.Errorf("iteration timed out after %v", opts.Timeout)
 			return result, nil
 		}
 
@@ -164,6 +182,72 @@ func (r *ClaudeRunner) Run(prompt string, trust bool, timeout time.Duration, int
 
 	// Parse completion signals from output
 	r.parseSignals(result)
+
+	return result, nil
+}
+
+// runInteractive executes Claude in interactive mode (terminal TUI)
+func (r *ClaudeRunner) runInteractive(opts RunOptions) (*RunResult, error) {
+	result := &RunResult{}
+
+	// Build command arguments
+	args := []string{
+		"--disable-slash-commands",
+	}
+
+	// Append system prompt if provided
+	if opts.SystemPrompt != "" {
+		args = append(args, "--append-system-prompt", opts.SystemPrompt)
+	}
+
+	// Set permission mode
+	if opts.Permission == PermissionBypass {
+		args = append(args, "--dangerously-skip-permissions")
+	} else {
+		args = append(args, "--permission-mode", string(opts.Permission))
+	}
+
+	// Interactive mode: pass prompt as argument
+	args = append(args, opts.Prompt)
+
+	// Create context with timeout if specified
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if opts.Timeout > 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), opts.Timeout)
+		defer cancel()
+	} else {
+		ctx = context.Background()
+	}
+
+	cmd := exec.CommandContext(ctx, "claude", args...)
+
+	// Inherit terminal for full TUI
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	// Start command
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start claude: %w", err)
+	}
+
+	// Wait for command to complete
+	err := cmd.Wait()
+
+	if err != nil {
+		// Check if this was a timeout
+		if ctx.Err() == context.DeadlineExceeded {
+			result.TimedOut = true
+			result.Error = fmt.Errorf("session timed out after %v", opts.Timeout)
+			return result, nil
+		}
+
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			result.ExitCode = exitErr.ExitCode()
+		}
+		result.Error = fmt.Errorf("claude exited with error: %w", err)
+	}
 
 	return result, nil
 }
@@ -292,30 +376,22 @@ type MockRunner struct {
 	// Responses is a queue of results to return (FIFO)
 	Responses []*RunResult
 	// Calls records all calls made to Run
-	Calls []MockCall
+	Calls []RunOptions
 	// NextIndex tracks which response to return next
 	NextIndex int
-}
-
-// MockCall records the arguments of a single Run call
-type MockCall struct {
-	Prompt      string
-	Trust       bool
-	Timeout     time.Duration
-	Interactive bool
 }
 
 // NewMockRunner creates a new MockRunner with the given responses
 func NewMockRunner(responses ...*RunResult) *MockRunner {
 	return &MockRunner{
 		Responses: responses,
-		Calls:     make([]MockCall, 0),
+		Calls:     make([]RunOptions, 0),
 	}
 }
 
 // Run records the call and returns the next queued response
-func (m *MockRunner) Run(prompt string, trust bool, timeout time.Duration, interactive bool) (*RunResult, error) {
-	m.Calls = append(m.Calls, MockCall{Prompt: prompt, Trust: trust, Timeout: timeout, Interactive: interactive})
+func (m *MockRunner) Run(opts RunOptions) (*RunResult, error) {
+	m.Calls = append(m.Calls, opts)
 
 	if m.NextIndex >= len(m.Responses) {
 		// Return a default blocked result if no more responses queued
@@ -333,7 +409,7 @@ func (m *MockRunner) Run(prompt string, trust bool, timeout time.Duration, inter
 
 // Reset clears call history and resets response index
 func (m *MockRunner) Reset() {
-	m.Calls = make([]MockCall, 0)
+	m.Calls = make([]RunOptions, 0)
 	m.NextIndex = 0
 }
 

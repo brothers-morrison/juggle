@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/ohare93/juggle/internal/agent"
@@ -74,6 +75,37 @@ Examples:
 	RunE: runAgentRun,
 }
 
+// agentRefineCmd launches an interactive session to review and improve ball definitions
+var agentRefineCmd = &cobra.Command{
+	Use:     "refine [session]",
+	Aliases: []string{"refinement"},
+	Short:   "Review and improve ball definitions interactively",
+	Long: `Launch an interactive Claude session in plan mode to review and improve balls.
+
+This command helps you:
+- Improve acceptance criteria to be specific and testable
+- Identify overlapping or duplicate work items
+- Adjust priorities based on impact and dependencies
+- Clarify vague intents for better autonomous execution
+
+Ball Selection:
+- No argument: Review all balls in current repo
+- Session arg: Review balls with that session tag
+- --all flag: Review balls from all discovered projects
+
+Examples:
+  # Review balls in current repo
+  juggle agent refine
+
+  # Review balls for a specific session
+  juggle agent refine my-feature
+
+  # Review all balls across all projects
+  juggle agent refine --all`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: runAgentRefine,
+}
+
 func init() {
 	agentRunCmd.Flags().IntVarP(&agentIterations, "iterations", "n", 10, "Maximum number of iterations")
 	agentRunCmd.Flags().BoolVar(&agentTrust, "trust", false, "Run with --dangerously-skip-permissions (dangerous!)")
@@ -84,6 +116,7 @@ func init() {
 	agentRunCmd.Flags().BoolVarP(&agentInteractive, "interactive", "i", false, "Run in interactive mode (full Claude TUI, defaults to 1 iteration)")
 
 	agentCmd.AddCommand(agentRunCmd)
+	agentCmd.AddCommand(agentRefineCmd)
 	rootCmd.AddCommand(agentCmd)
 }
 
@@ -167,8 +200,26 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 			return nil, fmt.Errorf("failed to generate prompt: %w", err)
 		}
 
-		// Run agent with prompt using the Runner interface
-		runResult, err := agent.DefaultRunner.Run(prompt, config.Trust, config.Timeout, config.Interactive)
+		// Build run options
+		opts := agent.RunOptions{
+			Prompt:     prompt,
+			Mode:       agent.ModeHeadless,
+			Permission: agent.PermissionAcceptEdits,
+			Timeout:    config.Timeout,
+		}
+		if config.Interactive {
+			opts.Mode = agent.ModeInteractive
+		}
+		if config.Trust {
+			opts.Permission = agent.PermissionBypass
+		}
+		// Add autonomous system prompt for headless mode
+		if !config.Interactive {
+			opts.SystemPrompt = agent.AutonomousSystemPrompt
+		}
+
+		// Run agent with options using the Runner interface
+		runResult, err := agent.DefaultRunner.Run(opts)
 		if err != nil {
 			return nil, fmt.Errorf("failed to run agent: %w", err)
 		}
@@ -549,4 +600,244 @@ func logTimeoutToProgress(projectDir, sessionID, message string) {
 
 	entry := fmt.Sprintf("[TIMEOUT] %s", message)
 	_ = sessionStore.AppendProgress(sessionID, entry)
+}
+
+// runAgentRefine implements the agent refine command
+func runAgentRefine(cmd *cobra.Command, args []string) error {
+	// Parse optional session argument
+	var sessionID string
+	if len(args) > 0 {
+		sessionID = args[0]
+	}
+
+	// Get current directory
+	cwd, err := GetWorkingDir()
+	if err != nil {
+		return fmt.Errorf("failed to get current directory: %w", err)
+	}
+
+	// Load balls based on scope
+	balls, err := loadBallsForRefine(cwd, sessionID)
+	if err != nil {
+		return fmt.Errorf("failed to load balls: %w", err)
+	}
+
+	if len(balls) == 0 {
+		fmt.Println("No balls found to refine.")
+		return nil
+	}
+
+	// Generate the refinement prompt
+	prompt, err := generateRefinePrompt(cwd, sessionID, balls)
+	if err != nil {
+		return fmt.Errorf("failed to generate prompt: %w", err)
+	}
+
+	fmt.Printf("Starting refinement session for %d ball(s)...\n", len(balls))
+	if sessionID != "" {
+		fmt.Printf("Session filter: %s\n", sessionID)
+	}
+	fmt.Println()
+
+	// Run Claude in interactive + plan mode
+	opts := agent.RunOptions{
+		Prompt:     prompt,
+		Mode:       agent.ModeInteractive,
+		Permission: agent.PermissionPlan,
+	}
+
+	_, err = agent.DefaultRunner.Run(opts)
+	if err != nil {
+		return fmt.Errorf("refinement session failed: %w", err)
+	}
+
+	return nil
+}
+
+// loadBallsForRefine loads balls based on scope:
+// - If sessionID provided, filter by session tag
+// - If GlobalOpts.AllProjects, load from all discovered projects
+// - Otherwise, load from current repo only
+func loadBallsForRefine(projectDir, sessionID string) ([]*session.Ball, error) {
+	// Load config to discover projects
+	config, err := LoadConfigForCommand()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Create store for current directory
+	store, err := NewStoreForCommand(projectDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create store: %w", err)
+	}
+
+	// Discover projects (respects --all flag)
+	projects, err := DiscoverProjectsForCommand(config, store)
+	if err != nil {
+		return nil, fmt.Errorf("failed to discover projects: %w", err)
+	}
+
+	if len(projects) == 0 {
+		return nil, fmt.Errorf("no projects with .juggler directories found")
+	}
+
+	// Load all balls from discovered projects
+	allBalls, err := session.LoadAllBalls(projects)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load balls: %w", err)
+	}
+
+	// If no session filter, return all non-complete balls
+	if sessionID == "" {
+		balls := make([]*session.Ball, 0)
+		for _, ball := range allBalls {
+			if ball.State != session.StateComplete {
+				balls = append(balls, ball)
+			}
+		}
+		return balls, nil
+	}
+
+	// Filter by session tag
+	balls := make([]*session.Ball, 0)
+	for _, ball := range allBalls {
+		for _, tag := range ball.Tags {
+			if tag == sessionID {
+				balls = append(balls, ball)
+				break
+			}
+		}
+	}
+
+	return balls, nil
+}
+
+// generateRefinePrompt creates the prompt for the refinement session
+func generateRefinePrompt(projectDir, sessionID string, balls []*session.Ball) (string, error) {
+	var buf strings.Builder
+
+	// Write context section with session info if available
+	buf.WriteString("<context>\n")
+	if sessionID != "" {
+		// Try to load session context
+		sessionStore, err := session.NewSessionStore(projectDir)
+		if err == nil {
+			juggleSession, err := sessionStore.LoadSession(sessionID)
+			if err == nil && juggleSession.Description != "" {
+				buf.WriteString(fmt.Sprintf("Session: %s\n", sessionID))
+				buf.WriteString(fmt.Sprintf("Description: %s\n", juggleSession.Description))
+				if juggleSession.Context != "" {
+					buf.WriteString("\n")
+					buf.WriteString(juggleSession.Context)
+					if !strings.HasSuffix(juggleSession.Context, "\n") {
+						buf.WriteString("\n")
+					}
+				}
+			}
+		}
+	}
+	buf.WriteString("</context>\n\n")
+
+	// Write balls section with all details
+	buf.WriteString("<balls>\n")
+	for i, ball := range balls {
+		if i > 0 {
+			buf.WriteString("\n")
+		}
+		writeBallForRefine(&buf, ball)
+	}
+	buf.WriteString("</balls>\n\n")
+
+	// Write instructions section with refinement template
+	buf.WriteString("<instructions>\n")
+	buf.WriteString(agent.GetRefinePromptTemplate())
+	if !strings.HasSuffix(agent.GetRefinePromptTemplate(), "\n") {
+		buf.WriteString("\n")
+	}
+	buf.WriteString("</instructions>\n")
+
+	return buf.String(), nil
+}
+
+// LoadBallsForRefineForTest is an exported wrapper for testing
+func LoadBallsForRefineForTest(projectDir, sessionID string) ([]*session.Ball, error) {
+	return loadBallsForRefine(projectDir, sessionID)
+}
+
+// GenerateRefinePromptForTest is an exported wrapper for testing
+func GenerateRefinePromptForTest(projectDir, sessionID string, balls []*session.Ball) (string, error) {
+	return generateRefinePrompt(projectDir, sessionID, balls)
+}
+
+// RunAgentRefineForTest runs the agent refine logic for testing
+func RunAgentRefineForTest(projectDir, sessionID string) error {
+	// Override GlobalOpts.ProjectDir for test
+	oldProjectDir := GlobalOpts.ProjectDir
+	GlobalOpts.ProjectDir = projectDir
+	defer func() { GlobalOpts.ProjectDir = oldProjectDir }()
+
+	// Load balls based on scope
+	balls, err := loadBallsForRefine(projectDir, sessionID)
+	if err != nil {
+		return fmt.Errorf("failed to load balls: %w", err)
+	}
+
+	if len(balls) == 0 {
+		return nil // No balls to refine
+	}
+
+	// Generate the refinement prompt
+	prompt, err := generateRefinePrompt(projectDir, sessionID, balls)
+	if err != nil {
+		return fmt.Errorf("failed to generate prompt: %w", err)
+	}
+
+	// Run Claude in interactive + plan mode
+	opts := agent.RunOptions{
+		Prompt:     prompt,
+		Mode:       agent.ModeInteractive,
+		Permission: agent.PermissionPlan,
+	}
+
+	_, err = agent.DefaultRunner.Run(opts)
+	return err
+}
+
+// writeBallForRefine writes a single ball with all details for refinement
+func writeBallForRefine(buf *strings.Builder, ball *session.Ball) {
+	// Header with ID, state, and priority
+	buf.WriteString(fmt.Sprintf("## %s [%s] (priority: %s)\n", ball.ID, ball.State, ball.Priority))
+
+	// Intent
+	buf.WriteString(fmt.Sprintf("Intent: %s\n", ball.Intent))
+
+	// Project directory
+	if ball.WorkingDir != "" {
+		buf.WriteString(fmt.Sprintf("Project: %s\n", ball.WorkingDir))
+	}
+
+	// Acceptance criteria
+	if len(ball.AcceptanceCriteria) > 0 {
+		buf.WriteString("Acceptance Criteria:\n")
+		for i, ac := range ball.AcceptanceCriteria {
+			buf.WriteString(fmt.Sprintf("  %d. %s\n", i+1, ac))
+		}
+	} else {
+		buf.WriteString("Acceptance Criteria: (none - needs definition)\n")
+	}
+
+	// Blocked reason if blocked
+	if ball.State == session.StateBlocked && ball.BlockedReason != "" {
+		buf.WriteString(fmt.Sprintf("Blocked: %s\n", ball.BlockedReason))
+	}
+
+	// Tags
+	if len(ball.Tags) > 0 {
+		buf.WriteString(fmt.Sprintf("Tags: %s\n", strings.Join(ball.Tags, ", ")))
+	}
+
+	// Output if researched
+	if ball.Output != "" {
+		buf.WriteString(fmt.Sprintf("Research Output: %s\n", ball.Output))
+	}
 }

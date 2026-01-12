@@ -13,7 +13,7 @@ func TestMockRunner_Run(t *testing.T) {
 		)
 
 		// First call
-		result, err := mock.Run("prompt1", false, 0, false)
+		result, err := mock.Run(RunOptions{Prompt: "prompt1", Permission: PermissionAcceptEdits})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -25,7 +25,7 @@ func TestMockRunner_Run(t *testing.T) {
 		}
 
 		// Second call
-		result, err = mock.Run("prompt2", true, 0, false)
+		result, err = mock.Run(RunOptions{Prompt: "prompt2", Permission: PermissionBypass})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -43,9 +43,9 @@ func TestMockRunner_Run(t *testing.T) {
 	t.Run("records all calls", func(t *testing.T) {
 		mock := NewMockRunner(&RunResult{Output: "ok"})
 
-		mock.Run("prompt1", false, 0, false)
-		mock.Run("prompt2", true, 0, false)
-		mock.Run("prompt3", false, 0, false)
+		mock.Run(RunOptions{Prompt: "prompt1", Permission: PermissionAcceptEdits})
+		mock.Run(RunOptions{Prompt: "prompt2", Permission: PermissionBypass})
+		mock.Run(RunOptions{Prompt: "prompt3", Permission: PermissionAcceptEdits})
 
 		if len(mock.Calls) != 3 {
 			t.Fatalf("expected 3 calls, got %d", len(mock.Calls))
@@ -54,15 +54,15 @@ func TestMockRunner_Run(t *testing.T) {
 		if mock.Calls[0].Prompt != "prompt1" {
 			t.Errorf("expected first prompt 'prompt1', got '%s'", mock.Calls[0].Prompt)
 		}
-		if mock.Calls[0].Trust != false {
-			t.Error("expected first call Trust=false")
+		if mock.Calls[0].Permission != PermissionAcceptEdits {
+			t.Error("expected first call Permission=PermissionAcceptEdits")
 		}
 
 		if mock.Calls[1].Prompt != "prompt2" {
 			t.Errorf("expected second prompt 'prompt2', got '%s'", mock.Calls[1].Prompt)
 		}
-		if mock.Calls[1].Trust != true {
-			t.Error("expected second call Trust=true")
+		if mock.Calls[1].Permission != PermissionBypass {
+			t.Error("expected second call Permission=PermissionBypass")
 		}
 	})
 
@@ -70,10 +70,10 @@ func TestMockRunner_Run(t *testing.T) {
 		mock := NewMockRunner(&RunResult{Output: "only one"})
 
 		// First call succeeds
-		mock.Run("first", false, 0, false)
+		mock.Run(RunOptions{Prompt: "first"})
 
 		// Second call should return default blocked
-		result, err := mock.Run("second", false, 0, false)
+		result, err := mock.Run(RunOptions{Prompt: "second"})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -91,8 +91,8 @@ func TestMockRunner_Run(t *testing.T) {
 			&RunResult{Output: "second"},
 		)
 
-		mock.Run("prompt1", false, 0, false)
-		mock.Run("prompt2", false, 0, false)
+		mock.Run(RunOptions{Prompt: "prompt1"})
+		mock.Run(RunOptions{Prompt: "prompt2"})
 
 		mock.Reset()
 
@@ -104,7 +104,7 @@ func TestMockRunner_Run(t *testing.T) {
 		}
 
 		// Should return first response again
-		result, _ := mock.Run("new prompt", false, 0, false)
+		result, _ := mock.Run(RunOptions{Prompt: "new prompt"})
 		if result.Output != "first" {
 			t.Errorf("expected 'first' after reset, got '%s'", result.Output)
 		}
@@ -113,16 +113,16 @@ func TestMockRunner_Run(t *testing.T) {
 	t.Run("SetResponses replaces queue", func(t *testing.T) {
 		mock := NewMockRunner(&RunResult{Output: "old"})
 
-		mock.Run("prompt", false, 0, false) // Consume old response
+		mock.Run(RunOptions{Prompt: "prompt"}) // Consume old response
 
 		mock.SetResponses(&RunResult{Output: "new1"}, &RunResult{Output: "new2"})
 
-		result, _ := mock.Run("prompt", false, 0, false)
+		result, _ := mock.Run(RunOptions{Prompt: "prompt"})
 		if result.Output != "new1" {
 			t.Errorf("expected 'new1', got '%s'", result.Output)
 		}
 
-		result, _ = mock.Run("prompt", false, 0, false)
+		result, _ = mock.Run(RunOptions{Prompt: "prompt"})
 		if result.Output != "new2" {
 			t.Errorf("expected 'new2', got '%s'", result.Output)
 		}
@@ -132,7 +132,7 @@ func TestMockRunner_Run(t *testing.T) {
 		mock := NewMockRunner(&RunResult{Output: "ok"})
 
 		timeout := 5 * time.Minute
-		mock.Run("prompt", false, timeout, false)
+		mock.Run(RunOptions{Prompt: "prompt", Timeout: timeout})
 
 		if len(mock.Calls) != 1 {
 			t.Fatalf("expected 1 call, got %d", len(mock.Calls))
@@ -146,7 +146,7 @@ func TestMockRunner_Run(t *testing.T) {
 	t.Run("returns timed out result", func(t *testing.T) {
 		mock := NewMockRunner(&RunResult{TimedOut: true, Output: "partial output before timeout"})
 
-		result, err := mock.Run("prompt", false, 5*time.Minute, false)
+		result, err := mock.Run(RunOptions{Prompt: "prompt", Timeout: 5 * time.Minute})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -156,6 +156,48 @@ func TestMockRunner_Run(t *testing.T) {
 		}
 		if result.Output != "partial output before timeout" {
 			t.Errorf("expected 'partial output before timeout', got '%s'", result.Output)
+		}
+	})
+
+	t.Run("records mode in call", func(t *testing.T) {
+		mock := NewMockRunner(&RunResult{Output: "ok"})
+
+		mock.Run(RunOptions{Prompt: "prompt", Mode: ModeInteractive})
+
+		if len(mock.Calls) != 1 {
+			t.Fatalf("expected 1 call, got %d", len(mock.Calls))
+		}
+
+		if mock.Calls[0].Mode != ModeInteractive {
+			t.Errorf("expected Mode=ModeInteractive, got %s", mock.Calls[0].Mode)
+		}
+	})
+
+	t.Run("records permission in call", func(t *testing.T) {
+		mock := NewMockRunner(&RunResult{Output: "ok"})
+
+		mock.Run(RunOptions{Prompt: "prompt", Permission: PermissionPlan})
+
+		if len(mock.Calls) != 1 {
+			t.Fatalf("expected 1 call, got %d", len(mock.Calls))
+		}
+
+		if mock.Calls[0].Permission != PermissionPlan {
+			t.Errorf("expected Permission=PermissionPlan, got %s", mock.Calls[0].Permission)
+		}
+	})
+
+	t.Run("records system prompt in call", func(t *testing.T) {
+		mock := NewMockRunner(&RunResult{Output: "ok"})
+
+		mock.Run(RunOptions{Prompt: "prompt", SystemPrompt: "You are a helpful assistant"})
+
+		if len(mock.Calls) != 1 {
+			t.Fatalf("expected 1 call, got %d", len(mock.Calls))
+		}
+
+		if mock.Calls[0].SystemPrompt != "You are a helpful assistant" {
+			t.Errorf("expected SystemPrompt='You are a helpful assistant', got '%s'", mock.Calls[0].SystemPrompt)
 		}
 	})
 }
@@ -399,7 +441,7 @@ func TestMockRunner_RateLimited(t *testing.T) {
 			RetryAfter:  30 * time.Second,
 		})
 
-		result, err := mock.Run("prompt", false, 0, false)
+		result, err := mock.Run(RunOptions{Prompt: "prompt"})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -409,6 +451,37 @@ func TestMockRunner_RateLimited(t *testing.T) {
 		}
 		if result.RetryAfter != 30*time.Second {
 			t.Errorf("expected RetryAfter=30s, got %v", result.RetryAfter)
+		}
+	})
+}
+
+func TestRunOptions_Modes(t *testing.T) {
+	t.Run("ModeHeadless is default", func(t *testing.T) {
+		opts := RunOptions{Prompt: "test"}
+		if opts.Mode != "" && opts.Mode != ModeHeadless {
+			// Empty string should be treated as headless
+			t.Errorf("expected Mode to be empty or ModeHeadless, got %s", opts.Mode)
+		}
+	})
+
+	t.Run("PermissionAcceptEdits is common default", func(t *testing.T) {
+		opts := RunOptions{Prompt: "test", Permission: PermissionAcceptEdits}
+		if opts.Permission != PermissionAcceptEdits {
+			t.Errorf("expected Permission=PermissionAcceptEdits, got %s", opts.Permission)
+		}
+	})
+
+	t.Run("PermissionPlan for refine mode", func(t *testing.T) {
+		opts := RunOptions{Prompt: "test", Permission: PermissionPlan}
+		if opts.Permission != PermissionPlan {
+			t.Errorf("expected Permission=PermissionPlan, got %s", opts.Permission)
+		}
+	})
+
+	t.Run("PermissionBypass for trust mode", func(t *testing.T) {
+		opts := RunOptions{Prompt: "test", Permission: PermissionBypass}
+		if opts.Permission != PermissionBypass {
+			t.Errorf("expected Permission=PermissionBypass, got %s", opts.Permission)
 		}
 	})
 }
