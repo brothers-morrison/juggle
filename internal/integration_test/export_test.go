@@ -1137,3 +1137,220 @@ func TestExportSessionWithAllFlag(t *testing.T) {
 		}
 	})
 }
+
+// TestExportSortsBallsWithInProgressFirst verifies that in_progress balls appear first in agent exports
+func TestExportSortsBallsWithInProgressFirst(t *testing.T) {
+	project := t.TempDir()
+
+	// Create session and ball stores
+	sessionStore, err := session.NewSessionStore(project)
+	if err != nil {
+		t.Fatalf("Failed to create session store: %v", err)
+	}
+
+	_, err = sessionStore.CreateSession("test-session", "Test session")
+	if err != nil {
+		t.Fatalf("Failed to create session: %v", err)
+	}
+
+	ballStore, err := session.NewStoreWithConfig(project, session.StoreConfig{JugglerDirName: ".juggler"})
+	if err != nil {
+		t.Fatalf("Failed to create ball store: %v", err)
+	}
+
+	// Create balls with mixed states and priorities
+	// The order they're created should NOT be the order in the export
+	balls := []*session.Ball{
+		{
+			ID:           "project-1",
+			WorkingDir:   project,
+			Intent:       "Pending urgent ball",
+			Priority:     session.PriorityUrgent,
+			State:        session.StatePending,
+			Tags:         []string{"test-session"},
+			StartedAt:    time.Now(),
+			LastActivity: time.Now(),
+		},
+		{
+			ID:           "project-2",
+			WorkingDir:   project,
+			Intent:       "In progress low priority ball",
+			Priority:     session.PriorityLow,
+			State:        session.StateInProgress,
+			Tags:         []string{"test-session"},
+			StartedAt:    time.Now(),
+			LastActivity: time.Now(),
+		},
+		{
+			ID:           "project-3",
+			WorkingDir:   project,
+			Intent:       "Blocked high priority ball",
+			Priority:     session.PriorityHigh,
+			State:        session.StateBlocked,
+			Tags:         []string{"test-session"},
+			StartedAt:    time.Now(),
+			LastActivity: time.Now(),
+		},
+		{
+			ID:           "project-4",
+			WorkingDir:   project,
+			Intent:       "In progress high priority ball",
+			Priority:     session.PriorityHigh,
+			State:        session.StateInProgress,
+			Tags:         []string{"test-session"},
+			StartedAt:    time.Now(),
+			LastActivity: time.Now(),
+		},
+		{
+			ID:           "project-5",
+			WorkingDir:   project,
+			Intent:       "Pending low priority ball",
+			Priority:     session.PriorityLow,
+			State:        session.StatePending,
+			Tags:         []string{"test-session"},
+			StartedAt:    time.Now(),
+			LastActivity: time.Now(),
+		},
+	}
+
+	for _, ball := range balls {
+		if err := ballStore.Save(ball); err != nil {
+			t.Fatalf("Failed to save ball %s: %v", ball.ID, err)
+		}
+	}
+
+	// Use SortBallsForAgentExport to verify sorting
+	sortedBalls := make([]*session.Ball, len(balls))
+	copy(sortedBalls, balls)
+	cli.SortBallsForAgentExport(sortedBalls)
+
+	// Expected order:
+	// 1. In progress high priority (project-4)
+	// 2. In progress low priority (project-2)
+	// 3. Pending urgent (project-1)
+	// 4. Pending low (project-5)
+	// 5. Blocked high (project-3)
+
+	t.Run("InProgressBallsAppearFirst", func(t *testing.T) {
+		if sortedBalls[0].State != session.StateInProgress {
+			t.Errorf("Expected first ball to be in_progress, got %s", sortedBalls[0].State)
+		}
+		if sortedBalls[1].State != session.StateInProgress {
+			t.Errorf("Expected second ball to be in_progress, got %s", sortedBalls[1].State)
+		}
+	})
+
+	t.Run("InProgressBallsSortedByPriority", func(t *testing.T) {
+		// First in_progress ball should be high priority
+		if sortedBalls[0].ID != "project-4" {
+			t.Errorf("Expected first ball to be project-4 (in_progress high), got %s", sortedBalls[0].ID)
+		}
+		// Second in_progress ball should be low priority
+		if sortedBalls[1].ID != "project-2" {
+			t.Errorf("Expected second ball to be project-2 (in_progress low), got %s", sortedBalls[1].ID)
+		}
+	})
+
+	t.Run("PendingBallsFollowInProgress", func(t *testing.T) {
+		if sortedBalls[2].State != session.StatePending {
+			t.Errorf("Expected third ball to be pending, got %s", sortedBalls[2].State)
+		}
+		// Pending urgent should come before pending low
+		if sortedBalls[2].ID != "project-1" {
+			t.Errorf("Expected third ball to be project-1 (pending urgent), got %s", sortedBalls[2].ID)
+		}
+		if sortedBalls[3].ID != "project-5" {
+			t.Errorf("Expected fourth ball to be project-5 (pending low), got %s", sortedBalls[3].ID)
+		}
+	})
+
+	t.Run("BlockedBallsAppearLast", func(t *testing.T) {
+		if sortedBalls[4].State != session.StateBlocked {
+			t.Errorf("Expected last ball to be blocked, got %s", sortedBalls[4].State)
+		}
+		if sortedBalls[4].ID != "project-3" {
+			t.Errorf("Expected last ball to be project-3 (blocked), got %s", sortedBalls[4].ID)
+		}
+	})
+}
+
+// TestExportAgentIncludesInProgressBalls verifies that in_progress balls are included in agent export
+func TestExportAgentIncludesInProgressBalls(t *testing.T) {
+	project := t.TempDir()
+
+	// Create session store
+	sessionStore, err := session.NewSessionStore(project)
+	if err != nil {
+		t.Fatalf("Failed to create session store: %v", err)
+	}
+
+	_, err = sessionStore.CreateSession("test-session", "Test session for in_progress balls")
+	if err != nil {
+		t.Fatalf("Failed to create session: %v", err)
+	}
+
+	// Create ball store
+	ballStore, err := session.NewStoreWithConfig(project, session.StoreConfig{JugglerDirName: ".juggler"})
+	if err != nil {
+		t.Fatalf("Failed to create ball store: %v", err)
+	}
+
+	// Create an in_progress ball
+	inProgressBall := &session.Ball{
+		ID:                 "project-1",
+		WorkingDir:         project,
+		Intent:             "In progress work item",
+		Priority:           session.PriorityHigh,
+		State:              session.StateInProgress,
+		Tags:               []string{"test-session"},
+		AcceptanceCriteria: []string{"AC 1", "AC 2"},
+		StartedAt:          time.Now(),
+		LastActivity:       time.Now(),
+	}
+
+	if err := ballStore.Save(inProgressBall); err != nil {
+		t.Fatalf("Failed to save ball: %v", err)
+	}
+
+	// Load all balls and verify in_progress is included
+	allBalls, err := session.LoadAllBalls([]string{project})
+	if err != nil {
+		t.Fatalf("Failed to load balls: %v", err)
+	}
+
+	// Filter by session
+	sessionBalls := make([]*session.Ball, 0)
+	for _, ball := range allBalls {
+		for _, tag := range ball.Tags {
+			if tag == "test-session" {
+				sessionBalls = append(sessionBalls, ball)
+				break
+			}
+		}
+	}
+
+	if len(sessionBalls) != 1 {
+		t.Fatalf("Expected 1 ball, got %d", len(sessionBalls))
+	}
+
+	if sessionBalls[0].State != session.StateInProgress {
+		t.Errorf("Expected ball to be in_progress, got %s", sessionBalls[0].State)
+	}
+
+	// Verify the ball appears in export output (using ralph format as proxy)
+	output, err := exportToRalph(project, "test-session", sessionBalls)
+	if err != nil {
+		t.Fatalf("Failed to export: %v", err)
+	}
+
+	outputStr := string(output)
+
+	// Verify in_progress ball appears in export
+	if !strings.Contains(outputStr, "[in_progress]") {
+		t.Error("Expected export to contain [in_progress] state marker")
+	}
+
+	if !strings.Contains(outputStr, "In progress work item") {
+		t.Error("Expected export to contain in_progress ball intent")
+	}
+}

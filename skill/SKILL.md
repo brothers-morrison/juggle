@@ -162,6 +162,18 @@ juggle list
 | `blocked` | Stuck (reason in `blocked_reason` field) |
 | `complete` | Done and archived |
 
+### In-Progress Ball Handling
+
+When the agent receives balls, **in_progress balls appear first** because they represent unfinished work from previous iterations.
+
+**How to handle in_progress balls:**
+
+1. **Check if already done** - Sometimes work was completed in a previous iteration but the agent loop was interrupted before updating state
+2. **If done:** Verify acceptance criteria are met, update state to `complete`, then continue to next ball
+3. **If not done:** Continue the implementation
+
+This ensures work is never lost between agent loop iterations.
+
 ## Command Reference
 
 ### Planning Commands

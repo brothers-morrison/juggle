@@ -17,10 +17,15 @@ Review these sections to understand the current state.
 
 ### 1. Select Work
 
-1. Find the highest-priority ball where state is NOT `complete`
-2. YOU decide which has highest priority based on dependencies and complexity
-3. If a ball is `in_progress`, continue that ball
-4. Note the ball's **acceptance criteria** - these determine what tools you'll need
+**Priority order for ball selection:**
+1. **in_progress balls first** - These represent unfinished work from previous iterations and MUST be completed or verified first
+2. **pending balls by priority** - urgent > high > medium > low
+3. **blocked balls** - Review if blockers have been resolved
+
+**For in_progress balls:**
+- Check if the work was already completed in a previous iteration
+- If YES: Verify the acceptance criteria, update state to `complete`, then signal CONTINUE (this does NOT count as implementation work - no commit needed)
+- If NO: Continue the implementation work
 
 **IMPORTANT: Only work on ONE BALL per iteration.**
 
@@ -142,6 +147,8 @@ After successfully completing ONE ball when other balls still need work:
 ```
 
 This signals the outer loop to call you again for the next ball. **This is the most common signal.**
+
+**Note:** When verifying an already-done in_progress ball (work completed in a previous iteration), updating its state to `complete` and signaling CONTINUE is expected. This verification step is lightweight and does not require a new commit.
 
 ### COMPLETE - All balls are terminal
 

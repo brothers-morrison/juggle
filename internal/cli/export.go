@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/ohare93/juggle/internal/agent"
@@ -510,6 +511,9 @@ func exportRalph(projectDir, sessionID string, balls []*session.Ball) ([]byte, e
 	}
 	buf.WriteString("</progress>\n\n")
 
+	// Sort balls: in_progress first (implies unfinished work), then by priority
+	sortBallsForAgent(balls)
+
 	// Write <tasks> section
 	buf.WriteString("<tasks>\n")
 	for i, ball := range balls {
@@ -619,6 +623,9 @@ func exportAgent(projectDir, sessionID string, balls []*session.Ball, debug bool
 	}
 	buf.WriteString("</progress>\n\n")
 
+	// Sort balls: in_progress first (implies unfinished work), then by priority
+	sortBallsForAgent(balls)
+
 	// Write <balls> or <task> section
 	if singleBall && len(balls) == 1 {
 		// Single ball mode: focused task format
@@ -715,4 +722,50 @@ func writeBallForAgent(buf *strings.Builder, ball *session.Ball) {
 	if len(ball.Tags) > 0 {
 		buf.WriteString(fmt.Sprintf("Tags: %s\n", strings.Join(ball.Tags, ", ")))
 	}
+}
+
+// SortBallsForAgentExport sorts balls so in_progress balls come first,
+// followed by pending balls, then blocked balls.
+// Complete balls should be filtered out before calling this.
+// Within each state, balls are sorted by priority (urgent > high > medium > low).
+// This is exported for testing.
+func SortBallsForAgentExport(balls []*session.Ball) {
+	sortBallsForAgent(balls)
+}
+
+// sortBallsForAgent sorts balls so in_progress balls come first,
+// followed by pending balls, then blocked balls.
+// Complete balls should be filtered out before calling this.
+// Within each state, balls are sorted by priority (urgent > high > medium > low).
+func sortBallsForAgent(balls []*session.Ball) {
+	// State priority: in_progress first, then pending, then blocked, then complete
+	stateOrder := map[session.BallState]int{
+		session.StateInProgress: 0,
+		session.StatePending:    1,
+		session.StateBlocked:    2,
+		session.StateComplete:   3,
+		session.StateResearched: 4,
+	}
+
+	// Priority order: urgent > high > medium > low
+	priorityOrder := map[session.Priority]int{
+		session.PriorityUrgent: 0,
+		session.PriorityHigh:   1,
+		session.PriorityMedium: 2,
+		session.PriorityLow:    3,
+	}
+
+	sort.SliceStable(balls, func(i, j int) bool {
+		// First sort by state
+		stateI := stateOrder[balls[i].State]
+		stateJ := stateOrder[balls[j].State]
+		if stateI != stateJ {
+			return stateI < stateJ
+		}
+
+		// Then sort by priority within each state
+		priorityI := priorityOrder[balls[i].Priority]
+		priorityJ := priorityOrder[balls[j].Priority]
+		return priorityI < priorityJ
+	})
 }
