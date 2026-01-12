@@ -960,6 +960,18 @@ func generateAgentPrompt(projectDir, sessionID string, debug bool, ballID string
 		}
 	}
 
+	// Filter out complete balls by default (they clutter the context for no gain)
+	// Exception: when a specific ball is requested, allow it even if complete
+	if ballID == "" {
+		filteredBalls := make([]*session.Ball, 0, len(balls))
+		for _, ball := range balls {
+			if ball.State != session.StateComplete && ball.State != session.StateResearched {
+				filteredBalls = append(filteredBalls, ball)
+			}
+		}
+		balls = filteredBalls
+	}
+
 	// Filter to specific ball if ballID is specified
 	singleBall := false
 	if ballID != "" {
@@ -1575,6 +1587,18 @@ func loadBallsForModelSelection(projectDir, sessionID, ballID string) ([]*sessio
 				}
 			}
 		}
+	}
+
+	// Filter out complete balls by default (they clutter the context for no gain)
+	// Exception: when a specific ball is requested, allow it even if complete
+	if ballID == "" {
+		filteredBalls := make([]*session.Ball, 0, len(balls))
+		for _, ball := range balls {
+			if ball.State != session.StateComplete && ball.State != session.StateResearched {
+				filteredBalls = append(filteredBalls, ball)
+			}
+		}
+		balls = filteredBalls
 	}
 
 	// Filter to specific ball if ballID is specified

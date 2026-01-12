@@ -309,3 +309,238 @@ func TestAgentPromptGeneration_PromptLength(t *testing.T) {
 		t.Errorf("Prompt seems too short: %d characters", len(prompt))
 	}
 }
+
+// Tests for complete ball exclusion from agent prompt
+
+func TestAgentPromptGeneration_ExcludesCompleteBalls(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Create a session
+	env.CreateSession(t, "test-session", "Test session for complete ball filtering")
+
+	store := env.GetStore(t)
+
+	// Create a pending ball
+	pendingBall := env.CreateBall(t, "Pending work item", session.PriorityMedium)
+	pendingBall.Tags = []string{"test-session"}
+	pendingBall.State = session.StatePending
+	if err := store.UpdateBall(pendingBall); err != nil {
+		t.Fatalf("Failed to update pending ball: %v", err)
+	}
+
+	// Create an in_progress ball
+	inProgressBall := env.CreateBall(t, "In progress work item", session.PriorityHigh)
+	inProgressBall.Tags = []string{"test-session"}
+	inProgressBall.State = session.StateInProgress
+	if err := store.UpdateBall(inProgressBall); err != nil {
+		t.Fatalf("Failed to update in_progress ball: %v", err)
+	}
+
+	// Create a complete ball - this should be excluded
+	completeBall := env.CreateBall(t, "Completed work item", session.PriorityLow)
+	completeBall.Tags = []string{"test-session"}
+	completeBall.State = session.StateComplete
+	if err := store.UpdateBall(completeBall); err != nil {
+		t.Fatalf("Failed to update complete ball: %v", err)
+	}
+
+	// Generate prompt
+	prompt, err := cli.GenerateAgentPromptForTest(env.ProjectDir, "test-session", false, "")
+	if err != nil {
+		t.Fatalf("Failed to generate prompt: %v", err)
+	}
+
+	// Verify pending and in_progress balls are included
+	if !strings.Contains(prompt, "Pending work item") {
+		t.Error("Prompt should contain pending ball")
+	}
+	if !strings.Contains(prompt, "In progress work item") {
+		t.Error("Prompt should contain in_progress ball")
+	}
+
+	// Verify complete ball is excluded
+	if strings.Contains(prompt, "Completed work item") {
+		t.Error("Prompt should NOT contain complete ball by default")
+	}
+}
+
+func TestAgentPromptGeneration_ExcludesResearchedBalls(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Create a session
+	env.CreateSession(t, "test-session", "Test session for researched ball filtering")
+
+	store := env.GetStore(t)
+
+	// Create a pending ball
+	pendingBall := env.CreateBall(t, "Pending work item", session.PriorityMedium)
+	pendingBall.Tags = []string{"test-session"}
+	pendingBall.State = session.StatePending
+	if err := store.UpdateBall(pendingBall); err != nil {
+		t.Fatalf("Failed to update pending ball: %v", err)
+	}
+
+	// Create a researched ball - this should be excluded
+	researchedBall := env.CreateBall(t, "Researched work item", session.PriorityLow)
+	researchedBall.Tags = []string{"test-session"}
+	researchedBall.State = session.StateResearched
+	researchedBall.Output = "Research findings here"
+	if err := store.UpdateBall(researchedBall); err != nil {
+		t.Fatalf("Failed to update researched ball: %v", err)
+	}
+
+	// Generate prompt
+	prompt, err := cli.GenerateAgentPromptForTest(env.ProjectDir, "test-session", false, "")
+	if err != nil {
+		t.Fatalf("Failed to generate prompt: %v", err)
+	}
+
+	// Verify pending ball is included
+	if !strings.Contains(prompt, "Pending work item") {
+		t.Error("Prompt should contain pending ball")
+	}
+
+	// Verify researched ball is excluded
+	if strings.Contains(prompt, "Researched work item") {
+		t.Error("Prompt should NOT contain researched ball by default")
+	}
+}
+
+func TestAgentPromptGeneration_IncludesBlockedBalls(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Create a session
+	env.CreateSession(t, "test-session", "Test session for blocked ball inclusion")
+
+	store := env.GetStore(t)
+
+	// Create a blocked ball - this should be included (not terminal like complete)
+	blockedBall := env.CreateBall(t, "Blocked work item", session.PriorityHigh)
+	blockedBall.Tags = []string{"test-session"}
+	blockedBall.State = session.StateBlocked
+	blockedBall.BlockedReason = "Missing dependency"
+	if err := store.UpdateBall(blockedBall); err != nil {
+		t.Fatalf("Failed to update blocked ball: %v", err)
+	}
+
+	// Generate prompt
+	prompt, err := cli.GenerateAgentPromptForTest(env.ProjectDir, "test-session", false, "")
+	if err != nil {
+		t.Fatalf("Failed to generate prompt: %v", err)
+	}
+
+	// Verify blocked ball is included
+	if !strings.Contains(prompt, "Blocked work item") {
+		t.Error("Prompt should contain blocked ball")
+	}
+}
+
+func TestAgentPromptGeneration_SpecificBallID_AllowsComplete(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Create a session
+	env.CreateSession(t, "test-session", "Test session for specific ball access")
+
+	store := env.GetStore(t)
+
+	// Create a complete ball
+	completeBall := env.CreateBall(t, "Completed work item for specific access", session.PriorityLow)
+	completeBall.Tags = []string{"test-session"}
+	completeBall.State = session.StateComplete
+	if err := store.UpdateBall(completeBall); err != nil {
+		t.Fatalf("Failed to update complete ball: %v", err)
+	}
+
+	// Generate prompt for specific ball ID - should work even for complete ball
+	prompt, err := cli.GenerateAgentPromptForTest(env.ProjectDir, "test-session", false, completeBall.ShortID())
+	if err != nil {
+		t.Fatalf("Failed to generate prompt for specific ball: %v", err)
+	}
+
+	// Verify complete ball is included when specifically requested
+	if !strings.Contains(prompt, "Completed work item for specific access") {
+		t.Error("Prompt should contain complete ball when specifically requested")
+	}
+}
+
+func TestAgentPromptGeneration_AllSession_ExcludesComplete(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	store := env.GetStore(t)
+
+	// Create a pending ball (no session tag)
+	pendingBall := env.CreateBall(t, "Pending in all session", session.PriorityMedium)
+	pendingBall.State = session.StatePending
+	if err := store.UpdateBall(pendingBall); err != nil {
+		t.Fatalf("Failed to update pending ball: %v", err)
+	}
+
+	// Create a complete ball (no session tag)
+	completeBall := env.CreateBall(t, "Complete in all session", session.PriorityLow)
+	completeBall.State = session.StateComplete
+	if err := store.UpdateBall(completeBall); err != nil {
+		t.Fatalf("Failed to update complete ball: %v", err)
+	}
+
+	// Generate prompt for "all" meta-session
+	prompt, err := cli.GenerateAgentPromptForTest(env.ProjectDir, "all", false, "")
+	if err != nil {
+		t.Fatalf("Failed to generate prompt for all session: %v", err)
+	}
+
+	// Verify pending ball is included
+	if !strings.Contains(prompt, "Pending in all session") {
+		t.Error("Prompt should contain pending ball in all session")
+	}
+
+	// Verify complete ball is excluded
+	if strings.Contains(prompt, "Complete in all session") {
+		t.Error("Prompt should NOT contain complete ball even in all session")
+	}
+}
+
+func TestLoadBallsForModelSelection_ExcludesCompleteBalls(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Create a session
+	env.CreateSession(t, "test-session", "Test session for model selection")
+
+	store := env.GetStore(t)
+
+	// Create a pending ball
+	pendingBall := env.CreateBall(t, "Pending for model selection", session.PriorityMedium)
+	pendingBall.Tags = []string{"test-session"}
+	pendingBall.State = session.StatePending
+	if err := store.UpdateBall(pendingBall); err != nil {
+		t.Fatalf("Failed to update pending ball: %v", err)
+	}
+
+	// Create a complete ball
+	completeBall := env.CreateBall(t, "Complete for model selection", session.PriorityLow)
+	completeBall.Tags = []string{"test-session"}
+	completeBall.State = session.StateComplete
+	if err := store.UpdateBall(completeBall); err != nil {
+		t.Fatalf("Failed to update complete ball: %v", err)
+	}
+
+	// Load balls for model selection
+	balls, err := cli.LoadBallsForModelSelectionForTest(env.ProjectDir, "test-session", "")
+	if err != nil {
+		t.Fatalf("Failed to load balls for model selection: %v", err)
+	}
+
+	// Should only get the pending ball
+	if len(balls) != 1 {
+		t.Errorf("Expected 1 ball (pending only), got %d", len(balls))
+	}
+
+	if len(balls) > 0 && balls[0].State != session.StatePending {
+		t.Errorf("Expected pending ball, got %s", balls[0].State)
+	}
+}
