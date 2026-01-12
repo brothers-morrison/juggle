@@ -12,27 +12,39 @@ import (
 )
 
 // BallYAML is the YAML-editable representation of a ball
+// Note: no omitempty tags so all fields are always shown in the editor
 type BallYAML struct {
 	ID                 string   `yaml:"id"`
 	Intent             string   `yaml:"intent"`
 	Priority           string   `yaml:"priority"`
 	State              string   `yaml:"state"`
-	BlockedReason      string   `yaml:"blocked_reason,omitempty"`
-	Tags               []string `yaml:"tags,omitempty"`
-	AcceptanceCriteria []string `yaml:"acceptance_criteria,omitempty"`
-	ModelSize          string   `yaml:"model_size,omitempty"`
+	BlockedReason      string   `yaml:"blocked_reason"`
+	Tags               []string `yaml:"tags"`
+	AcceptanceCriteria []string `yaml:"acceptance_criteria"`
+	ModelSize          string   `yaml:"model_size"`
 }
 
 // ballToYAML converts a ball to YAML format for editing
+// All fields are always shown, even when empty, for discoverability
 func ballToYAML(ball *session.Ball) (string, error) {
+	// Initialize slices to empty (not nil) so they show as [] in YAML
+	tags := ball.Tags
+	if tags == nil {
+		tags = []string{}
+	}
+	ac := ball.AcceptanceCriteria
+	if ac == nil {
+		ac = []string{}
+	}
+
 	yamlBall := BallYAML{
 		ID:                 ball.ID,
 		Intent:             ball.Intent,
 		Priority:           string(ball.Priority),
 		State:              string(ball.State),
 		BlockedReason:      ball.BlockedReason,
-		Tags:               ball.Tags,
-		AcceptanceCriteria: ball.AcceptanceCriteria,
+		Tags:               tags,
+		AcceptanceCriteria: ac,
 		ModelSize:          string(ball.ModelSize),
 	}
 
@@ -46,12 +58,17 @@ func ballToYAML(ball *session.Ball) (string, error) {
 # Lines starting with # are ignored
 # Save and close editor to apply changes
 # Close without saving to cancel
+# Empty values can be left as-is or cleared
+# Empty arrays can be written as: tags: []
 
 `
 	return header + string(data), nil
 }
 
 // yamlToBall parses edited YAML and applies changes to a ball
+// Empty values are handled gracefully:
+// - Required fields (intent, priority, state): keep existing value if empty/whitespace
+// - Optional fields (blocked_reason, tags, acceptance_criteria, model_size): can be cleared to empty
 func yamlToBall(yamlContent string, ball *session.Ball) error {
 	var yamlBall BallYAML
 	if err := yaml.Unmarshal([]byte(yamlContent), &yamlBall); err != nil {
@@ -61,46 +78,66 @@ func yamlToBall(yamlContent string, ball *session.Ball) error {
 	// Validate and apply changes
 	// Note: ID is read-only (can't change ball ID)
 
-	// Update intent
-	if yamlBall.Intent != "" {
-		ball.Intent = yamlBall.Intent
+	// Update intent (only if non-empty after trimming whitespace)
+	intent := strings.TrimSpace(yamlBall.Intent)
+	if intent != "" {
+		ball.Intent = intent
 	}
 
-	// Update priority
-	if yamlBall.Priority != "" {
-		priority := session.Priority(yamlBall.Priority)
-		if !session.ValidatePriority(string(priority)) {
-			return fmt.Errorf("invalid priority: %s (must be low, medium, high, or urgent)", yamlBall.Priority)
+	// Update priority (only if non-empty after trimming whitespace)
+	priority := strings.TrimSpace(yamlBall.Priority)
+	if priority != "" {
+		p := session.Priority(priority)
+		if !session.ValidatePriority(string(p)) {
+			return fmt.Errorf("invalid priority: %s (must be low, medium, high, or urgent)", priority)
 		}
-		ball.Priority = priority
+		ball.Priority = p
 	}
 
-	// Update state
-	if yamlBall.State != "" {
-		state := session.BallState(yamlBall.State)
-		if !session.ValidateBallState(string(state)) {
-			return fmt.Errorf("invalid state: %s (must be pending, in_progress, complete, or blocked)", yamlBall.State)
+	// Update state (only if non-empty after trimming whitespace)
+	state := strings.TrimSpace(yamlBall.State)
+	if state != "" {
+		s := session.BallState(state)
+		if !session.ValidateBallState(string(s)) {
+			return fmt.Errorf("invalid state: %s (must be pending, in_progress, complete, or blocked)", state)
 		}
-		ball.State = state
+		ball.State = s
 	}
 
-	// Update blocked reason
-	ball.BlockedReason = yamlBall.BlockedReason
+	// Update blocked reason (can be cleared - trim whitespace)
+	ball.BlockedReason = strings.TrimSpace(yamlBall.BlockedReason)
 
-	// Update tags
-	ball.Tags = yamlBall.Tags
+	// Update tags (can be cleared to empty array)
+	// Trim whitespace from each tag and remove empty tags
+	var cleanTags []string
+	for _, tag := range yamlBall.Tags {
+		tag = strings.TrimSpace(tag)
+		if tag != "" {
+			cleanTags = append(cleanTags, tag)
+		}
+	}
+	ball.Tags = cleanTags
 
-	// Update acceptance criteria
-	ball.AcceptanceCriteria = yamlBall.AcceptanceCriteria
+	// Update acceptance criteria (can be cleared to empty array)
+	// Trim whitespace from each criterion and remove empty ones
+	var cleanAC []string
+	for _, ac := range yamlBall.AcceptanceCriteria {
+		ac = strings.TrimSpace(ac)
+		if ac != "" {
+			cleanAC = append(cleanAC, ac)
+		}
+	}
+	ball.AcceptanceCriteria = cleanAC
 
-	// Update model size
-	if yamlBall.ModelSize != "" {
-		modelSize := session.ModelSize(yamlBall.ModelSize)
-		switch modelSize {
+	// Update model size (can be cleared to blank/default)
+	modelSize := strings.TrimSpace(yamlBall.ModelSize)
+	if modelSize != "" {
+		ms := session.ModelSize(modelSize)
+		switch ms {
 		case session.ModelSizeSmall, session.ModelSizeMedium, session.ModelSizeLarge, session.ModelSizeBlank:
-			ball.ModelSize = modelSize
+			ball.ModelSize = ms
 		default:
-			return fmt.Errorf("invalid model_size: %s (must be small, medium, large, or empty)", yamlBall.ModelSize)
+			return fmt.Errorf("invalid model_size: %s (must be small, medium, large, or empty)", modelSize)
 		}
 	} else {
 		ball.ModelSize = session.ModelSizeBlank

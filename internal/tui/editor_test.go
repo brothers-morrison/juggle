@@ -1043,3 +1043,193 @@ state: pending
 		t.Error("LastActivity should be updated to approximately now")
 	}
 }
+
+func TestBallToYAML_ShowsAllFieldsEvenWhenEmpty(t *testing.T) {
+	// Test that all fields are shown in YAML even when empty
+	ball := &session.Ball{
+		ID:                 "test-1",
+		Intent:             "Test task",
+		Priority:           session.PriorityMedium,
+		State:              session.StatePending,
+		BlockedReason:      "",    // Empty
+		Tags:               nil,   // Nil
+		AcceptanceCriteria: nil,   // Nil
+		ModelSize:          "",    // Empty
+	}
+
+	yaml, err := ballToYAML(ball)
+	if err != nil {
+		t.Fatalf("ballToYAML() error = %v", err)
+	}
+
+	// All fields should be present
+	requiredFields := []string{
+		"id:",
+		"intent:",
+		"priority:",
+		"state:",
+		"blocked_reason:",
+		"tags:",
+		"acceptance_criteria:",
+		"model_size:",
+	}
+
+	for _, field := range requiredFields {
+		if !strings.Contains(yaml, field) {
+			t.Errorf("YAML missing field %q:\n%s", field, yaml)
+		}
+	}
+}
+
+func TestYamlToBall_EmptyValuesPreserveRequired(t *testing.T) {
+	// Test that empty required fields preserve existing values
+	yamlContent := `
+id: test
+intent: ""
+priority: ""
+state: ""
+`
+	ball := &session.Ball{
+		ID:       "test",
+		Intent:   "Original Intent",
+		Priority: session.PriorityHigh,
+		State:    session.StateInProgress,
+	}
+
+	err := yamlToBall(yamlContent, ball)
+	if err != nil {
+		t.Fatalf("yamlToBall() error = %v", err)
+	}
+
+	// Required fields should keep original values
+	if ball.Intent != "Original Intent" {
+		t.Errorf("Intent should preserve original value, got %q", ball.Intent)
+	}
+	if ball.Priority != session.PriorityHigh {
+		t.Errorf("Priority should preserve original value, got %q", ball.Priority)
+	}
+	if ball.State != session.StateInProgress {
+		t.Errorf("State should preserve original value, got %q", ball.State)
+	}
+}
+
+func TestYamlToBall_WhitespaceOnlyValuesPreserveRequired(t *testing.T) {
+	// Test that whitespace-only required fields preserve existing values
+	yamlContent := `
+id: test
+intent: "   "
+priority: "  "
+state: "	"
+`
+	ball := &session.Ball{
+		ID:       "test",
+		Intent:   "Original Intent",
+		Priority: session.PriorityHigh,
+		State:    session.StateInProgress,
+	}
+
+	err := yamlToBall(yamlContent, ball)
+	if err != nil {
+		t.Fatalf("yamlToBall() error = %v", err)
+	}
+
+	// Required fields should keep original values when whitespace-only
+	if ball.Intent != "Original Intent" {
+		t.Errorf("Intent should preserve original value, got %q", ball.Intent)
+	}
+	if ball.Priority != session.PriorityHigh {
+		t.Errorf("Priority should preserve original value, got %q", ball.Priority)
+	}
+	if ball.State != session.StateInProgress {
+		t.Errorf("State should preserve original value, got %q", ball.State)
+	}
+}
+
+func TestYamlToBall_EmptyOptionalFieldsClear(t *testing.T) {
+	// Test that empty optional fields can clear existing values
+	yamlContent := `
+id: test
+intent: Test
+priority: medium
+state: pending
+blocked_reason: ""
+tags: []
+acceptance_criteria: []
+model_size: ""
+`
+	ball := &session.Ball{
+		ID:                 "test",
+		Intent:             "Test",
+		Priority:           session.PriorityMedium,
+		State:              session.StatePending,
+		BlockedReason:      "Was blocked",
+		Tags:               []string{"tag1", "tag2"},
+		AcceptanceCriteria: []string{"AC1", "AC2"},
+		ModelSize:          session.ModelSizeLarge,
+	}
+
+	err := yamlToBall(yamlContent, ball)
+	if err != nil {
+		t.Fatalf("yamlToBall() error = %v", err)
+	}
+
+	// Optional fields should be cleared
+	if ball.BlockedReason != "" {
+		t.Errorf("BlockedReason should be cleared, got %q", ball.BlockedReason)
+	}
+	if len(ball.Tags) != 0 {
+		t.Errorf("Tags should be cleared, got %v", ball.Tags)
+	}
+	if len(ball.AcceptanceCriteria) != 0 {
+		t.Errorf("AcceptanceCriteria should be cleared, got %v", ball.AcceptanceCriteria)
+	}
+	if ball.ModelSize != session.ModelSizeBlank {
+		t.Errorf("ModelSize should be blank, got %q", ball.ModelSize)
+	}
+}
+
+func TestYamlToBall_TrimsWhitespaceFromArrayElements(t *testing.T) {
+	// Test that whitespace is trimmed from array elements
+	yamlContent := `
+id: test
+intent: Test
+priority: medium
+state: pending
+tags:
+  - "  tag1  "
+  - "tag2"
+  - "   "
+  - ""
+acceptance_criteria:
+  - "  AC1  "
+  - "AC2"
+  - "   "
+`
+	ball := &session.Ball{
+		ID:       "test",
+		Intent:   "Test",
+		Priority: session.PriorityMedium,
+		State:    session.StatePending,
+	}
+
+	err := yamlToBall(yamlContent, ball)
+	if err != nil {
+		t.Fatalf("yamlToBall() error = %v", err)
+	}
+
+	// Tags should be trimmed and empty ones removed
+	if len(ball.Tags) != 2 {
+		t.Errorf("Expected 2 tags (empty ones removed), got %d: %v", len(ball.Tags), ball.Tags)
+	}
+	if ball.Tags[0] != "tag1" {
+		t.Errorf("Tag should be trimmed, got %q", ball.Tags[0])
+	}
+
+	// ACs should be trimmed and empty ones removed
+	if len(ball.AcceptanceCriteria) != 2 {
+		t.Errorf("Expected 2 ACs (empty ones removed), got %d: %v", len(ball.AcceptanceCriteria), ball.AcceptanceCriteria)
+	}
+	if ball.AcceptanceCriteria[0] != "AC1" {
+		t.Errorf("AC should be trimmed, got %q", ball.AcceptanceCriteria[0])
+	}
+}
