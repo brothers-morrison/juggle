@@ -131,23 +131,37 @@ If the commit fails or is permission-denied, output exactly:
 
 ## Completion Signals
 
-**CRITICAL: Before outputting COMPLETE, you MUST verify that ALL balls in the session are in a terminal state (either `complete` or `blocked`).**
+After completing your work for this iteration, output ONE of these signals:
 
-Run `juggle show <ball-id>` for each ball or review the balls list below. Only output COMPLETE after confirming no balls have state `pending` or `in_progress`.
+### CONTINUE - Completed one ball, more remain
 
-When ALL balls in the session have state `complete` or `blocked`, output exactly:
+After successfully completing ONE ball when other balls still need work:
+
+```
+<promise>CONTINUE</promise>
+```
+
+This signals the outer loop to call you again for the next ball. **This is the most common signal.**
+
+### COMPLETE - All balls are terminal
+
+When ALL balls in the session have state `complete` or `blocked`:
 
 ```
 <promise>COMPLETE</promise>
 ```
 
-**DO NOT output COMPLETE if any ball has state `pending` or `in_progress`.**
+Verify by checking that no balls have state `pending` or `in_progress`.
 
-When you encounter a blocker and cannot proceed with the current ball, output exactly:
+### BLOCKED - Current ball cannot proceed
+
+When you cannot proceed with the current ball due to a blocker:
 
 ```
 <promise>BLOCKED: [specific reason]</promise>
 ```
+
+**Important:** BLOCKED means the *current ball* cannot proceed due to an actual blocker (missing dependency, tool failure, unclear requirements). Do NOT use BLOCKED just because other balls remain - that's what CONTINUE is for.
 
 ## Important Rules
 

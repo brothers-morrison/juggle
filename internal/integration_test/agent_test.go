@@ -667,3 +667,77 @@ func TestAgentLoop_TerminalStateExitsWithoutCOMPLETESignal(t *testing.T) {
 		t.Errorf("Expected BallsBlocked=1, got %d", result.BallsBlocked)
 	}
 }
+
+func TestAgentLoop_ContinueSignalContinuesLoop(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Create a session
+	env.CreateSession(t, "test-session", "Test session for agent")
+
+	// Create two pending balls tagged with the session
+	ball1 := env.CreateBall(t, "First ball", session.PriorityMedium)
+	ball1.Tags = []string{"test-session"}
+	ball1.State = session.StatePending
+	store := env.GetStore(t)
+	if err := store.UpdateBall(ball1); err != nil {
+		t.Fatalf("Failed to update ball1: %v", err)
+	}
+
+	ball2 := env.CreateBall(t, "Second ball", session.PriorityMedium)
+	ball2.Tags = []string{"test-session"}
+	ball2.State = session.StatePending
+	if err := store.UpdateBall(ball2); err != nil {
+		t.Fatalf("Failed to update ball2: %v", err)
+	}
+
+	// Setup mock runner that returns CONTINUE twice
+	// CONTINUE causes the loop to skip terminal-state check and proceed to next iteration
+	mock := agent.NewMockRunner(
+		&agent.RunResult{
+			Output:   "Completed first ball.\n<promise>CONTINUE</promise>",
+			Continue: true,
+		},
+		&agent.RunResult{
+			Output:   "Completed second ball.\n<promise>CONTINUE</promise>",
+			Continue: true,
+		},
+	)
+	agent.SetRunner(mock)
+	defer agent.ResetRunner()
+
+	// Run the agent loop with MaxIterations=2 so we hit max iterations
+	// after the two CONTINUE signals
+	config := cli.AgentLoopConfig{
+		SessionID:     "test-session",
+		ProjectDir:    env.ProjectDir,
+		MaxIterations: 2,
+		Trust:         false,
+		IterDelay:     0,
+	}
+
+	result, err := cli.RunAgentLoop(config)
+	if err != nil {
+		t.Fatalf("Agent run failed: %v", err)
+	}
+
+	// Verify runner was called 2 times (CONTINUE, CONTINUE then max iterations)
+	if len(mock.Calls) != 2 {
+		t.Errorf("Expected 2 calls to runner (2 CONTINUE signals), got %d", len(mock.Calls))
+	}
+
+	// Result should show 2 iterations
+	if result.Iterations != 2 {
+		t.Errorf("Expected 2 iterations, got %d", result.Iterations)
+	}
+
+	// Should not be blocked (max iterations reached, not blocked)
+	if result.Blocked {
+		t.Error("Expected result.Blocked=false")
+	}
+
+	// Should not be complete (balls are still pending)
+	if result.Complete {
+		t.Error("Expected result.Complete=false (balls still pending)")
+	}
+}

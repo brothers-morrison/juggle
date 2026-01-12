@@ -135,6 +135,19 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 				terminal, total, complete, blocked)
 		}
 
+		if runResult.Continue {
+			// Agent completed one ball, more remain - continue to next iteration
+			fmt.Printf("✓ Agent completed a ball, continuing to next iteration...\n")
+
+			// Update ball counts for progress tracking
+			_, complete, blocked, total := checkBallsTerminal(config.ProjectDir, config.SessionID)
+			result.BallsComplete = complete
+			result.BallsBlocked = blocked
+			result.BallsTotal = total
+
+			continue
+		}
+
 		if runResult.Blocked {
 			result.Blocked = true
 			result.BlockedReason = runResult.BlockedReason

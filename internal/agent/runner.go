@@ -16,6 +16,7 @@ type RunResult struct {
 	Output        string
 	ExitCode      int
 	Complete      bool
+	Continue      bool // Agent completed one ball, more remain - signals loop to continue to next iteration
 	Blocked       bool
 	BlockedReason string
 	Error         error
@@ -122,10 +123,14 @@ func (r *ClaudeRunner) Run(prompt string, trust bool) (*RunResult, error) {
 	return result, nil
 }
 
-// parseSignals checks the output for COMPLETE/BLOCKED signals
+// parseSignals checks the output for COMPLETE/CONTINUE/BLOCKED signals
 func (r *ClaudeRunner) parseSignals(result *RunResult) {
 	if strings.Contains(result.Output, "<promise>COMPLETE</promise>") {
 		result.Complete = true
+	}
+
+	if strings.Contains(result.Output, "<promise>CONTINUE</promise>") {
+		result.Continue = true
 	}
 
 	if idx := strings.Index(result.Output, "<promise>BLOCKED:"); idx != -1 {
