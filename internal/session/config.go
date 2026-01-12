@@ -182,10 +182,8 @@ func EnsureProjectInSearchPaths(projectDir string) error {
 }
 
 // ProjectConfig holds per-project configuration stored in .juggler/config.json
-// Note: NextBallCount is deprecated but kept for backward compatibility with existing config files
 type ProjectConfig struct {
-	NextBallCount              int      `json:"next_ball_count,omitempty"`               // Deprecated: balls now use UUID-based IDs
-	DefaultAcceptanceCriteria  []string `json:"default_acceptance_criteria,omitempty"`   // Repo-level ACs applied to all sessions
+	DefaultAcceptanceCriteria []string `json:"default_acceptance_criteria,omitempty"` // Repo-level ACs applied to all sessions
 }
 
 // DefaultProjectConfig returns a new project config with initial values
@@ -239,28 +237,6 @@ func SaveProjectConfig(projectDir string, config *ProjectConfig) error {
 	}
 
 	return nil
-}
-
-// GetAndIncrementBallCount is deprecated - kept for backward compatibility only.
-// Ball IDs now use UUID-based generation instead of sequential counters.
-// This function is no longer used but remains for any external callers.
-func GetAndIncrementBallCount(projectDir string) (int, error) {
-	config, err := LoadProjectConfig(projectDir)
-	if err != nil {
-		return 0, err
-	}
-
-	currentCount := config.NextBallCount
-	if currentCount == 0 {
-		currentCount = 1
-	}
-	config.NextBallCount = currentCount + 1
-
-	if err := SaveProjectConfig(projectDir, config); err != nil {
-		return 0, fmt.Errorf("failed to increment ball count: %w", err)
-	}
-
-	return currentCount, nil
 }
 
 // SetDefaultAcceptanceCriteria sets repo-level acceptance criteria
