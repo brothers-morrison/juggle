@@ -2450,3 +2450,551 @@ func TestAdjustBallsScrollOffsetEmpty(t *testing.T) {
 		t.Errorf("Expected ballsScrollOffset to be 0 for empty balls, got %d", model.ballsScrollOffset)
 	}
 }
+
+// Test that pressing 't' key opens session selector view
+func TestTagKeyOpensSessionSelector(t *testing.T) {
+	sessions := []*session.JuggleSession{
+		{ID: "session-a", Description: "First session"},
+		{ID: "session-b", Description: "Second session"},
+	}
+
+	balls := []*session.Ball{
+		{ID: "ball-1", Intent: "Test task", Tags: []string{}, WorkingDir: "/tmp"},
+	}
+
+	model := Model{
+		mode:            splitView,
+		activePanel:     BallsPanel,
+		cursor:          0,
+		filteredBalls:   balls,
+		sessions:        sessions,
+		selectedSession: &session.JuggleSession{ID: PseudoSessionAll},
+	}
+
+	newModel, _ := model.handleTagEditStart()
+	m := newModel.(Model)
+
+	if m.mode != sessionSelectorView {
+		t.Errorf("Expected mode to be sessionSelectorView, got %v", m.mode)
+	}
+
+	if m.editingBall == nil {
+		t.Error("Expected editingBall to be set")
+	}
+
+	if m.editingBall.ID != "ball-1" {
+		t.Errorf("Expected editingBall ID to be 'ball-1', got '%s'", m.editingBall.ID)
+	}
+
+	if len(m.sessionSelectItems) != 2 {
+		t.Errorf("Expected 2 available sessions, got %d", len(m.sessionSelectItems))
+	}
+}
+
+// Test that 't' key on ball already in all sessions shows appropriate message
+func TestTagKeyBallAlreadyInAllSessions(t *testing.T) {
+	sessions := []*session.JuggleSession{
+		{ID: "session-a", Description: "First session"},
+	}
+
+	balls := []*session.Ball{
+		{ID: "ball-1", Intent: "Test task", Tags: []string{"session-a"}, WorkingDir: "/tmp"},
+	}
+
+	model := Model{
+		mode:            splitView,
+		activePanel:     BallsPanel,
+		cursor:          0,
+		filteredBalls:   balls,
+		sessions:        sessions,
+		selectedSession: &session.JuggleSession{ID: PseudoSessionAll},
+	}
+
+	newModel, _ := model.handleTagEditStart()
+	m := newModel.(Model)
+
+	// Should stay in splitView because ball is already in all sessions
+	if m.mode != splitView {
+		t.Errorf("Expected mode to remain splitView when ball is in all sessions, got %v", m.mode)
+	}
+
+	if m.message != "Ball already in all sessions" {
+		t.Errorf("Expected message 'Ball already in all sessions', got '%s'", m.message)
+	}
+}
+
+// Test that 't' key filters out sessions ball is already tagged with
+func TestTagKeyFiltersExistingSessions(t *testing.T) {
+	sessions := []*session.JuggleSession{
+		{ID: "session-a", Description: "First session"},
+		{ID: "session-b", Description: "Second session"},
+		{ID: "session-c", Description: "Third session"},
+	}
+
+	balls := []*session.Ball{
+		{ID: "ball-1", Intent: "Test task", Tags: []string{"session-a"}, WorkingDir: "/tmp"},
+	}
+
+	model := Model{
+		mode:            splitView,
+		activePanel:     BallsPanel,
+		cursor:          0,
+		filteredBalls:   balls,
+		sessions:        sessions,
+		selectedSession: &session.JuggleSession{ID: PseudoSessionAll},
+	}
+
+	newModel, _ := model.handleTagEditStart()
+	m := newModel.(Model)
+
+	if m.mode != sessionSelectorView {
+		t.Errorf("Expected mode to be sessionSelectorView, got %v", m.mode)
+	}
+
+	// Should only have session-b and session-c (not session-a which is already tagged)
+	if len(m.sessionSelectItems) != 2 {
+		t.Errorf("Expected 2 available sessions, got %d", len(m.sessionSelectItems))
+	}
+
+	sessionIDs := make(map[string]bool)
+	for _, sess := range m.sessionSelectItems {
+		sessionIDs[sess.ID] = true
+	}
+
+	if sessionIDs["session-a"] {
+		t.Error("session-a should not be in available sessions (ball already tagged with it)")
+	}
+
+	if !sessionIDs["session-b"] {
+		t.Error("session-b should be in available sessions")
+	}
+
+	if !sessionIDs["session-c"] {
+		t.Error("session-c should be in available sessions")
+	}
+}
+
+// Test session selector navigation with j/k keys
+func TestSessionSelectorNavigation(t *testing.T) {
+	sessions := []*session.JuggleSession{
+		{ID: "session-a", Description: "First session"},
+		{ID: "session-b", Description: "Second session"},
+		{ID: "session-c", Description: "Third session"},
+	}
+
+	ball := &session.Ball{ID: "ball-1", Intent: "Test task", Tags: []string{}, WorkingDir: "/tmp"}
+
+	model := Model{
+		mode:               sessionSelectorView,
+		sessionSelectItems: sessions,
+		sessionSelectIndex: 0,
+		editingBall:        ball,
+	}
+
+	// Press 'j' to move down
+	newModel, _ := model.handleSessionSelectorKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	m := newModel.(Model)
+
+	if m.sessionSelectIndex != 1 {
+		t.Errorf("Expected sessionSelectIndex to be 1 after 'j', got %d", m.sessionSelectIndex)
+	}
+
+	// Press 'k' to move up
+	newModel, _ = m.handleSessionSelectorKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	m = newModel.(Model)
+
+	if m.sessionSelectIndex != 0 {
+		t.Errorf("Expected sessionSelectIndex to be 0 after 'k', got %d", m.sessionSelectIndex)
+	}
+
+	// Test down arrow
+	newModel, _ = m.handleSessionSelectorKey(tea.KeyMsg{Type: tea.KeyDown})
+	m = newModel.(Model)
+
+	if m.sessionSelectIndex != 1 {
+		t.Errorf("Expected sessionSelectIndex to be 1 after down arrow, got %d", m.sessionSelectIndex)
+	}
+
+	// Test up arrow
+	newModel, _ = m.handleSessionSelectorKey(tea.KeyMsg{Type: tea.KeyUp})
+	m = newModel.(Model)
+
+	if m.sessionSelectIndex != 0 {
+		t.Errorf("Expected sessionSelectIndex to be 0 after up arrow, got %d", m.sessionSelectIndex)
+	}
+}
+
+// Test session selector doesn't go past boundaries
+func TestSessionSelectorBoundaries(t *testing.T) {
+	sessions := []*session.JuggleSession{
+		{ID: "session-a", Description: "First session"},
+		{ID: "session-b", Description: "Second session"},
+	}
+
+	ball := &session.Ball{ID: "ball-1", Intent: "Test task", Tags: []string{}, WorkingDir: "/tmp"}
+
+	model := Model{
+		mode:               sessionSelectorView,
+		sessionSelectItems: sessions,
+		sessionSelectIndex: 0,
+		editingBall:        ball,
+	}
+
+	// Try to go up when already at top
+	newModel, _ := model.handleSessionSelectorKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	m := newModel.(Model)
+
+	if m.sessionSelectIndex != 0 {
+		t.Errorf("Expected sessionSelectIndex to remain 0 at top, got %d", m.sessionSelectIndex)
+	}
+
+	// Move to bottom
+	m.sessionSelectIndex = 1
+
+	// Try to go down when at bottom
+	newModel, _ = m.handleSessionSelectorKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	m = newModel.(Model)
+
+	if m.sessionSelectIndex != 1 {
+		t.Errorf("Expected sessionSelectIndex to remain 1 at bottom, got %d", m.sessionSelectIndex)
+	}
+}
+
+// Test session selector cancel with escape
+func TestSessionSelectorCancel(t *testing.T) {
+	sessions := []*session.JuggleSession{
+		{ID: "session-a", Description: "First session"},
+	}
+
+	ball := &session.Ball{ID: "ball-1", Intent: "Test task", Tags: []string{}, WorkingDir: "/tmp"}
+
+	model := Model{
+		mode:               sessionSelectorView,
+		sessionSelectItems: sessions,
+		sessionSelectIndex: 0,
+		editingBall:        ball,
+	}
+
+	// Press escape to cancel
+	newModel, _ := model.handleSessionSelectorKey(tea.KeyMsg{Type: tea.KeyEsc})
+	m := newModel.(Model)
+
+	if m.mode != splitView {
+		t.Errorf("Expected mode to be splitView after cancel, got %v", m.mode)
+	}
+
+	if m.sessionSelectItems != nil {
+		t.Error("Expected sessionSelectItems to be nil after cancel")
+	}
+
+	if m.message != "Cancelled" {
+		t.Errorf("Expected message 'Cancelled', got '%s'", m.message)
+	}
+}
+
+// Test session selector cancel with 'q'
+func TestSessionSelectorCancelWithQ(t *testing.T) {
+	sessions := []*session.JuggleSession{
+		{ID: "session-a", Description: "First session"},
+	}
+
+	ball := &session.Ball{ID: "ball-1", Intent: "Test task", Tags: []string{}, WorkingDir: "/tmp"}
+
+	model := Model{
+		mode:               sessionSelectorView,
+		sessionSelectItems: sessions,
+		sessionSelectIndex: 0,
+		editingBall:        ball,
+	}
+
+	// Press 'q' to cancel
+	newModel, _ := model.handleSessionSelectorKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	m := newModel.(Model)
+
+	if m.mode != splitView {
+		t.Errorf("Expected mode to be splitView after cancel, got %v", m.mode)
+	}
+
+	if m.sessionSelectItems != nil {
+		t.Error("Expected sessionSelectItems to be nil after cancel")
+	}
+}
+
+// Test session selector selection with enter
+func TestSessionSelectorSelectWithEnter(t *testing.T) {
+	sessions := []*session.JuggleSession{
+		{ID: "session-a", Description: "First session"},
+		{ID: "session-b", Description: "Second session"},
+	}
+
+	ball := &session.Ball{ID: "ball-1", Intent: "Test task", Tags: []string{}, WorkingDir: "/tmp"}
+
+	model := Model{
+		mode:               sessionSelectorView,
+		sessionSelectItems: sessions,
+		sessionSelectIndex: 1, // Select session-b
+		editingBall:        ball,
+	}
+
+	// Press enter to select
+	newModel, _ := model.handleSessionSelectorKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m := newModel.(Model)
+
+	if m.mode != splitView {
+		t.Errorf("Expected mode to be splitView after selection, got %v", m.mode)
+	}
+
+	// Ball should now have session-b as a tag
+	if len(m.editingBall.Tags) != 1 {
+		t.Errorf("Expected 1 tag on ball, got %d", len(m.editingBall.Tags))
+	}
+
+	if m.editingBall.Tags[0] != "session-b" {
+		t.Errorf("Expected tag 'session-b', got '%s'", m.editingBall.Tags[0])
+	}
+
+	if !strings.Contains(m.message, "session-b") {
+		t.Errorf("Expected message to contain 'session-b', got '%s'", m.message)
+	}
+}
+
+// Test session selector selection with space
+func TestSessionSelectorSelectWithSpace(t *testing.T) {
+	sessions := []*session.JuggleSession{
+		{ID: "session-a", Description: "First session"},
+	}
+
+	ball := &session.Ball{ID: "ball-1", Intent: "Test task", Tags: []string{}, WorkingDir: "/tmp"}
+
+	model := Model{
+		mode:               sessionSelectorView,
+		sessionSelectItems: sessions,
+		sessionSelectIndex: 0,
+		editingBall:        ball,
+	}
+
+	// Press space to select
+	newModel, _ := model.handleSessionSelectorKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}})
+	m := newModel.(Model)
+
+	if m.mode != splitView {
+		t.Errorf("Expected mode to be splitView after selection, got %v", m.mode)
+	}
+
+	// Ball should now have session-a as a tag
+	if len(m.editingBall.Tags) != 1 {
+		t.Errorf("Expected 1 tag on ball, got %d", len(m.editingBall.Tags))
+	}
+}
+
+// Test session selector view rendering
+func TestSessionSelectorViewRendering(t *testing.T) {
+	sessions := []*session.JuggleSession{
+		{ID: "session-a", Description: "First session"},
+		{ID: "session-b", Description: "Second session"},
+	}
+
+	ball := &session.Ball{ID: "ball-1", Intent: "Test task", Tags: []string{"existing-tag"}, WorkingDir: "/tmp"}
+
+	model := Model{
+		mode:               sessionSelectorView,
+		sessionSelectItems: sessions,
+		sessionSelectIndex: 0,
+		editingBall:        ball,
+		width:              80,
+		height:             24,
+	}
+
+	view := model.renderSessionSelectorView()
+
+	// Should show title
+	if !strings.Contains(view, "Select Session") {
+		t.Error("Expected view to contain 'Select Session' title")
+	}
+
+	// Should show ball context
+	if !strings.Contains(view, "ball-1") {
+		t.Error("Expected view to contain ball ID")
+	}
+
+	if !strings.Contains(view, "Test task") {
+		t.Error("Expected view to contain ball intent")
+	}
+
+	// Should show existing tags
+	if !strings.Contains(view, "existing-tag") {
+		t.Error("Expected view to show existing tags")
+	}
+
+	// Should show available sessions
+	if !strings.Contains(view, "session-a") {
+		t.Error("Expected view to show session-a")
+	}
+
+	if !strings.Contains(view, "session-b") {
+		t.Error("Expected view to show session-b")
+	}
+
+	// Should show help text
+	if !strings.Contains(view, "navigate") || !strings.Contains(view, "Esc") {
+		t.Error("Expected view to show help text")
+	}
+}
+
+// Test session selector view shows cursor
+func TestSessionSelectorViewShowsCursor(t *testing.T) {
+	sessions := []*session.JuggleSession{
+		{ID: "session-a", Description: "First session"},
+		{ID: "session-b", Description: "Second session"},
+	}
+
+	ball := &session.Ball{ID: "ball-1", Intent: "Test task", Tags: []string{}, WorkingDir: "/tmp"}
+
+	model := Model{
+		mode:               sessionSelectorView,
+		sessionSelectItems: sessions,
+		sessionSelectIndex: 1, // Second item selected
+		editingBall:        ball,
+		width:              80,
+		height:             24,
+	}
+
+	view := model.renderSessionSelectorView()
+
+	// The view should have a cursor indicator ">" before the selected session
+	if !strings.Contains(view, "> session-b") {
+		t.Error("Expected cursor '>' before selected session-b")
+	}
+}
+
+// Test 't' key does nothing when not in balls panel
+func TestTagKeyOnlyWorksInBallsPanel(t *testing.T) {
+	sessions := []*session.JuggleSession{
+		{ID: "session-a", Description: "First session"},
+	}
+
+	balls := []*session.Ball{
+		{ID: "ball-1", Intent: "Test task", Tags: []string{}, WorkingDir: "/tmp"},
+	}
+
+	model := Model{
+		mode:            splitView,
+		activePanel:     SessionsPanel, // Not in balls panel
+		cursor:          0,
+		filteredBalls:   balls,
+		sessions:        sessions,
+		selectedSession: &session.JuggleSession{ID: PseudoSessionAll},
+	}
+
+	// Simulate pressing 't' via handleSplitViewKey
+	newModel, _ := model.handleSplitViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	m := newModel.(Model)
+
+	// Should remain in splitView since we're not in balls panel
+	if m.mode != splitView {
+		t.Errorf("Expected mode to remain splitView when 't' pressed outside balls panel, got %v", m.mode)
+	}
+}
+
+// Test 't' key with no balls selected
+func TestTagKeyNoBallSelected(t *testing.T) {
+	sessions := []*session.JuggleSession{
+		{ID: "session-a", Description: "First session"},
+	}
+
+	model := Model{
+		mode:            splitView,
+		activePanel:     BallsPanel,
+		cursor:          0,
+		filteredBalls:   []*session.Ball{}, // No balls
+		sessions:        sessions,
+		selectedSession: &session.JuggleSession{ID: PseudoSessionAll},
+	}
+
+	newModel, _ := model.handleTagEditStart()
+	m := newModel.(Model)
+
+	if m.mode != splitView {
+		t.Errorf("Expected mode to remain splitView when no balls, got %v", m.mode)
+	}
+
+	if m.message != "No ball selected" {
+		t.Errorf("Expected message 'No ball selected', got '%s'", m.message)
+	}
+}
+
+// Test submitSessionSelection with empty items
+func TestSubmitSessionSelectionEmpty(t *testing.T) {
+	ball := &session.Ball{ID: "ball-1", Intent: "Test task", Tags: []string{}, WorkingDir: "/tmp"}
+
+	model := Model{
+		mode:               sessionSelectorView,
+		sessionSelectItems: []*session.JuggleSession{}, // Empty
+		sessionSelectIndex: 0,
+		editingBall:        ball,
+	}
+
+	newModel, _ := model.submitSessionSelection()
+	m := newModel.(Model)
+
+	if m.mode != splitView {
+		t.Errorf("Expected mode to be splitView, got %v", m.mode)
+	}
+
+	if m.sessionSelectItems != nil {
+		t.Error("Expected sessionSelectItems to be nil")
+	}
+}
+
+// Test submitSessionSelection with nil editingBall
+func TestSubmitSessionSelectionNilBall(t *testing.T) {
+	sessions := []*session.JuggleSession{
+		{ID: "session-a", Description: "First session"},
+	}
+
+	model := Model{
+		mode:               sessionSelectorView,
+		sessionSelectItems: sessions,
+		sessionSelectIndex: 0,
+		editingBall:        nil, // No ball
+	}
+
+	newModel, _ := model.submitSessionSelection()
+	m := newModel.(Model)
+
+	if m.mode != splitView {
+		t.Errorf("Expected mode to be splitView, got %v", m.mode)
+	}
+
+	if m.sessionSelectItems != nil {
+		t.Error("Expected sessionSelectItems to be nil")
+	}
+}
+
+// Test session selector index bounds correction
+func TestSessionSelectorIndexCorrection(t *testing.T) {
+	sessions := []*session.JuggleSession{
+		{ID: "session-a", Description: "First session"},
+	}
+
+	ball := &session.Ball{ID: "ball-1", Intent: "Test task", Tags: []string{}, WorkingDir: "/tmp"}
+
+	model := Model{
+		mode:               sessionSelectorView,
+		sessionSelectItems: sessions,
+		sessionSelectIndex: 5, // Out of bounds
+		editingBall:        ball,
+	}
+
+	newModel, _ := model.submitSessionSelection()
+	m := newModel.(Model)
+
+	// Should have corrected the index and selected session-a
+	if len(m.editingBall.Tags) != 1 {
+		t.Errorf("Expected 1 tag on ball, got %d", len(m.editingBall.Tags))
+	}
+
+	if m.editingBall.Tags[0] != "session-a" {
+		t.Errorf("Expected tag 'session-a' (index corrected), got '%s'", m.editingBall.Tags[0])
+	}
+}
