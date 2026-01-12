@@ -2081,6 +2081,12 @@ func (m Model) finalizeBallCreation() (tea.Model, tea.Cmd) {
 		ball.SetDependencies(m.pendingBallDependsOn)
 	}
 
+	// Set model size if not default (0 = default/blank, 1 = small, 2 = medium, 3 = large)
+	if m.pendingBallModelSize > 0 {
+		modelSizes := []session.ModelSize{session.ModelSizeBlank, session.ModelSizeSmall, session.ModelSizeMedium, session.ModelSizeLarge}
+		ball.ModelSize = modelSizes[m.pendingBallModelSize]
+	}
+
 	// Use the store's working directory
 	err = m.store.AppendBall(ball)
 	if err != nil {
@@ -2105,7 +2111,8 @@ func (m Model) finalizeBallCreation() (tea.Model, tea.Cmd) {
 func (m *Model) clearPendingBallState() {
 	m.pendingBallIntent = ""
 	m.pendingAcceptanceCriteria = nil
-	m.pendingBallPriority = 1 // Reset to default (medium)
+	m.pendingBallPriority = 1   // Reset to default (medium)
+	m.pendingBallModelSize = 0  // Reset to default
 	m.pendingBallTags = ""
 	m.pendingBallSession = 0
 	m.pendingBallDependsOn = nil
@@ -2916,12 +2923,14 @@ func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		fieldPriority  = 1
 		fieldTags      = 2
 		fieldSession   = 3
-		fieldDependsOn = 4 // Depends On field - opens selector on Enter
-		fieldACStart   = 5 // ACs start at index 5
+		fieldModelSize = 4
+		fieldDependsOn = 5 // Depends On field - opens selector on Enter
+		fieldACStart   = 6 // ACs start at index 6
 	)
 
 	// Number of options for selection fields
-	numPriorityOptions := 4 // low, medium, high, urgent
+	numPriorityOptions := 4  // low, medium, high, urgent
+	numModelSizeOptions := 4 // (default), small, medium, large
 
 	// Count real sessions (excluding pseudo-sessions)
 	numSessionOptions := 1 // Start with "(none)"
@@ -2931,7 +2940,7 @@ func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Calculate the maximum field index (5 base fields + existing ACs + 1 for new AC input)
+	// Calculate the maximum field index (6 base fields + existing ACs + 1 for new AC input)
 	maxFieldIndex := fieldACStart + len(m.pendingAcceptanceCriteria) // The "add new AC" field
 
 	// Helper to check if we're on a text input field
@@ -3103,6 +3112,11 @@ func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.pendingBallSession < 0 {
 				m.pendingBallSession = numSessionOptions - 1
 			}
+		} else if m.pendingBallFormField == fieldModelSize {
+			m.pendingBallModelSize--
+			if m.pendingBallModelSize < 0 {
+				m.pendingBallModelSize = numModelSizeOptions - 1
+			}
 		}
 		return m, nil
 
@@ -3118,6 +3132,11 @@ func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.pendingBallSession >= numSessionOptions {
 				m.pendingBallSession = 0
 			}
+		} else if m.pendingBallFormField == fieldModelSize {
+			m.pendingBallModelSize++
+			if m.pendingBallModelSize >= numModelSizeOptions {
+				m.pendingBallModelSize = 0
+			}
 		}
 		return m, nil
 
@@ -3132,6 +3151,11 @@ func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.pendingBallSession++
 			if m.pendingBallSession >= numSessionOptions {
 				m.pendingBallSession = 0
+			}
+		} else if m.pendingBallFormField == fieldModelSize {
+			m.pendingBallModelSize++
+			if m.pendingBallModelSize >= numModelSizeOptions {
+				m.pendingBallModelSize = 0
 			}
 		} else {
 			// For text fields, tab moves to next field

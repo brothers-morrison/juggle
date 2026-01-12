@@ -7994,7 +7994,7 @@ func TestUnifiedBallFormAddAC(t *testing.T) {
 		pendingBallPriority:       1,
 		pendingBallTags:           "",
 		pendingBallSession:        0,
-		pendingBallFormField:      5, // On the "new AC" field (index 5 = first AC position, after depends_on)
+		pendingBallFormField:      6, // On the "new AC" field (index 6 = first AC position, after model_size and depends_on)
 		pendingAcceptanceCriteria: []string{},
 		textInput:                 ti,
 		sessions:                  []*session.JuggleSession{},
@@ -8014,8 +8014,8 @@ func TestUnifiedBallFormAddAC(t *testing.T) {
 	}
 
 	// Should stay on new AC field for adding more
-	if m.pendingBallFormField != 6 {
-		t.Errorf("Expected to stay on new AC field (6), got %d", m.pendingBallFormField)
+	if m.pendingBallFormField != 7 {
+		t.Errorf("Expected to stay on new AC field (7), got %d", m.pendingBallFormField)
 	}
 }
 
@@ -8032,7 +8032,7 @@ func TestUnifiedBallFormEditAC(t *testing.T) {
 		pendingBallPriority:       1,
 		pendingBallTags:           "",
 		pendingBallSession:        0,
-		pendingBallFormField:      5, // On first existing AC (index 5, after depends_on)
+		pendingBallFormField:      6, // On first existing AC (index 6, after model_size and depends_on)
 		pendingAcceptanceCriteria: []string{"Original AC"},
 		textInput:                 ti,
 		sessions:                  []*session.JuggleSession{},
@@ -8061,39 +8061,39 @@ func TestUnifiedBallFormNavigateThroughACs(t *testing.T) {
 		pendingBallPriority:       1,
 		pendingBallTags:           "",
 		pendingBallSession:        0,
-		pendingBallFormField:      4, // On depends_on field
+		pendingBallFormField:      5, // On depends_on field (was 4 before model_size was added)
 		pendingAcceptanceCriteria: []string{"AC 1", "AC 2", "AC 3"},
 		textInput:                 ti,
 		sessions:                  []*session.JuggleSession{},
 		activityLog:               make([]ActivityEntry, 0),
 	}
 
-	// Navigate down to first AC (field 5)
+	// Navigate down to first AC (field 6)
 	newModel, _ := model.handleUnifiedBallFormKey(tea.KeyMsg{Type: tea.KeyDown})
 	m := newModel.(Model)
-	if m.pendingBallFormField != 5 {
-		t.Errorf("Expected field 5 (AC 1), got %d", m.pendingBallFormField)
+	if m.pendingBallFormField != 6 {
+		t.Errorf("Expected field 6 (AC 1), got %d", m.pendingBallFormField)
 	}
 
 	// Navigate to second AC
 	newModel, _ = m.handleUnifiedBallFormKey(tea.KeyMsg{Type: tea.KeyDown})
 	m = newModel.(Model)
-	if m.pendingBallFormField != 6 {
-		t.Errorf("Expected field 6 (AC 2), got %d", m.pendingBallFormField)
+	if m.pendingBallFormField != 7 {
+		t.Errorf("Expected field 7 (AC 2), got %d", m.pendingBallFormField)
 	}
 
 	// Navigate to third AC
 	newModel, _ = m.handleUnifiedBallFormKey(tea.KeyMsg{Type: tea.KeyDown})
 	m = newModel.(Model)
-	if m.pendingBallFormField != 7 {
-		t.Errorf("Expected field 7 (AC 3), got %d", m.pendingBallFormField)
+	if m.pendingBallFormField != 8 {
+		t.Errorf("Expected field 8 (AC 3), got %d", m.pendingBallFormField)
 	}
 
 	// Navigate to "new AC" field
 	newModel, _ = m.handleUnifiedBallFormKey(tea.KeyMsg{Type: tea.KeyDown})
 	m = newModel.(Model)
-	if m.pendingBallFormField != 8 {
-		t.Errorf("Expected field 8 (new AC), got %d", m.pendingBallFormField)
+	if m.pendingBallFormField != 9 {
+		t.Errorf("Expected field 9 (new AC), got %d", m.pendingBallFormField)
 	}
 
 	// Navigate wrap to intent
@@ -8151,7 +8151,7 @@ func TestUnifiedBallFormCreateOnEmptyAC(t *testing.T) {
 		pendingBallPriority:       1,
 		pendingBallTags:           "",
 		pendingBallSession:        0,
-		pendingBallFormField:      5, // On the "new AC" field (index 5, after depends_on)
+		pendingBallFormField:      6, // On the "new AC" field (index 6, after model_size and depends_on)
 		pendingAcceptanceCriteria: []string{},
 		textInput:                 ti,
 		sessions:                  []*session.JuggleSession{},
@@ -8227,7 +8227,7 @@ func TestUnifiedBallFormRequiresIntent(t *testing.T) {
 		pendingBallIntent:         "", // Empty intent
 		pendingBallPriority:       1,
 		pendingBallTags:           "",
-		pendingBallFormField:      5, // On new AC field (index 5, after depends_on)
+		pendingBallFormField:      6, // On new AC field (index 6, after model_size and depends_on)
 		pendingAcceptanceCriteria: []string{},
 		textInput:                 ti,
 		sessions:                  []*session.JuggleSession{},
@@ -8329,7 +8329,7 @@ func TestOpenDependencySelector(t *testing.T) {
 	model := Model{
 		mode:                      unifiedBallFormView,
 		pendingBallIntent:         "Test ball",
-		pendingBallFormField:      4, // On depends_on field
+		pendingBallFormField:      5, // On depends_on field (was 4 before model_size was added)
 		pendingAcceptanceCriteria: []string{},
 		pendingBallDependsOn:      []string{},
 		textInput:                 ti,
@@ -8520,7 +8520,7 @@ func TestDependencySelectorPreservesExisting(t *testing.T) {
 	model := Model{
 		mode:                      unifiedBallFormView,
 		pendingBallIntent:         "Test ball",
-		pendingBallFormField:      4, // On depends_on field
+		pendingBallFormField:      5, // On depends_on field (was 4 before model_size was added)
 		pendingBallDependsOn:      []string{"test-1"}, // Pre-existing dependency
 		pendingAcceptanceCriteria: []string{},
 		textInput:                 ti,
@@ -8562,7 +8562,7 @@ func TestBallCreationWithDependencies(t *testing.T) {
 		pendingBallTags:           "",
 		pendingBallSession:        0,
 		pendingBallDependsOn:      []string{"dep-1", "dep-2"},
-		pendingBallFormField:      6, // On "new AC" field (field 5=first AC, 6=new AC input)
+		pendingBallFormField:      7, // On "new AC" field (field 6=first AC, 7=new AC input)
 		pendingAcceptanceCriteria: []string{"Test AC"},
 		textInput:                 ti,
 		sessions:                  []*session.JuggleSession{},
@@ -8612,7 +8612,7 @@ func TestDependencySelectorNoBalls(t *testing.T) {
 	model := Model{
 		mode:                      unifiedBallFormView,
 		pendingBallIntent:         "Test ball",
-		pendingBallFormField:      4, // On depends_on field
+		pendingBallFormField:      5, // On depends_on field (was 4 before model_size was added)
 		pendingBallDependsOn:      []string{},
 		pendingAcceptanceCriteria: []string{},
 		textInput:                 ti,
@@ -8718,5 +8718,149 @@ func TestClearPendingBallStateClearsDependencies(t *testing.T) {
 	}
 	if model.dependencySelectActive != nil {
 		t.Error("Expected dependencySelectActive to be nil")
+	}
+}
+
+// Test model size selection in unified ball form
+func TestUnifiedBallFormModelSizeSelection(t *testing.T) {
+	ti := textinput.New()
+	ti.CharLimit = 256
+	ti.Width = 40
+
+	model := Model{
+		mode:                 unifiedBallFormView,
+		pendingBallIntent:    "Test",
+		pendingBallPriority:  1, // medium
+		pendingBallModelSize: 0, // default
+		pendingBallFormField: 4, // model_size field
+		textInput:            ti,
+		sessions:             []*session.JuggleSession{},
+		activityLog:          make([]ActivityEntry, 0),
+	}
+
+	// Test cycling right through model sizes
+	newModel, _ := model.handleUnifiedBallFormKey(tea.KeyMsg{Type: tea.KeyRight})
+	m := newModel.(Model)
+	if m.pendingBallModelSize != 1 {
+		t.Errorf("Expected model size to be 1 (small) after right, got %d", m.pendingBallModelSize)
+	}
+
+	// Continue cycling
+	newModel, _ = m.handleUnifiedBallFormKey(tea.KeyMsg{Type: tea.KeyRight})
+	m = newModel.(Model)
+	if m.pendingBallModelSize != 2 {
+		t.Errorf("Expected model size to be 2 (medium) after right, got %d", m.pendingBallModelSize)
+	}
+
+	newModel, _ = m.handleUnifiedBallFormKey(tea.KeyMsg{Type: tea.KeyRight})
+	m = newModel.(Model)
+	if m.pendingBallModelSize != 3 {
+		t.Errorf("Expected model size to be 3 (large) after right, got %d", m.pendingBallModelSize)
+	}
+
+	// Wrap around
+	newModel, _ = m.handleUnifiedBallFormKey(tea.KeyMsg{Type: tea.KeyRight})
+	m = newModel.(Model)
+	if m.pendingBallModelSize != 0 {
+		t.Errorf("Expected model size to wrap to 0 (default), got %d", m.pendingBallModelSize)
+	}
+
+	// Test cycling left
+	newModel, _ = m.handleUnifiedBallFormKey(tea.KeyMsg{Type: tea.KeyLeft})
+	m = newModel.(Model)
+	if m.pendingBallModelSize != 3 {
+		t.Errorf("Expected model size to wrap to 3 (large) after left from 0, got %d", m.pendingBallModelSize)
+	}
+}
+
+// Test ball creation includes model size
+func TestBallCreationWithModelSize(t *testing.T) {
+	ti := textinput.New()
+	ti.CharLimit = 256
+	ti.Width = 40
+	ti.Focus()
+
+	tmpDir := t.TempDir()
+	store, _ := session.NewStore(tmpDir)
+
+	model := Model{
+		mode:                      unifiedBallFormView,
+		pendingBallIntent:         "Ball with model size",
+		pendingBallPriority:       1,
+		pendingBallModelSize:      2, // medium
+		pendingBallFormField:      6, // On "new AC" field
+		pendingAcceptanceCriteria: []string{},
+		textInput:                 ti,
+		sessions:                  []*session.JuggleSession{},
+		activityLog:               make([]ActivityEntry, 0),
+		store:                     store,
+	}
+	model.textInput.SetValue("") // Empty value to trigger ball creation
+
+	// Press enter on empty new AC field to finalize ball creation
+	newModel, _ := model.handleUnifiedBallFormKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m := newModel.(Model)
+
+	// Should have created ball
+	if m.mode != splitView {
+		t.Errorf("Expected mode to be splitView, got %v", m.mode)
+	}
+
+	// Load the created ball
+	balls, err := store.LoadBalls()
+	if err != nil {
+		t.Fatalf("Failed to load balls: %v", err)
+	}
+	if len(balls) != 1 {
+		t.Fatalf("Expected 1 ball, got %d", len(balls))
+	}
+
+	// Check model size was set correctly
+	if balls[0].ModelSize != session.ModelSizeMedium {
+		t.Errorf("Expected ball model size to be 'medium', got '%s'", balls[0].ModelSize)
+	}
+}
+
+// Test model size is shown in unified ball form view
+func TestRenderUnifiedBallFormModelSizeField(t *testing.T) {
+	ti := textinput.New()
+	ti.CharLimit = 256
+	ti.Width = 40
+
+	model := Model{
+		mode:                      unifiedBallFormView,
+		pendingBallIntent:         "Test ball",
+		pendingBallPriority:       1,
+		pendingBallModelSize:      1, // small selected
+		pendingBallFormField:      0,
+		pendingAcceptanceCriteria: []string{},
+		textInput:                 ti,
+		sessions:                  []*session.JuggleSession{},
+	}
+
+	view := model.renderUnifiedBallFormView()
+
+	if !strings.Contains(view, "Model Size:") {
+		t.Error("View should contain 'Model Size:' field")
+	}
+	// Check that model size options are shown
+	if !strings.Contains(view, "(default)") || !strings.Contains(view, "small") ||
+		!strings.Contains(view, "medium") || !strings.Contains(view, "large") {
+		t.Error("View should show all model size options")
+	}
+}
+
+// Test clearPendingBallState resets model size
+func TestClearPendingBallStateClearsModelSize(t *testing.T) {
+	model := Model{
+		pendingBallIntent:    "Test",
+		pendingBallPriority:  2,
+		pendingBallModelSize: 3, // large
+	}
+
+	model.clearPendingBallState()
+
+	if model.pendingBallModelSize != 0 {
+		t.Errorf("Expected pendingBallModelSize to be 0 (default), got %d", model.pendingBallModelSize)
 	}
 }

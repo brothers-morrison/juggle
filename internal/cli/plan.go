@@ -158,6 +158,23 @@ func runPlan(cmd *cobra.Command, args []string) error {
 	}
 	// In non-interactive mode with no --ac flag, acceptanceCriteria will be empty (no prompt)
 
+	// Get model size from: 1) --model-size flag, 2) interactive selection, 3) empty in non-interactive mode
+	modelSize := modelSizeFlag
+	if modelSize == "" && !nonInteractiveFlag {
+		modelSize = promptSelection(reader, "Model Size (for cost optimization)", []string{"(default)", "small", "medium", "large"}, 0)
+		// Convert "(default)" back to empty string
+		if modelSize == "(default)" {
+			modelSize = ""
+		}
+	}
+	// Validate model size if provided
+	if modelSize != "" {
+		ms := session.ModelSize(modelSize)
+		if ms != session.ModelSizeSmall && ms != session.ModelSizeMedium && ms != session.ModelSizeLarge {
+			return fmt.Errorf("invalid model size %q, must be one of: small, medium, large", modelSize)
+		}
+	}
+
 	// Create the planned ball
 	ball, err := session.NewBall(cwd, intent, session.Priority(priority))
 	if err != nil {
@@ -182,13 +199,9 @@ func runPlan(cmd *cobra.Command, args []string) error {
 		ball.AddTag(sessionID)
 	}
 
-	// Set model size if provided
-	if modelSizeFlag != "" {
-		modelSize := session.ModelSize(modelSizeFlag)
-		if modelSize != session.ModelSizeSmall && modelSize != session.ModelSizeMedium && modelSize != session.ModelSizeLarge {
-			return fmt.Errorf("invalid model size %q, must be one of: small, medium, large", modelSizeFlag)
-		}
-		ball.ModelSize = modelSize
+	// Set model size if provided (validation already done above)
+	if modelSize != "" {
+		ball.ModelSize = session.ModelSize(modelSize)
 	}
 
 	// Set dependencies if provided

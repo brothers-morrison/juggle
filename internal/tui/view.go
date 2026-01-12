@@ -1213,8 +1213,9 @@ func (m Model) renderUnifiedBallFormView() string {
 		fieldPriority  = 1
 		fieldTags      = 2
 		fieldSession   = 3
-		fieldDependsOn = 4
-		fieldACStart   = 5 // ACs start at index 5
+		fieldModelSize = 4
+		fieldDependsOn = 5
+		fieldACStart   = 6 // ACs start at index 6
 	)
 
 	// Priority options
@@ -1305,6 +1306,29 @@ func (m Model) renderUnifiedBallFormView() string {
 		}
 		if j == m.pendingBallSession {
 			if m.pendingBallFormField == fieldSession {
+				b.WriteString(optionSelectedStyle.Render(opt))
+			} else {
+				b.WriteString(selectedStyle.Render(opt))
+			}
+		} else {
+			b.WriteString(optionNormalStyle.Render(opt))
+		}
+	}
+	b.WriteString("\n")
+
+	// --- Model Size field ---
+	modelSizes := []string{"(default)", "small", "medium", "large"}
+	labelStyle = normalStyle
+	if m.pendingBallFormField == fieldModelSize {
+		labelStyle = activeFieldStyle
+	}
+	b.WriteString(labelStyle.Render("Model Size: "))
+	for j, opt := range modelSizes {
+		if j > 0 {
+			b.WriteString(" | ")
+		}
+		if j == m.pendingBallModelSize {
+			if m.pendingBallFormField == fieldModelSize {
 				b.WriteString(optionSelectedStyle.Render(opt))
 			} else {
 				b.WriteString(selectedStyle.Render(opt))
