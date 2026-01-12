@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -32,9 +33,12 @@ var agentCmd = &cobra.Command{
 
 // agentRunCmd runs the agent loop
 var agentRunCmd = &cobra.Command{
-	Use:   "run <session-id>",
+	Use:   "run [session-id]",
 	Short: "Run agent loop for a session",
 	Long: `Run an AI agent loop for a session.
+
+If no session-id is provided, a selector will be shown to choose from
+available sessions. Use --all to show sessions from all discovered projects.
 
 The agent will:
 1. Generate a prompt using 'juggle export --format agent'
@@ -49,6 +53,9 @@ automatically waits with exponential backoff before retrying. If Claude
 specifies a retry-after time, that time is used instead.
 
 Examples:
+  # Show session selector (interactive)
+  juggle agent run
+
   # Run agent for 10 iterations (default)
   juggle agent run my-feature
 
@@ -77,8 +84,11 @@ Examples:
   juggle agent run my-feature --dry-run
 
   # Show prompt info before running (debug mode)
-  juggle agent run my-feature --debug`,
-	Args: cobra.ExactArgs(1),
+  juggle agent run my-feature --debug
+
+  # Select from sessions across all discovered projects
+  juggle agent run --all`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: runAgentRun,
 }
 
@@ -421,13 +431,183 @@ func logRateLimitToProgress(projectDir, sessionID, message string) {
 	_ = sessionStore.AppendProgress(sessionID, entry)
 }
 
-func runAgentRun(cmd *cobra.Command, args []string) error {
-	sessionID := args[0]
+// SessionSelection holds the result of selecting a session for agent run
+type SessionSelection struct {
+	SessionID  string
+	ProjectDir string
+}
 
+// selectSessionForAgent shows an interactive session selector for agent run.
+// Returns the selected session info or nil if cancelled.
+func selectSessionForAgent(cwd string) (*SessionSelection, error) {
+	// Load config to discover projects
+	config, err := LoadConfigForCommand()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Create store for current directory
+	store, err := NewStoreForCommand(cwd)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create store: %w", err)
+	}
+
+	// Get session store for local sessions
+	sessionStore, err := session.NewSessionStoreWithConfig(cwd, GetStoreConfig())
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize session store: %w", err)
+	}
+
+	// Collect sessions based on scope (--all flag)
+	type sessionInfo struct {
+		ID          string
+		Description string
+		ProjectDir  string
+		BallCount   int
+	}
+	var sessions []sessionInfo
+
+	if GlobalOpts.AllProjects {
+		// Discover all projects and their sessions
+		projects, err := DiscoverProjectsForCommand(config, store)
+		if err != nil {
+			return nil, fmt.Errorf("failed to discover projects: %w", err)
+		}
+
+		for _, projectPath := range projects {
+			projSessionStore, err := session.NewSessionStore(projectPath)
+			if err != nil {
+				continue
+			}
+
+			projSessions, err := projSessionStore.ListSessions()
+			if err != nil {
+				continue
+			}
+
+			for _, s := range projSessions {
+				// Count balls for this session
+				balls, _ := session.LoadBallsBySession([]string{projectPath}, s.ID)
+				sessions = append(sessions, sessionInfo{
+					ID:          s.ID,
+					Description: s.Description,
+					ProjectDir:  projectPath,
+					BallCount:   len(balls),
+				})
+			}
+		}
+	} else {
+		// Local sessions only
+		localSessions, err := sessionStore.ListSessions()
+		if err != nil {
+			return nil, fmt.Errorf("failed to list sessions: %w", err)
+		}
+
+		for _, s := range localSessions {
+			// Count balls for this session
+			balls, _ := session.LoadBallsBySession([]string{cwd}, s.ID)
+			sessions = append(sessions, sessionInfo{
+				ID:          s.ID,
+				Description: s.Description,
+				ProjectDir:  cwd,
+				BallCount:   len(balls),
+			})
+		}
+	}
+
+	if len(sessions) == 0 {
+		scopeMsg := "this project"
+		if GlobalOpts.AllProjects {
+			scopeMsg = "any discovered project"
+		}
+		return nil, fmt.Errorf("no sessions found in %s. Create one with: juggle sessions create <id>", scopeMsg)
+	}
+
+	// Display session selector
+	fmt.Println("Select a session to run the agent on:")
+	fmt.Println()
+
+	for i, s := range sessions {
+		prefix := fmt.Sprintf("  %d. %s", i+1, s.ID)
+		ballInfo := fmt.Sprintf("(%d balls)", s.BallCount)
+		if s.Description != "" {
+			fmt.Printf("%s - %s %s\n", prefix, s.Description, ballInfo)
+		} else {
+			fmt.Printf("%s %s\n", prefix, ballInfo)
+		}
+		// Show project directory if viewing all projects
+		if GlobalOpts.AllProjects {
+			fmt.Printf("     📁 %s\n", s.ProjectDir)
+		}
+	}
+	fmt.Println()
+	fmt.Print("Enter number (or 'q' to cancel): ")
+
+	// Read selection
+	reader := bufio.NewReader(os.Stdin)
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return nil, fmt.Errorf("failed to read input: %w", err)
+	}
+	input = strings.TrimSpace(input)
+
+	// Handle cancel
+	if input == "q" || input == "Q" || input == "" {
+		return nil, nil
+	}
+
+	// Parse selection
+	var idx int
+	_, err = fmt.Sscanf(input, "%d", &idx)
+	if err != nil || idx < 1 || idx > len(sessions) {
+		return nil, fmt.Errorf("invalid selection: %s", input)
+	}
+
+	selected := sessions[idx-1]
+
+	// If the selected session is from a different project, notify the user
+	if selected.ProjectDir != cwd {
+		fmt.Printf("\n📁 Session is in project: %s\n", selected.ProjectDir)
+		fmt.Printf("   Running agent in that directory...\n\n")
+	}
+
+	return &SessionSelection{
+		SessionID:  selected.ID,
+		ProjectDir: selected.ProjectDir,
+	}, nil
+}
+
+// SelectSessionForAgentForTest is an exported wrapper for testing
+func SelectSessionForAgentForTest(cwd string) (*SessionSelection, error) {
+	return selectSessionForAgent(cwd)
+}
+
+func runAgentRun(cmd *cobra.Command, args []string) error {
 	// Get current directory
 	cwd, err := GetWorkingDir()
 	if err != nil {
 		return fmt.Errorf("failed to get current directory: %w", err)
+	}
+
+	// Track which project directory to use (may change if session is in different project)
+	projectDir := cwd
+
+	// Determine session ID from args or selector
+	var sessionID string
+	if len(args) > 0 {
+		sessionID = args[0]
+	} else {
+		// No session provided - show selector
+		selected, err := selectSessionForAgent(cwd)
+		if err != nil {
+			return err
+		}
+		if selected == nil {
+			// User cancelled
+			return nil
+		}
+		sessionID = selected.SessionID
+		projectDir = selected.ProjectDir
 	}
 
 	// Determine iterations and interactive mode
@@ -444,7 +624,7 @@ func runAgentRun(cmd *cobra.Command, args []string) error {
 
 	// Handle --dry-run and --debug: show prompt info
 	if agentDryRun || agentDebug {
-		prompt, err := generateAgentPrompt(cwd, sessionID, true, agentBallID) // debug=true for reasoning instructions
+		prompt, err := generateAgentPrompt(projectDir, sessionID, true, agentBallID) // debug=true for reasoning instructions
 		if err != nil {
 			return fmt.Errorf("failed to generate prompt: %w", err)
 		}
@@ -507,7 +687,7 @@ func runAgentRun(cmd *cobra.Command, args []string) error {
 	// Run the agent loop
 	loopConfig := AgentLoopConfig{
 		SessionID:     sessionID,
-		ProjectDir:    cwd,
+		ProjectDir:    projectDir,
 		MaxIterations: iterations,
 		Trust:         agentTrust,
 		Debug:         false, // Debug mode now just shows prompt info, doesn't affect prompt content
@@ -548,7 +728,7 @@ func runAgentRun(cmd *cobra.Command, args []string) error {
 		fmt.Println("Status: Max iterations reached")
 	}
 
-	outputPath := filepath.Join(cwd, ".juggler", "sessions", sessionID, "last_output.txt")
+	outputPath := filepath.Join(projectDir, ".juggler", "sessions", sessionID, "last_output.txt")
 	fmt.Printf("\nOutput saved to: %s\n", outputPath)
 
 	return nil
