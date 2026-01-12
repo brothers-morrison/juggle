@@ -194,6 +194,9 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 		}
 		rateLimitRetrying = false // Reset for next iteration
 
+		// Record progress state before iteration (for validation)
+		progressBefore := getProgressLineCount(sessionStore, config.SessionID)
+
 		// Generate prompt using export command
 		prompt, err := generateAgentPrompt(config.ProjectDir, config.SessionID, config.Debug, config.BallID)
 		if err != nil {
@@ -272,39 +275,63 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 
 		// Check for completion signals (already parsed by Runner)
 		if runResult.Complete {
-			// VALIDATE: Check if all balls are actually in terminal state (complete or blocked)
-			terminal, complete, blocked, total := checkBallsTerminal(config.ProjectDir, config.SessionID, config.BallID)
-			if total > 0 && terminal == total {
-				result.Complete = true
-				result.BallsComplete = complete
-				result.BallsBlocked = blocked
-				result.BallsTotal = total
-				break
+			// VALIDATE: Check if progress was updated this iteration
+			progressAfter := getProgressLineCount(sessionStore, config.SessionID)
+			if progressAfter <= progressBefore {
+				fmt.Println()
+				fmt.Printf("⚠️  Agent signaled COMPLETE but did not update progress. Continuing iteration...\n")
+				// Don't accept the signal - continue to check terminal state
+			} else {
+				// VALIDATE: Check if all balls are actually in terminal state (complete or blocked)
+				terminal, complete, blocked, total := checkBallsTerminal(config.ProjectDir, config.SessionID, config.BallID)
+				if total > 0 && terminal == total {
+					result.Complete = true
+					result.BallsComplete = complete
+					result.BallsBlocked = blocked
+					result.BallsTotal = total
+					break
+				}
+				// Signal was premature - log warning and continue
+				fmt.Println()
+				fmt.Printf("⚠️  Agent signaled COMPLETE but only %d/%d balls are in terminal state (%d complete, %d blocked). Continuing...\n",
+					terminal, total, complete, blocked)
 			}
-			// Signal was premature - log warning and continue
-			fmt.Println()
-			fmt.Printf("⚠️  Agent signaled COMPLETE but only %d/%d balls are in terminal state (%d complete, %d blocked). Continuing...\n",
-				terminal, total, complete, blocked)
 		}
 
 		if runResult.Continue {
-			// Agent completed one ball, more remain - continue to next iteration
-			fmt.Println()
-			fmt.Printf("✓ Agent completed a ball, continuing to next iteration...\n")
+			// VALIDATE: Check if progress was updated this iteration
+			progressAfter := getProgressLineCount(sessionStore, config.SessionID)
+			if progressAfter <= progressBefore {
+				fmt.Println()
+				fmt.Printf("⚠️  Agent signaled CONTINUE but did not update progress. Continuing iteration...\n")
+				// Don't accept the signal - fall through to terminal state check
+			} else {
+				// Agent completed one ball, more remain - continue to next iteration
+				fmt.Println()
+				fmt.Printf("✓ Agent completed a ball, continuing to next iteration...\n")
 
-			// Update ball counts for progress tracking
-			_, complete, blocked, total := checkBallsTerminal(config.ProjectDir, config.SessionID, config.BallID)
-			result.BallsComplete = complete
-			result.BallsBlocked = blocked
-			result.BallsTotal = total
+				// Update ball counts for progress tracking
+				_, complete, blocked, total := checkBallsTerminal(config.ProjectDir, config.SessionID, config.BallID)
+				result.BallsComplete = complete
+				result.BallsBlocked = blocked
+				result.BallsTotal = total
 
-			continue
+				continue
+			}
 		}
 
 		if runResult.Blocked {
-			result.Blocked = true
-			result.BlockedReason = runResult.BlockedReason
-			break
+			// VALIDATE: Check if progress was updated this iteration
+			progressAfter := getProgressLineCount(sessionStore, config.SessionID)
+			if progressAfter <= progressBefore {
+				fmt.Println()
+				fmt.Printf("⚠️  Agent signaled BLOCKED but did not update progress. Continuing iteration...\n")
+				// Don't accept the signal - fall through to terminal state check
+			} else {
+				result.Blocked = true
+				result.BlockedReason = runResult.BlockedReason
+				break
+			}
 		}
 
 		// Check if all balls are in terminal state (complete or blocked)
@@ -600,6 +627,30 @@ func logTimeoutToProgress(projectDir, sessionID, message string) {
 
 	entry := fmt.Sprintf("[TIMEOUT] %s", message)
 	_ = sessionStore.AppendProgress(sessionID, entry)
+}
+
+// getProgressLineCount returns the number of lines in the session's progress file.
+// Used to detect if progress was updated during an iteration.
+func getProgressLineCount(store *session.SessionStore, sessionID string) int {
+	progress, err := store.LoadProgress(sessionID)
+	if err != nil {
+		return 0
+	}
+	if progress == "" {
+		return 0
+	}
+	// Count newlines + 1 for content (unless trailing newline only)
+	lines := strings.Count(progress, "\n")
+	// If there's content but no trailing newline, add 1
+	if len(progress) > 0 && !strings.HasSuffix(progress, "\n") {
+		lines++
+	}
+	return lines
+}
+
+// GetProgressLineCountForTest is an exported wrapper for testing
+func GetProgressLineCountForTest(store *session.SessionStore, sessionID string) int {
+	return getProgressLineCount(store, sessionID)
 }
 
 // runAgentRefine implements the agent refine command

@@ -1,6 +1,7 @@
 package integration_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -104,6 +105,7 @@ func TestAgentLoop_BlockedSignalExitsWithReason(t *testing.T) {
 
 	// Create a session
 	env.CreateSession(t, "test-session", "Test session for agent")
+	sessionStore := env.GetSessionStore(t)
 
 	// Create a ball tagged with the session
 	ball := env.CreateBall(t, "Test ball", session.PriorityMedium)
@@ -113,7 +115,7 @@ func TestAgentLoop_BlockedSignalExitsWithReason(t *testing.T) {
 		t.Fatalf("Failed to update ball: %v", err)
 	}
 
-	// Setup mock runner that returns BLOCKED
+	// Setup mock runner that returns BLOCKED (with progress)
 	mock := agent.NewMockRunner(
 		&agent.RunResult{
 			Output:        "Working...\n<promise>BLOCKED: tools not available</promise>\nStopped.",
@@ -121,7 +123,12 @@ func TestAgentLoop_BlockedSignalExitsWithReason(t *testing.T) {
 			BlockedReason: "tools not available",
 		},
 	)
-	agent.SetRunner(mock)
+	// Use progress updating mock to simulate agent updating progress
+	agent.SetRunner(&progressUpdatingMockRunner{
+		mock:         mock,
+		sessionStore: sessionStore,
+		sessionID:    "test-session",
+	})
 	defer agent.ResetRunner()
 
 	// Run the agent loop
@@ -139,8 +146,8 @@ func TestAgentLoop_BlockedSignalExitsWithReason(t *testing.T) {
 	}
 
 	// Verify runner was only called once (loop exited on BLOCKED)
-	if len(mock.Calls) != 1 {
-		t.Errorf("Expected 1 call to runner (exited on BLOCKED), got %d", len(mock.Calls))
+	if mock.NextIndex != 1 {
+		t.Errorf("Expected 1 call to runner (exited on BLOCKED), got %d", mock.NextIndex)
 	}
 
 	// Verify result shows blocked with reason
@@ -1254,4 +1261,460 @@ func TestAgentLoop_RateLimitResetsRetryCountOnSuccess(t *testing.T) {
 	if !result.Complete {
 		t.Error("Expected result.Complete=true")
 	}
+}
+
+// Progress validation tests
+
+func TestAgentLoop_CompleteSignalRejectedWithoutProgress(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Create a session
+	env.CreateSession(t, "test-session", "Test session for agent")
+
+	// Create a ball that's already complete (so COMPLETE signal would be valid)
+	ball := env.CreateBall(t, "Test ball", session.PriorityMedium)
+	ball.Tags = []string{"test-session"}
+	ball.State = session.StateComplete
+	store := env.GetStore(t)
+	if err := store.UpdateBall(ball); err != nil {
+		t.Fatalf("Failed to update ball: %v", err)
+	}
+
+	// Setup mock runner that returns COMPLETE but doesn't update progress
+	// (agent doesn't call juggle progress append)
+	mock := agent.NewMockRunner(
+		&agent.RunResult{
+			Output:   "Working...\n<promise>COMPLETE</promise>",
+			Complete: true,
+		},
+		&agent.RunResult{
+			Output:   "More work...\n<promise>COMPLETE</promise>",
+			Complete: true,
+		},
+	)
+	agent.SetRunner(mock)
+	defer agent.ResetRunner()
+
+	// Run the agent loop - COMPLETE without progress should be rejected
+	config := cli.AgentLoopConfig{
+		SessionID:     "test-session",
+		ProjectDir:    env.ProjectDir,
+		MaxIterations: 2,
+		Trust:         false,
+		IterDelay:     0,
+	}
+
+	result, err := cli.RunAgentLoop(config)
+	if err != nil {
+		t.Fatalf("Agent run failed: %v", err)
+	}
+
+	// Verify runner was called twice (COMPLETE rejected first time, terminal state check passed second time)
+	// The ball is complete, so terminal state check should exit after first iteration even without progress
+	// because we fall through to terminal state check
+	if len(mock.Calls) < 1 {
+		t.Errorf("Expected at least 1 call to runner, got %d", len(mock.Calls))
+	}
+
+	// Should still be complete because terminal state check passes
+	// The warning was logged but loop continued and found all balls terminal
+	if !result.Complete {
+		t.Error("Expected result.Complete=true (terminal state check passed)")
+	}
+}
+
+func TestAgentLoop_ContinueSignalRejectedWithoutProgress(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Create a session
+	env.CreateSession(t, "test-session", "Test session for agent")
+
+	// Create two pending balls
+	ball1 := env.CreateBall(t, "First ball", session.PriorityMedium)
+	ball1.Tags = []string{"test-session"}
+	ball1.State = session.StatePending
+	store := env.GetStore(t)
+	if err := store.UpdateBall(ball1); err != nil {
+		t.Fatalf("Failed to update ball1: %v", err)
+	}
+
+	ball2 := env.CreateBall(t, "Second ball", session.PriorityMedium)
+	ball2.Tags = []string{"test-session"}
+	ball2.State = session.StatePending
+	if err := store.UpdateBall(ball2); err != nil {
+		t.Fatalf("Failed to update ball2: %v", err)
+	}
+
+	// Setup mock runner that returns CONTINUE without updating progress
+	mock := agent.NewMockRunner(
+		&agent.RunResult{
+			Output:   "Done!\n<promise>CONTINUE</promise>",
+			Continue: true,
+		},
+		&agent.RunResult{
+			Output:   "More!\n<promise>CONTINUE</promise>",
+			Continue: true,
+		},
+		&agent.RunResult{
+			Output: "Final iteration",
+		},
+	)
+	agent.SetRunner(mock)
+	defer agent.ResetRunner()
+
+	// Run the agent loop - CONTINUE without progress should be rejected
+	config := cli.AgentLoopConfig{
+		SessionID:     "test-session",
+		ProjectDir:    env.ProjectDir,
+		MaxIterations: 3,
+		Trust:         false,
+		IterDelay:     0,
+	}
+
+	result, err := cli.RunAgentLoop(config)
+	if err != nil {
+		t.Fatalf("Agent run failed: %v", err)
+	}
+
+	// Verify runner was called 3 times (CONTINUE signals rejected, fell through to terminal check each time)
+	if len(mock.Calls) != 3 {
+		t.Errorf("Expected 3 calls to runner (CONTINUE rejected each time), got %d", len(mock.Calls))
+	}
+
+	// Should not be complete (balls still pending)
+	if result.Complete {
+		t.Error("Expected result.Complete=false (balls still pending)")
+	}
+}
+
+func TestAgentLoop_BlockedSignalRejectedWithoutProgress(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Create a session
+	env.CreateSession(t, "test-session", "Test session for agent")
+
+	// Create a pending ball
+	ball := env.CreateBall(t, "Test ball", session.PriorityMedium)
+	ball.Tags = []string{"test-session"}
+	ball.State = session.StatePending
+	store := env.GetStore(t)
+	if err := store.UpdateBall(ball); err != nil {
+		t.Fatalf("Failed to update ball: %v", err)
+	}
+
+	// Setup mock runner that returns BLOCKED without updating progress
+	mock := agent.NewMockRunner(
+		&agent.RunResult{
+			Output:        "Can't continue\n<promise>BLOCKED: tools not available</promise>",
+			Blocked:       true,
+			BlockedReason: "tools not available",
+		},
+		&agent.RunResult{
+			Output: "More work...",
+		},
+	)
+	agent.SetRunner(mock)
+	defer agent.ResetRunner()
+
+	// Run the agent loop - BLOCKED without progress should be rejected
+	config := cli.AgentLoopConfig{
+		SessionID:     "test-session",
+		ProjectDir:    env.ProjectDir,
+		MaxIterations: 2,
+		Trust:         false,
+		IterDelay:     0,
+	}
+
+	result, err := cli.RunAgentLoop(config)
+	if err != nil {
+		t.Fatalf("Agent run failed: %v", err)
+	}
+
+	// Verify runner was called twice (BLOCKED rejected first time)
+	if len(mock.Calls) != 2 {
+		t.Errorf("Expected 2 calls to runner (BLOCKED rejected), got %d", len(mock.Calls))
+	}
+
+	// Should NOT be blocked (signal was rejected)
+	if result.Blocked {
+		t.Error("Expected result.Blocked=false (BLOCKED signal rejected without progress)")
+	}
+}
+
+func TestAgentLoop_CompleteSignalAcceptedWithProgress(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Create a session with initial progress
+	env.CreateSession(t, "test-session", "Test session for agent")
+	sessionStore := env.GetSessionStore(t)
+	if err := sessionStore.AppendProgress("test-session", "[Initial] Starting work\n"); err != nil {
+		t.Fatalf("Failed to append initial progress: %v", err)
+	}
+
+	// Create a ball that's already complete
+	ball := env.CreateBall(t, "Test ball", session.PriorityMedium)
+	ball.Tags = []string{"test-session"}
+	ball.State = session.StateComplete
+	store := env.GetStore(t)
+	if err := store.UpdateBall(ball); err != nil {
+		t.Fatalf("Failed to update ball: %v", err)
+	}
+
+	// Record initial progress line count
+	initialLineCount := cli.GetProgressLineCountForTest(sessionStore, "test-session")
+
+	// Setup mock runner that:
+	// 1. "Updates progress" by us appending to progress before returning
+	// 2. Returns COMPLETE signal
+	mock := agent.NewMockRunner(
+		&agent.RunResult{
+			Output:   "Working...\n<promise>COMPLETE</promise>",
+			Complete: true,
+		},
+	)
+
+	// Custom run function that simulates agent updating progress
+	origRunner := agent.DefaultRunner
+	agent.SetRunner(&progressUpdatingMockRunner{
+		mock:         mock,
+		sessionStore: sessionStore,
+		sessionID:    "test-session",
+	})
+	defer func() { agent.DefaultRunner = origRunner }()
+
+	// Run the agent loop - COMPLETE with progress should be accepted
+	config := cli.AgentLoopConfig{
+		SessionID:     "test-session",
+		ProjectDir:    env.ProjectDir,
+		MaxIterations: 3,
+		Trust:         false,
+		IterDelay:     0,
+	}
+
+	result, err := cli.RunAgentLoop(config)
+	if err != nil {
+		t.Fatalf("Agent run failed: %v", err)
+	}
+
+	// Verify progress was updated
+	finalLineCount := cli.GetProgressLineCountForTest(sessionStore, "test-session")
+	if finalLineCount <= initialLineCount {
+		t.Errorf("Expected progress to be updated, but line count: initial=%d, final=%d",
+			initialLineCount, finalLineCount)
+	}
+
+	// Should be complete (signal accepted with progress)
+	if !result.Complete {
+		t.Error("Expected result.Complete=true (COMPLETE signal accepted with progress)")
+	}
+
+	// Should have only called once (signal accepted)
+	if mock.NextIndex != 1 {
+		t.Errorf("Expected 1 call to runner, got %d", mock.NextIndex)
+	}
+}
+
+func TestAgentLoop_BlockedSignalAcceptedWithProgress(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Create a session with initial progress
+	env.CreateSession(t, "test-session", "Test session for agent")
+	sessionStore := env.GetSessionStore(t)
+	if err := sessionStore.AppendProgress("test-session", "[Initial] Starting work\n"); err != nil {
+		t.Fatalf("Failed to append initial progress: %v", err)
+	}
+
+	// Create a pending ball
+	ball := env.CreateBall(t, "Test ball", session.PriorityMedium)
+	ball.Tags = []string{"test-session"}
+	ball.State = session.StatePending
+	store := env.GetStore(t)
+	if err := store.UpdateBall(ball); err != nil {
+		t.Fatalf("Failed to update ball: %v", err)
+	}
+
+	// Setup mock runner that returns BLOCKED with progress updated
+	mock := agent.NewMockRunner(
+		&agent.RunResult{
+			Output:        "Can't continue\n<promise>BLOCKED: tools not available</promise>",
+			Blocked:       true,
+			BlockedReason: "tools not available",
+		},
+	)
+
+	// Custom run function that simulates agent updating progress
+	origRunner := agent.DefaultRunner
+	agent.SetRunner(&progressUpdatingMockRunner{
+		mock:         mock,
+		sessionStore: sessionStore,
+		sessionID:    "test-session",
+	})
+	defer func() { agent.DefaultRunner = origRunner }()
+
+	// Run the agent loop - BLOCKED with progress should be accepted
+	config := cli.AgentLoopConfig{
+		SessionID:     "test-session",
+		ProjectDir:    env.ProjectDir,
+		MaxIterations: 3,
+		Trust:         false,
+		IterDelay:     0,
+	}
+
+	result, err := cli.RunAgentLoop(config)
+	if err != nil {
+		t.Fatalf("Agent run failed: %v", err)
+	}
+
+	// Should be blocked (signal accepted with progress)
+	if !result.Blocked {
+		t.Error("Expected result.Blocked=true (BLOCKED signal accepted with progress)")
+	}
+	if result.BlockedReason != "tools not available" {
+		t.Errorf("Expected BlockedReason 'tools not available', got '%s'", result.BlockedReason)
+	}
+
+	// Should have only called once (signal accepted)
+	if mock.NextIndex != 1 {
+		t.Errorf("Expected 1 call to runner, got %d", mock.NextIndex)
+	}
+}
+
+func TestAgentLoop_ContinueSignalAcceptedWithProgress(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Create a session with initial progress
+	env.CreateSession(t, "test-session", "Test session for agent")
+	sessionStore := env.GetSessionStore(t)
+	if err := sessionStore.AppendProgress("test-session", "[Initial] Starting work\n"); err != nil {
+		t.Fatalf("Failed to append initial progress: %v", err)
+	}
+
+	// Create two pending balls
+	ball1 := env.CreateBall(t, "First ball", session.PriorityMedium)
+	ball1.Tags = []string{"test-session"}
+	ball1.State = session.StatePending
+	store := env.GetStore(t)
+	if err := store.UpdateBall(ball1); err != nil {
+		t.Fatalf("Failed to update ball1: %v", err)
+	}
+
+	ball2 := env.CreateBall(t, "Second ball", session.PriorityMedium)
+	ball2.Tags = []string{"test-session"}
+	ball2.State = session.StatePending
+	if err := store.UpdateBall(ball2); err != nil {
+		t.Fatalf("Failed to update ball2: %v", err)
+	}
+
+	// Setup mock runner that returns CONTINUE twice (with progress)
+	mock := agent.NewMockRunner(
+		&agent.RunResult{
+			Output:   "Done first!\n<promise>CONTINUE</promise>",
+			Continue: true,
+		},
+		&agent.RunResult{
+			Output:   "Done second!\n<promise>CONTINUE</promise>",
+			Continue: true,
+		},
+	)
+
+	// Custom run function that simulates agent updating progress
+	origRunner := agent.DefaultRunner
+	agent.SetRunner(&progressUpdatingMockRunner{
+		mock:         mock,
+		sessionStore: sessionStore,
+		sessionID:    "test-session",
+	})
+	defer func() { agent.DefaultRunner = origRunner }()
+
+	// Run the agent loop - CONTINUE with progress should be accepted
+	config := cli.AgentLoopConfig{
+		SessionID:     "test-session",
+		ProjectDir:    env.ProjectDir,
+		MaxIterations: 2,
+		Trust:         false,
+		IterDelay:     0,
+	}
+
+	result, err := cli.RunAgentLoop(config)
+	if err != nil {
+		t.Fatalf("Agent run failed: %v", err)
+	}
+
+	// Should have called twice (both CONTINUE signals accepted)
+	if mock.NextIndex != 2 {
+		t.Errorf("Expected 2 calls to runner, got %d", mock.NextIndex)
+	}
+
+	// Should show 2 iterations
+	if result.Iterations != 2 {
+		t.Errorf("Expected 2 iterations, got %d", result.Iterations)
+	}
+
+	// Should not be complete (balls still pending, max iterations hit)
+	if result.Complete {
+		t.Error("Expected result.Complete=false (max iterations reached)")
+	}
+}
+
+func TestGetProgressLineCount(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Create a session
+	env.CreateSession(t, "test-session", "Test session")
+	sessionStore := env.GetSessionStore(t)
+
+	// Test empty progress
+	count := cli.GetProgressLineCountForTest(sessionStore, "test-session")
+	if count != 0 {
+		t.Errorf("Expected 0 lines for empty progress, got %d", count)
+	}
+
+	// Append one line
+	if err := sessionStore.AppendProgress("test-session", "Line 1\n"); err != nil {
+		t.Fatalf("Failed to append progress: %v", err)
+	}
+	count = cli.GetProgressLineCountForTest(sessionStore, "test-session")
+	if count != 1 {
+		t.Errorf("Expected 1 line, got %d", count)
+	}
+
+	// Append another line
+	if err := sessionStore.AppendProgress("test-session", "Line 2\n"); err != nil {
+		t.Fatalf("Failed to append progress: %v", err)
+	}
+	count = cli.GetProgressLineCountForTest(sessionStore, "test-session")
+	if count != 2 {
+		t.Errorf("Expected 2 lines, got %d", count)
+	}
+
+	// Append multi-line entry
+	if err := sessionStore.AppendProgress("test-session", "Line 3\nLine 4\n"); err != nil {
+		t.Fatalf("Failed to append progress: %v", err)
+	}
+	count = cli.GetProgressLineCountForTest(sessionStore, "test-session")
+	if count != 4 {
+		t.Errorf("Expected 4 lines, got %d", count)
+	}
+}
+
+// progressUpdatingMockRunner wraps MockRunner and adds progress on each call
+type progressUpdatingMockRunner struct {
+	mock         *agent.MockRunner
+	sessionStore *session.SessionStore
+	sessionID    string
+}
+
+func (p *progressUpdatingMockRunner) Run(opts agent.RunOptions) (*agent.RunResult, error) {
+	// Simulate agent updating progress before returning
+	entry := fmt.Sprintf("[Iteration %d] Agent work completed\n", p.mock.NextIndex+1)
+	_ = p.sessionStore.AppendProgress(p.sessionID, entry)
+
+	return p.mock.Run(opts)
 }

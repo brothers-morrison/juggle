@@ -13,6 +13,22 @@ import (
 	"github.com/ohare93/juggle/internal/session"
 )
 
+// outputProgressUpdatingMockRunner wraps MockRunner and adds progress on each call.
+// This is needed because the agent loop now validates that progress is updated before accepting signals.
+type outputProgressUpdatingMockRunner struct {
+	mock         *agent.MockRunner
+	sessionStore *session.SessionStore
+	sessionID    string
+}
+
+func (p *outputProgressUpdatingMockRunner) Run(opts agent.RunOptions) (*agent.RunResult, error) {
+	// Simulate agent updating progress before returning
+	entry := fmt.Sprintf("[Iteration %d] Agent work completed\n", p.mock.NextIndex+1)
+	_ = p.sessionStore.AppendProgress(p.sessionID, entry)
+
+	return p.mock.Run(opts)
+}
+
 // captureOutput captures stdout during function execution and returns the output as a string.
 // Uses defer to ensure os.Stdout is restored even if f() panics.
 func captureOutput(f func()) string {
@@ -93,6 +109,7 @@ func TestOutputFormatting_SingleIteration_Blocked(t *testing.T) {
 	defer CleanupTestEnv(t, env)
 
 	env.CreateSession(t, "test-session", "Test session")
+	sessionStore := env.GetSessionStore(t)
 
 	ball := env.CreateInProgressBall(t, "Test ball", session.PriorityMedium)
 	ball.Tags = []string{"test-session"}
@@ -108,7 +125,12 @@ func TestOutputFormatting_SingleIteration_Blocked(t *testing.T) {
 			BlockedReason: "waiting on approval",
 		},
 	)
-	agent.SetRunner(mock)
+	// Use progress updating mock so BLOCKED signal is accepted
+	agent.SetRunner(&outputProgressUpdatingMockRunner{
+		mock:         mock,
+		sessionStore: sessionStore,
+		sessionID:    "test-session",
+	})
 	defer agent.ResetRunner()
 
 	config := cli.AgentLoopConfig{
@@ -140,6 +162,7 @@ func TestOutputFormatting_MultipleIterations_Continue(t *testing.T) {
 	defer CleanupTestEnv(t, env)
 
 	env.CreateSession(t, "test-session", "Test session")
+	sessionStore := env.GetSessionStore(t)
 
 	// Create balls pre-marked as complete so COMPLETE signal will exit
 	// (The test focuses on output formatting, not state validation)
@@ -169,7 +192,12 @@ func TestOutputFormatting_MultipleIterations_Continue(t *testing.T) {
 			Complete: true,
 		},
 	)
-	agent.SetRunner(mock)
+	// Use progress updating mock so signals are accepted
+	agent.SetRunner(&outputProgressUpdatingMockRunner{
+		mock:         mock,
+		sessionStore: sessionStore,
+		sessionID:    "test-session",
+	})
 	defer agent.ResetRunner()
 
 	config := cli.AgentLoopConfig{
@@ -264,6 +292,7 @@ func TestOutputFormatting_PrematureComplete(t *testing.T) {
 	defer CleanupTestEnv(t, env)
 
 	env.CreateSession(t, "test-session", "Test session")
+	sessionStore := env.GetSessionStore(t)
 
 	// Ball stays in progress - COMPLETE signal should be ignored
 	ball := env.CreateInProgressBall(t, "Incomplete ball", session.PriorityMedium)
@@ -284,7 +313,12 @@ func TestOutputFormatting_PrematureComplete(t *testing.T) {
 			Output: "Still working...",
 		},
 	)
-	agent.SetRunner(mock)
+	// Use progress updating mock so signals pass progress check
+	agent.SetRunner(&outputProgressUpdatingMockRunner{
+		mock:         mock,
+		sessionStore: sessionStore,
+		sessionID:    "test-session",
+	})
 	defer agent.ResetRunner()
 
 	config := cli.AgentLoopConfig{
@@ -299,7 +333,7 @@ func TestOutputFormatting_PrematureComplete(t *testing.T) {
 		cli.RunAgentLoop(config)
 	})
 
-	// Verify warning message appears with spacing
+	// Verify warning message appears with spacing (premature because ball not terminal)
 	if !strings.Contains(output, "⚠️  Agent signaled COMPLETE but only") {
 		t.Errorf("Expected premature COMPLETE warning in output:\n%s", output)
 	}
@@ -467,6 +501,7 @@ func TestOutputFormatting_Iterations_3(t *testing.T) {
 	defer CleanupTestEnv(t, env)
 
 	env.CreateSession(t, "test-session", "Test session")
+	sessionStore := env.GetSessionStore(t)
 
 	ball := env.CreateBall(t, "Test ball", session.PriorityMedium)
 	ball.Tags = []string{"test-session"}
@@ -481,7 +516,12 @@ func TestOutputFormatting_Iterations_3(t *testing.T) {
 		&agent.RunResult{Output: "Working 2\n<promise>CONTINUE</promise>", Continue: true},
 		&agent.RunResult{Output: "Done\n<promise>COMPLETE</promise>", Complete: true},
 	)
-	agent.SetRunner(mock)
+	// Use progress updating mock so signals are accepted
+	agent.SetRunner(&outputProgressUpdatingMockRunner{
+		mock:         mock,
+		sessionStore: sessionStore,
+		sessionID:    "test-session",
+	})
 	defer agent.ResetRunner()
 
 	config := cli.AgentLoopConfig{

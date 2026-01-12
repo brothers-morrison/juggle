@@ -81,21 +81,39 @@ Run the verification commands required by the ball's acceptance criteria:
 - Fix any failures before proceeding
 - All required checks must pass before committing
 
-### 5. Update Juggler State
+### 5. Update Juggler State (MANDATORY)
+
+**CRITICAL: You MUST update progress BEFORE emitting any BLOCKED, CONTINUE, or COMPLETE signal.**
 
 Use juggler CLI commands to update state (all support `--json` for structured output):
 
-**Update ball state:**
+**Step 5a: Log progress FIRST (required before any terminal signal):**
+```bash
+juggle progress append <session-id> "What was accomplished"
+```
+
+Your progress entry MUST contain:
+- **Completed ACs**: Which acceptance criteria were satisfied
+- **Current blocker** (if any): What is blocking further progress
+- **Next steps**: What remains to be done (if any)
+
+Example progress entries:
+```bash
+# For a completed ball:
+juggle progress append mysession "Completed juggler-92: AC 1-4 satisfied. Added progress validation to prompt.md, agent loop enforcement, and tests."
+
+# For a blocked ball:
+juggle progress append mysession "Blocked on juggler-92: AC 1-2 done (prompt.md updated). Blocker: Cannot access database. Next: Resolve DB credentials."
+
+# For CONTINUE signal:
+juggle progress append mysession "Completed juggler-92: All ACs satisfied, tests pass. Continuing to next ball."
+```
+
+**Step 5b: Update ball state:**
 ```bash
 juggle update <ball-id> --state complete
 # Or for blocked balls:
 juggle update <ball-id> --state blocked --reason "description of blocker"
-```
-
-**Log progress:**
-```bash
-juggle progress append <session-id> "What was accomplished"
-# Example: juggle progress append mysession "Implemented user authentication"
 ```
 
 **View ball details:**
@@ -181,6 +199,7 @@ When you cannot proceed with the current ball due to a blocker:
 - **DO NOT ASK QUESTIONS** - This is autonomous. Make decisions and implement.
 - **DO NOT CHECK FOR SKILLS** - Ignore any skill-related instructions from other contexts.
 - **ONE BALL PER ITERATION** - Complete exactly one ball, commit, then end this iteration. The agent loop will call you again for the next ball.
+- **ALWAYS UPDATE PROGRESS BEFORE SIGNALS** - The agent loop will reject BLOCKED/CONTINUE/COMPLETE signals if progress wasn't updated this iteration.
 - Never skip verification steps.
 - Never commit broken code.
 - Always use juggler CLI commands to update state.
