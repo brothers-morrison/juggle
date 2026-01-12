@@ -336,3 +336,74 @@ func TestAgentRefine_PromptShowsMissingACs(t *testing.T) {
 		t.Error("Prompt should flag missing acceptance criteria")
 	}
 }
+
+// TestAgentRefine_AllMetaSession tests that "all" acts as a meta-session for all repo balls
+func TestAgentRefine_AllMetaSession(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Create balls with different session tags
+	ball1 := env.CreateBall(t, "Ball in session A", session.PriorityMedium)
+	ball1.Tags = []string{"session-a"}
+	store := env.GetStore(t)
+	if err := store.UpdateBall(ball1); err != nil {
+		t.Fatalf("Failed to update ball1: %v", err)
+	}
+
+	ball2 := env.CreateBall(t, "Ball in session B", session.PriorityMedium)
+	ball2.Tags = []string{"session-b"}
+	if err := store.UpdateBall(ball2); err != nil {
+		t.Fatalf("Failed to update ball2: %v", err)
+	}
+
+	ball3 := env.CreateBall(t, "Ball with no session", session.PriorityMedium)
+	// No tags
+	if err := store.UpdateBall(ball3); err != nil {
+		t.Fatalf("Failed to update ball3: %v", err)
+	}
+
+	// Load balls with "all" as session - should get all non-complete balls
+	balls, err := cli.LoadBallsForRefineForTest(env.ProjectDir, "all")
+	if err != nil {
+		t.Fatalf("Failed to load balls: %v", err)
+	}
+
+	// Should have all 3 balls
+	if len(balls) != 3 {
+		t.Errorf("Expected 3 balls with 'all' meta-session, got %d", len(balls))
+	}
+}
+
+// TestAgentRefine_AllExcludesCompletedBalls tests that "all" still excludes completed balls
+func TestAgentRefine_AllExcludesCompletedBalls(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Create a completed ball
+	completedBall := env.CreateBall(t, "Completed ball", session.PriorityMedium)
+	completedBall.State = session.StateComplete
+	store := env.GetStore(t)
+	if err := store.UpdateBall(completedBall); err != nil {
+		t.Fatalf("Failed to update completed ball: %v", err)
+	}
+
+	// Create a pending ball
+	pendingBall := env.CreateBall(t, "Pending ball", session.PriorityMedium)
+	if err := store.UpdateBall(pendingBall); err != nil {
+		t.Fatalf("Failed to update pending ball: %v", err)
+	}
+
+	// Load balls with "all" - should exclude completed
+	balls, err := cli.LoadBallsForRefineForTest(env.ProjectDir, "all")
+	if err != nil {
+		t.Fatalf("Failed to load balls: %v", err)
+	}
+
+	// Should have only the pending ball
+	if len(balls) != 1 {
+		t.Errorf("Expected 1 ball (excluding completed), got %d", len(balls))
+	}
+	if len(balls) > 0 && balls[0].Intent != "Pending ball" {
+		t.Errorf("Expected 'Pending ball', got '%s'", balls[0].Intent)
+	}
+}

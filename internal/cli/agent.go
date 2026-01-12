@@ -687,8 +687,9 @@ func loadBallsForRefine(projectDir, sessionID string) ([]*session.Ball, error) {
 		return nil, fmt.Errorf("failed to load balls: %w", err)
 	}
 
-	// If no session filter, return all non-complete balls
-	if sessionID == "" {
+	// If no session filter or "all" is specified, return all non-complete balls
+	// "all" is a special meta-session meaning "all balls in repo"
+	if sessionID == "" || sessionID == "all" {
 		balls := make([]*session.Ball, 0)
 		for _, ball := range allBalls {
 			if ball.State != session.StateComplete {
