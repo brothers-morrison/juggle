@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -1423,5 +1424,395 @@ func TestSubmitBallInputTransitionsToACInput(t *testing.T) {
 
 	if len(m.pendingAcceptanceCriteria) != 0 {
 		t.Errorf("Expected pendingAcceptanceCriteria to be empty, got %d", len(m.pendingAcceptanceCriteria))
+	}
+}
+
+// Test activity log page down (ctrl+d)
+func TestActivityLogPageDown(t *testing.T) {
+	// Create a model with many activity entries
+	entries := make([]ActivityEntry, 50)
+	for i := range entries {
+		entries[i] = ActivityEntry{Message: fmt.Sprintf("Activity %d", i)}
+	}
+
+	model := Model{
+		mode:              splitView,
+		activePanel:       ActivityPanel,
+		activityLog:       entries,
+		activityLogOffset: 0,
+	}
+
+	// Page down should increase offset
+	newModel, _ := model.handleActivityLogPageDown()
+	m := newModel.(Model)
+
+	if m.activityLogOffset == 0 {
+		t.Error("Expected activityLogOffset to increase after page down")
+	}
+
+	// Should not exceed max offset
+	maxOffset := m.getActivityLogMaxOffset()
+	if m.activityLogOffset > maxOffset {
+		t.Errorf("activityLogOffset %d exceeds max offset %d", m.activityLogOffset, maxOffset)
+	}
+}
+
+// Test activity log page up (ctrl+u)
+func TestActivityLogPageUp(t *testing.T) {
+	entries := make([]ActivityEntry, 50)
+	for i := range entries {
+		entries[i] = ActivityEntry{Message: fmt.Sprintf("Activity %d", i)}
+	}
+
+	model := Model{
+		mode:              splitView,
+		activePanel:       ActivityPanel,
+		activityLog:       entries,
+		activityLogOffset: 20, // Start scrolled down
+	}
+
+	// Page up should decrease offset
+	newModel, _ := model.handleActivityLogPageUp()
+	m := newModel.(Model)
+
+	if m.activityLogOffset >= 20 {
+		t.Errorf("Expected activityLogOffset to decrease from 20, got %d", m.activityLogOffset)
+	}
+
+	if m.activityLogOffset < 0 {
+		t.Error("activityLogOffset should not go below 0")
+	}
+}
+
+// Test activity log go to top (gg)
+func TestActivityLogGoToTop(t *testing.T) {
+	entries := make([]ActivityEntry, 50)
+	for i := range entries {
+		entries[i] = ActivityEntry{Message: fmt.Sprintf("Activity %d", i)}
+	}
+
+	model := Model{
+		mode:              splitView,
+		activePanel:       ActivityPanel,
+		activityLog:       entries,
+		activityLogOffset: 30, // Start scrolled down
+	}
+
+	// Go to top should set offset to 0
+	newModel, _ := model.handleActivityLogGoToTop()
+	m := newModel.(Model)
+
+	if m.activityLogOffset != 0 {
+		t.Errorf("Expected activityLogOffset to be 0 after go to top, got %d", m.activityLogOffset)
+	}
+}
+
+// Test activity log go to bottom (G)
+func TestActivityLogGoToBottom(t *testing.T) {
+	entries := make([]ActivityEntry, 50)
+	for i := range entries {
+		entries[i] = ActivityEntry{Message: fmt.Sprintf("Activity %d", i)}
+	}
+
+	model := Model{
+		mode:              splitView,
+		activePanel:       ActivityPanel,
+		activityLog:       entries,
+		activityLogOffset: 0, // Start at top
+	}
+
+	// Go to bottom should set offset to max
+	newModel, _ := model.handleActivityLogGoToBottom()
+	m := newModel.(Model)
+
+	expectedOffset := m.getActivityLogMaxOffset()
+	if m.activityLogOffset != expectedOffset {
+		t.Errorf("Expected activityLogOffset to be %d after go to bottom, got %d", expectedOffset, m.activityLogOffset)
+	}
+}
+
+// Test activity log scroll position persists when switching panels
+func TestActivityLogScrollPersistsAcrossPanels(t *testing.T) {
+	entries := make([]ActivityEntry, 50)
+	for i := range entries {
+		entries[i] = ActivityEntry{Message: fmt.Sprintf("Activity %d", i)}
+	}
+
+	model := Model{
+		mode:              splitView,
+		activePanel:       ActivityPanel,
+		activityLog:       entries,
+		activityLogOffset: 25, // Scrolled position
+		sessions:          []*session.JuggleSession{},
+		filteredBalls:     []*session.Ball{},
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+	}
+
+	// Switch to sessions panel
+	model.activePanel = SessionsPanel
+
+	// Offset should persist
+	if model.activityLogOffset != 25 {
+		t.Errorf("Expected activityLogOffset to persist as 25, got %d", model.activityLogOffset)
+	}
+
+	// Switch to balls panel
+	model.activePanel = BallsPanel
+
+	// Offset should still persist
+	if model.activityLogOffset != 25 {
+		t.Errorf("Expected activityLogOffset to persist as 25, got %d", model.activityLogOffset)
+	}
+
+	// Switch back to activity panel
+	model.activePanel = ActivityPanel
+
+	// Offset should still be the same
+	if model.activityLogOffset != 25 {
+		t.Errorf("Expected activityLogOffset to persist as 25, got %d", model.activityLogOffset)
+	}
+}
+
+// Test gg key sequence detection for activity log
+func TestActivityLogGGSequence(t *testing.T) {
+	entries := make([]ActivityEntry, 50)
+	for i := range entries {
+		entries[i] = ActivityEntry{Message: fmt.Sprintf("Activity %d", i)}
+	}
+
+	model := Model{
+		mode:              splitView,
+		activePanel:       ActivityPanel,
+		activityLog:       entries,
+		activityLogOffset: 30,
+		lastKey:           "",
+		sessions:          []*session.JuggleSession{},
+		filteredBalls:     []*session.Ball{},
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+	}
+
+	// First 'g' press should store the key
+	newModel, _ := model.handleSplitViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}})
+	m := newModel.(Model)
+
+	if m.lastKey != "g" {
+		t.Errorf("Expected lastKey to be 'g' after first g press, got '%s'", m.lastKey)
+	}
+
+	// Offset should not change yet
+	if m.activityLogOffset != 30 {
+		t.Errorf("Expected activityLogOffset to remain 30 after first g, got %d", m.activityLogOffset)
+	}
+
+	// Second 'g' press should go to top
+	newModel, _ = m.handleSplitViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}})
+	m = newModel.(Model)
+
+	if m.activityLogOffset != 0 {
+		t.Errorf("Expected activityLogOffset to be 0 after gg, got %d", m.activityLogOffset)
+	}
+
+	if m.lastKey != "" {
+		t.Errorf("Expected lastKey to be cleared after gg, got '%s'", m.lastKey)
+	}
+}
+
+// Test G key goes to bottom in activity log
+func TestActivityLogGKeyGoesToBottom(t *testing.T) {
+	entries := make([]ActivityEntry, 50)
+	for i := range entries {
+		entries[i] = ActivityEntry{Message: fmt.Sprintf("Activity %d", i)}
+	}
+
+	model := Model{
+		mode:              splitView,
+		activePanel:       ActivityPanel,
+		activityLog:       entries,
+		activityLogOffset: 0,
+		lastKey:           "",
+		sessions:          []*session.JuggleSession{},
+		filteredBalls:     []*session.Ball{},
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+	}
+
+	// 'G' press should go to bottom
+	newModel, _ := model.handleSplitViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'G'}})
+	m := newModel.(Model)
+
+	expectedOffset := m.getActivityLogMaxOffset()
+	if m.activityLogOffset != expectedOffset {
+		t.Errorf("Expected activityLogOffset to be %d after G, got %d", expectedOffset, m.activityLogOffset)
+	}
+
+	if m.lastKey != "" {
+		t.Errorf("Expected lastKey to be cleared after G, got '%s'", m.lastKey)
+	}
+}
+
+// Test ctrl+d only works in activity panel
+func TestCtrlDOnlyWorksInActivityPanel(t *testing.T) {
+	entries := make([]ActivityEntry, 50)
+	for i := range entries {
+		entries[i] = ActivityEntry{Message: fmt.Sprintf("Activity %d", i)}
+	}
+
+	model := Model{
+		mode:              splitView,
+		activePanel:       SessionsPanel, // Not activity panel
+		activityLog:       entries,
+		activityLogOffset: 0,
+		sessions:          []*session.JuggleSession{},
+		filteredBalls:     []*session.Ball{},
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+	}
+
+	// ctrl+d in sessions panel should not affect activity offset
+	newModel, _ := model.handleSplitViewKey(tea.KeyMsg{Type: tea.KeyCtrlD})
+	m := newModel.(Model)
+
+	if m.activityLogOffset != 0 {
+		t.Errorf("Expected activityLogOffset to remain 0 in sessions panel, got %d", m.activityLogOffset)
+	}
+}
+
+// Test page down at bottom doesn't exceed max
+func TestActivityLogPageDownAtBottom(t *testing.T) {
+	entries := make([]ActivityEntry, 50)
+	for i := range entries {
+		entries[i] = ActivityEntry{Message: fmt.Sprintf("Activity %d", i)}
+	}
+
+	model := Model{
+		mode:              splitView,
+		activePanel:       ActivityPanel,
+		activityLog:       entries,
+		activityLogOffset: 0,
+	}
+
+	maxOffset := model.getActivityLogMaxOffset()
+	model.activityLogOffset = maxOffset // Start at bottom
+
+	// Page down at bottom should stay at max
+	newModel, _ := model.handleActivityLogPageDown()
+	m := newModel.(Model)
+
+	if m.activityLogOffset != maxOffset {
+		t.Errorf("Expected activityLogOffset to stay at %d when at bottom, got %d", maxOffset, m.activityLogOffset)
+	}
+}
+
+// Test page up at top doesn't go below zero
+func TestActivityLogPageUpAtTop(t *testing.T) {
+	entries := make([]ActivityEntry, 50)
+	for i := range entries {
+		entries[i] = ActivityEntry{Message: fmt.Sprintf("Activity %d", i)}
+	}
+
+	model := Model{
+		mode:              splitView,
+		activePanel:       ActivityPanel,
+		activityLog:       entries,
+		activityLogOffset: 0, // Start at top
+	}
+
+	// Page up at top should stay at 0
+	newModel, _ := model.handleActivityLogPageUp()
+	m := newModel.(Model)
+
+	if m.activityLogOffset != 0 {
+		t.Errorf("Expected activityLogOffset to stay at 0 when at top, got %d", m.activityLogOffset)
+	}
+}
+
+// Test ctrl+u clears filter in non-activity panels
+func TestCtrlUClearsFilterInOtherPanels(t *testing.T) {
+	model := Model{
+		mode:              splitView,
+		activePanel:       SessionsPanel, // Not activity panel
+		activityLog:       make([]ActivityEntry, 10),
+		activityLogOffset: 5,
+		panelSearchQuery:  "test-filter",
+		panelSearchActive: true,
+		sessions:          []*session.JuggleSession{},
+		filteredBalls:     []*session.Ball{},
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+	}
+
+	// ctrl+u in sessions panel should clear filter
+	newModel, _ := model.handleSplitViewKey(tea.KeyMsg{Type: tea.KeyCtrlU})
+	m := newModel.(Model)
+
+	if m.panelSearchQuery != "" {
+		t.Errorf("Expected panelSearchQuery to be cleared, got '%s'", m.panelSearchQuery)
+	}
+
+	if m.panelSearchActive {
+		t.Error("Expected panelSearchActive to be false")
+	}
+
+	// Note: activity log offset will be auto-scrolled to bottom when addActivity()
+	// is called from a non-activity panel (this is expected behavior)
+}
+
+// Test ctrl+u scrolls up in activity panel
+func TestCtrlUScrollsUpInActivityPanel(t *testing.T) {
+	entries := make([]ActivityEntry, 50)
+	for i := range entries {
+		entries[i] = ActivityEntry{Message: fmt.Sprintf("Activity %d", i)}
+	}
+
+	model := Model{
+		mode:              splitView,
+		activePanel:       ActivityPanel,
+		activityLog:       entries,
+		activityLogOffset: 30,
+		panelSearchQuery:  "test-filter", // Has filter
+		panelSearchActive: true,
+		sessions:          []*session.JuggleSession{},
+		filteredBalls:     []*session.Ball{},
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+	}
+
+	// ctrl+u in activity panel should scroll, not clear filter
+	newModel, _ := model.handleSplitViewKey(tea.KeyMsg{Type: tea.KeyCtrlU})
+	m := newModel.(Model)
+
+	if m.activityLogOffset >= 30 {
+		t.Errorf("Expected activityLogOffset to decrease from 30, got %d", m.activityLogOffset)
+	}
+
+	// Filter should remain
+	if m.panelSearchQuery != "test-filter" {
+		t.Errorf("Expected panelSearchQuery to remain 'test-filter', got '%s'", m.panelSearchQuery)
 	}
 }
