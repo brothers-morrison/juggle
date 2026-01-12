@@ -1792,9 +1792,9 @@ func (m Model) handleSplitEditItem() (tea.Model, tea.Cmd) {
 			}
 		}
 
-		m.pendingBallFormField = 0 // Start at intent field
-		m.textInput.SetValue(ball.Title)
-		m.textInput.Placeholder = "What is this ball about?"
+		m.pendingBallFormField = 0 // Start at context field
+		m.textInput.SetValue(ball.Context)
+		m.textInput.Placeholder = "Background context for this task"
 		m.mode = unifiedBallFormView
 		m.addActivity("Editing ball: " + ball.ID)
 	}
@@ -3240,7 +3240,7 @@ func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.textInput.Placeholder = "Edit acceptance criterion"
 				} else {
 					m.textInput.SetValue("")
-					m.textInput.Placeholder = "New acceptance criterion (Enter on empty = next field)"
+					m.textInput.Placeholder = "New acceptance criterion (Enter on empty = save)"
 				}
 				m.textInput.Focus()
 			} else {
@@ -3284,17 +3284,19 @@ func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if acIndex == len(m.pendingAcceptanceCriteria) {
 				// On the "new AC" field
 				if value == "" {
-					// Empty enter on the new AC field - move to next field (Tags)
+					// Empty enter on the new AC field - create the ball
 					saveCurrentFieldValue()
-					// Recalculate after potential changes
-					_, newFieldTags, _, _, _ := recalcFieldIndices()
-					m.pendingBallFormField = newFieldTags
-					loadFieldValue(m.pendingBallFormField)
+					// Validate required fields
+					if m.pendingBallIntent == "" {
+						m.message = "Title is required"
+						return m, nil
+					}
+					return m.finalizeBallCreation()
 				} else {
 					// Add new AC and stay on the new AC field
 					m.pendingAcceptanceCriteria = append(m.pendingAcceptanceCriteria, value)
 					m.textInput.Reset()
-					m.textInput.Placeholder = "New acceptance criterion (Enter on empty = next field)"
+					m.textInput.Placeholder = "New acceptance criterion (Enter on empty = save)"
 					m.pendingBallFormField = fieldACStart + len(m.pendingAcceptanceCriteria) // Move to new "add" field
 				}
 			} else {

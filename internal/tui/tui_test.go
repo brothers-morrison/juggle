@@ -8341,9 +8341,9 @@ func TestUnifiedBallFormCancel(t *testing.T) {
 	}
 }
 
-// Test enter on empty AC field moves to Tags field (not creates ball anymore)
+// Test enter on empty AC field creates the ball
 // Field order: Context(0), Title(1), ACs(2+), Tags, Session, ModelSize, DependsOn
-func TestUnifiedBallFormEnterOnEmptyACMovesToTags(t *testing.T) {
+func TestUnifiedBallFormEnterOnEmptyACSavesBall(t *testing.T) {
 	ti := textinput.New()
 	ti.CharLimit = 256
 	ti.Width = 40
@@ -8367,18 +8367,25 @@ func TestUnifiedBallFormEnterOnEmptyACMovesToTags(t *testing.T) {
 	}
 	model.textInput.SetValue("") // Empty value
 
-	// Press enter on empty AC field - should move to Tags (field 3)
+	// Press enter on empty AC field - should create the ball
 	newModel, _ := model.handleUnifiedBallFormKey(tea.KeyMsg{Type: tea.KeyEnter})
 	m := newModel.(Model)
 
-	// Should stay in form mode but move to Tags field
-	if m.mode != unifiedBallFormView {
-		t.Errorf("Expected mode to still be unifiedBallFormView, got %v", m.mode)
+	// Should exit form mode (back to splitView)
+	if m.mode != splitView {
+		t.Errorf("Expected mode to be splitView after ball creation, got %v", m.mode)
 	}
 
-	// Should be on Tags field (index 3 with no ACs)
-	if m.pendingBallFormField != 3 {
-		t.Errorf("Expected to be on Tags field (3), got %d", m.pendingBallFormField)
+	// Verify the ball was created
+	balls, err := store.LoadBalls()
+	if err != nil {
+		t.Fatalf("Failed to load balls: %v", err)
+	}
+	if len(balls) != 1 {
+		t.Errorf("Expected 1 ball to be created, got %d", len(balls))
+	}
+	if len(balls) > 0 && balls[0].Title != "Test intent for ball" {
+		t.Errorf("Expected ball title 'Test intent for ball', got '%s'", balls[0].Title)
 	}
 }
 

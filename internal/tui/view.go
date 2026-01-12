@@ -1487,7 +1487,7 @@ func (m Model) renderUnifiedBallFormView() string {
 	// Help
 	help := lipgloss.NewStyle().
 		Faint(true).
-		Render("↑/↓ = navigate | ←/→ = cycle options | Enter = next/add AC | Ctrl+Enter = create ball | Esc = cancel")
+		Render("↑/↓ = navigate | ←/→ = cycle options | Enter = next/save | Ctrl+Enter = save | Esc = cancel")
 	b.WriteString(help)
 
 	return b.String()
