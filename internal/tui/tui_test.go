@@ -2063,6 +2063,277 @@ func TestCtrlUScrollsUpInActivityPanel(t *testing.T) {
 	}
 }
 
+// Test empty filter input clears current filter (balls panel)
+func TestEmptyFilterClearsFilterBallsPanel(t *testing.T) {
+	model := Model{
+		mode:              panelSearchView,
+		activePanel:       BallsPanel,
+		panelSearchQuery:  "existing-filter",
+		panelSearchActive: true,
+		textInput:         textinput.New(),
+		sessions:          []*session.JuggleSession{},
+		filteredBalls:     []*session.Ball{},
+		activityLog:       make([]ActivityEntry, 0),
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+	}
+	model.textInput.SetValue("") // Empty input
+
+	// Press enter with empty input
+	newModel, _ := model.handlePanelSearchKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m := newModel.(Model)
+
+	if m.panelSearchQuery != "" {
+		t.Errorf("Expected panelSearchQuery to be empty, got '%s'", m.panelSearchQuery)
+	}
+
+	if m.panelSearchActive {
+		t.Error("Expected panelSearchActive to be false")
+	}
+
+	if m.mode != splitView {
+		t.Errorf("Expected mode to return to splitView, got %v", m.mode)
+	}
+
+	// Check message shows filter cleared
+	if m.message != "Filter cleared" {
+		t.Errorf("Expected message 'Filter cleared', got '%s'", m.message)
+	}
+}
+
+// Test empty filter input clears current filter (sessions panel)
+func TestEmptyFilterClearsFilterSessionsPanel(t *testing.T) {
+	model := Model{
+		mode:              panelSearchView,
+		activePanel:       SessionsPanel,
+		panelSearchQuery:  "existing-filter",
+		panelSearchActive: true,
+		textInput:         textinput.New(),
+		sessions:          []*session.JuggleSession{},
+		filteredBalls:     []*session.Ball{},
+		activityLog:       make([]ActivityEntry, 0),
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+	}
+	model.textInput.SetValue("") // Empty input
+
+	// Press enter with empty input
+	newModel, _ := model.handlePanelSearchKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m := newModel.(Model)
+
+	if m.panelSearchQuery != "" {
+		t.Errorf("Expected panelSearchQuery to be empty, got '%s'", m.panelSearchQuery)
+	}
+
+	if m.panelSearchActive {
+		t.Error("Expected panelSearchActive to be false")
+	}
+}
+
+// Test filter with whitespace only is treated as empty
+func TestWhitespaceOnlyFilterClearsFilter(t *testing.T) {
+	model := Model{
+		mode:              panelSearchView,
+		activePanel:       BallsPanel,
+		panelSearchQuery:  "existing-filter",
+		panelSearchActive: true,
+		textInput:         textinput.New(),
+		sessions:          []*session.JuggleSession{},
+		filteredBalls:     []*session.Ball{},
+		activityLog:       make([]ActivityEntry, 0),
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+	}
+	model.textInput.SetValue("   ") // Whitespace only
+
+	// Press enter with whitespace input
+	newModel, _ := model.handlePanelSearchKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m := newModel.(Model)
+
+	if m.panelSearchQuery != "" {
+		t.Errorf("Expected panelSearchQuery to be empty (whitespace trimmed), got '%s'", m.panelSearchQuery)
+	}
+
+	if m.panelSearchActive {
+		t.Error("Expected panelSearchActive to be false")
+	}
+}
+
+// Test escape cancels filter without clearing existing
+func TestEscapeCancelsFilterWithoutClearing(t *testing.T) {
+	model := Model{
+		mode:              panelSearchView,
+		activePanel:       BallsPanel,
+		panelSearchQuery:  "existing-filter",
+		panelSearchActive: true,
+		textInput:         textinput.New(),
+		sessions:          []*session.JuggleSession{},
+		filteredBalls:     []*session.Ball{},
+		activityLog:       make([]ActivityEntry, 0),
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+	}
+
+	// Press escape
+	newModel, _ := model.handlePanelSearchKey(tea.KeyMsg{Type: tea.KeyEsc})
+	m := newModel.(Model)
+
+	// Filter should remain unchanged
+	if m.panelSearchQuery != "existing-filter" {
+		t.Errorf("Expected panelSearchQuery to remain 'existing-filter', got '%s'", m.panelSearchQuery)
+	}
+
+	if !m.panelSearchActive {
+		t.Error("Expected panelSearchActive to remain true")
+	}
+
+	if m.mode != splitView {
+		t.Errorf("Expected mode to return to splitView, got %v", m.mode)
+	}
+}
+
+// Test filter applied with non-empty value shows correct message
+func TestFilterAppliedShowsCorrectMessage(t *testing.T) {
+	model := Model{
+		mode:              panelSearchView,
+		activePanel:       BallsPanel,
+		panelSearchQuery:  "",
+		panelSearchActive: false,
+		textInput:         textinput.New(),
+		sessions:          []*session.JuggleSession{},
+		filteredBalls:     []*session.Ball{},
+		activityLog:       make([]ActivityEntry, 0),
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+	}
+	model.textInput.SetValue("myfilter")
+
+	// Press enter with filter value
+	newModel, _ := model.handlePanelSearchKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m := newModel.(Model)
+
+	if m.panelSearchQuery != "myfilter" {
+		t.Errorf("Expected panelSearchQuery to be 'myfilter', got '%s'", m.panelSearchQuery)
+	}
+
+	if !m.panelSearchActive {
+		t.Error("Expected panelSearchActive to be true")
+	}
+
+	if m.message != "Filter: myfilter (Ctrl+U to clear)" {
+		t.Errorf("Expected message with filter and hint, got '%s'", m.message)
+	}
+}
+
+// Test filterSessions returns all sessions when filter cleared
+func TestFilterSessionsReturnsAllWhenCleared(t *testing.T) {
+	model := Model{
+		panelSearchQuery:  "",
+		panelSearchActive: false,
+		sessions: []*session.JuggleSession{
+			{ID: "session-1", Description: "First session"},
+			{ID: "session-2", Description: "Second session"},
+			{ID: "session-3", Description: "Third session"},
+		},
+	}
+
+	sessions := model.filterSessions()
+
+	// Should have 2 pseudo-sessions + 3 real sessions = 5
+	if len(sessions) != 5 {
+		t.Errorf("Expected 5 sessions (2 pseudo + 3 real), got %d", len(sessions))
+	}
+
+	// First two should be pseudo-sessions
+	if sessions[0].ID != PseudoSessionAll {
+		t.Errorf("Expected first session to be PseudoSessionAll, got '%s'", sessions[0].ID)
+	}
+	if sessions[1].ID != PseudoSessionUntagged {
+		t.Errorf("Expected second session to be PseudoSessionUntagged, got '%s'", sessions[1].ID)
+	}
+}
+
+// Test filterBallsForSession returns all balls when filter cleared
+func TestFilterBallsReturnsAllWhenCleared(t *testing.T) {
+	model := Model{
+		panelSearchQuery:  "",
+		panelSearchActive: false,
+		selectedSession:   &session.JuggleSession{ID: PseudoSessionAll},
+		filteredBalls: []*session.Ball{
+			{ID: "ball-1", Intent: "First ball"},
+			{ID: "ball-2", Intent: "Second ball"},
+			{ID: "ball-3", Intent: "Third ball"},
+		},
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+	}
+
+	balls := model.filterBallsForSession()
+
+	if len(balls) != 3 {
+		t.Errorf("Expected 3 balls when filter cleared, got %d", len(balls))
+	}
+}
+
+// Test activity log gets entry when filter is cleared via empty input
+func TestActivityLogUpdatedOnFilterClear(t *testing.T) {
+	model := Model{
+		mode:              panelSearchView,
+		activePanel:       BallsPanel,
+		panelSearchQuery:  "existing-filter",
+		panelSearchActive: true,
+		textInput:         textinput.New(),
+		sessions:          []*session.JuggleSession{},
+		filteredBalls:     []*session.Ball{},
+		activityLog:       make([]ActivityEntry, 0),
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+	}
+	model.textInput.SetValue("") // Empty input
+
+	// Press enter with empty input
+	newModel, _ := model.handlePanelSearchKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m := newModel.(Model)
+
+	// Check activity log has an entry for filter cleared
+	if len(m.activityLog) == 0 {
+		t.Error("Expected activity log to have entry for filter cleared")
+	} else {
+		lastEntry := m.activityLog[len(m.activityLog)-1]
+		if lastEntry.Message != "Filter cleared" {
+			t.Errorf("Expected last activity message 'Filter cleared', got '%s'", lastEntry.Message)
+		}
+	}
+}
+
 // Test allBallsSameProject helper function
 func TestAllBallsSameProject(t *testing.T) {
 	tests := []struct {
