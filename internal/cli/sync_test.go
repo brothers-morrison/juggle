@@ -542,3 +542,381 @@ func TestWriteToPRDNoMatchingBall(t *testing.T) {
 		t.Errorf("expected story without ball to remain passes=false, got true")
 	}
 }
+
+// === Conflict Detection Tests ===
+
+func TestDetectConflictsNoConflicts(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupTestDir(t, tmpDir)
+
+	// Create prd.json and sync it to create matching balls
+	prdFile := PRDFile{
+		Project: "TestProject",
+		UserStories: []UserStory{
+			{
+				ID:                 "US-001",
+				Title:              "Test Story",
+				AcceptanceCriteria: []string{"AC1", "AC2"},
+				Priority:           5,
+				Passes:             false,
+			},
+		},
+	}
+
+	prdData, _ := json.MarshalIndent(prdFile, "", "  ")
+	prdPath := filepath.Join(tmpDir, "prd.json")
+	os.WriteFile(prdPath, prdData, 0644)
+
+	// Sync to create balls
+	if err := syncPRDFile(prdPath, tmpDir); err != nil {
+		t.Fatalf("sync failed: %v", err)
+	}
+
+	// Detect conflicts - should be none
+	conflicts, err := detectConflicts(prdPath, tmpDir)
+	if err != nil {
+		t.Fatalf("detectConflicts failed: %v", err)
+	}
+
+	if len(conflicts) != 0 {
+		t.Errorf("expected 0 conflicts, got %d", len(conflicts))
+	}
+}
+
+func TestDetectConflictsStateConflict(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupTestDir(t, tmpDir)
+
+	// Create prd.json with passes: true
+	prdFile := PRDFile{
+		Project: "TestProject",
+		UserStories: []UserStory{
+			{
+				ID:       "US-001",
+				Title:    "Test Story",
+				Priority: 5,
+				Passes:   true, // prd says complete
+			},
+		},
+	}
+
+	prdData, _ := json.MarshalIndent(prdFile, "", "  ")
+	prdPath := filepath.Join(tmpDir, "prd.json")
+	os.WriteFile(prdPath, prdData, 0644)
+
+	// Create ball with pending state (conflict with prd)
+	store, _ := session.NewStore(tmpDir)
+	ball, _ := session.NewBall(tmpDir, "Test Story", session.PriorityHigh)
+	ball.State = session.StatePending // ball says not complete
+	store.AppendBall(ball)
+
+	// Detect conflicts
+	conflicts, err := detectConflicts(prdPath, tmpDir)
+	if err != nil {
+		t.Fatalf("detectConflicts failed: %v", err)
+	}
+
+	if len(conflicts) != 1 {
+		t.Fatalf("expected 1 conflict, got %d", len(conflicts))
+	}
+
+	if conflicts[0].FieldName != "state/passes" {
+		t.Errorf("expected state/passes conflict, got %s", conflicts[0].FieldName)
+	}
+}
+
+func TestDetectConflictsPriorityConflict(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupTestDir(t, tmpDir)
+
+	// Create prd.json with priority 1 (urgent)
+	prdFile := PRDFile{
+		Project: "TestProject",
+		UserStories: []UserStory{
+			{
+				ID:       "US-001",
+				Title:    "Test Story",
+				Priority: 1, // urgent
+				Passes:   false,
+			},
+		},
+	}
+
+	prdData, _ := json.MarshalIndent(prdFile, "", "  ")
+	prdPath := filepath.Join(tmpDir, "prd.json")
+	os.WriteFile(prdPath, prdData, 0644)
+
+	// Create ball with low priority (conflict)
+	store, _ := session.NewStore(tmpDir)
+	ball, _ := session.NewBall(tmpDir, "Test Story", session.PriorityLow)
+	store.AppendBall(ball)
+
+	// Detect conflicts
+	conflicts, err := detectConflicts(prdPath, tmpDir)
+	if err != nil {
+		t.Fatalf("detectConflicts failed: %v", err)
+	}
+
+	if len(conflicts) != 1 {
+		t.Fatalf("expected 1 conflict, got %d", len(conflicts))
+	}
+
+	if conflicts[0].FieldName != "priority" {
+		t.Errorf("expected priority conflict, got %s", conflicts[0].FieldName)
+	}
+}
+
+func TestDetectConflictsACConflict(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupTestDir(t, tmpDir)
+
+	// Create prd.json with specific ACs
+	prdFile := PRDFile{
+		Project: "TestProject",
+		UserStories: []UserStory{
+			{
+				ID:                 "US-001",
+				Title:              "Test Story",
+				AcceptanceCriteria: []string{"PRD AC 1", "PRD AC 2"},
+				Priority:           5,
+				Passes:             false,
+			},
+		},
+	}
+
+	prdData, _ := json.MarshalIndent(prdFile, "", "  ")
+	prdPath := filepath.Join(tmpDir, "prd.json")
+	os.WriteFile(prdPath, prdData, 0644)
+
+	// Create ball with different ACs (conflict)
+	store, _ := session.NewStore(tmpDir)
+	ball, _ := session.NewBall(tmpDir, "Test Story", session.PriorityHigh)
+	ball.AcceptanceCriteria = []string{"Ball AC 1"} // different ACs
+	store.AppendBall(ball)
+
+	// Detect conflicts
+	conflicts, err := detectConflicts(prdPath, tmpDir)
+	if err != nil {
+		t.Fatalf("detectConflicts failed: %v", err)
+	}
+
+	// Should have AC conflict (priority also conflicts but AC is what we're testing)
+	var acConflict *SyncConflict
+	for i := range conflicts {
+		if conflicts[i].FieldName == "acceptance_criteria" {
+			acConflict = &conflicts[i]
+			break
+		}
+	}
+
+	if acConflict == nil {
+		t.Fatal("expected acceptance_criteria conflict, not found")
+	}
+}
+
+func TestDetectConflictsMultipleConflicts(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupTestDir(t, tmpDir)
+
+	// Create prd.json with multiple stories
+	prdFile := PRDFile{
+		Project: "TestProject",
+		UserStories: []UserStory{
+			{
+				ID:       "US-001",
+				Title:    "Story One",
+				Priority: 1,
+				Passes:   true,
+			},
+			{
+				ID:       "US-002",
+				Title:    "Story Two",
+				Priority: 1,
+				Passes:   false,
+			},
+		},
+	}
+
+	prdData, _ := json.MarshalIndent(prdFile, "", "  ")
+	prdPath := filepath.Join(tmpDir, "prd.json")
+	os.WriteFile(prdPath, prdData, 0644)
+
+	// Create balls with conflicting values
+	store, _ := session.NewStore(tmpDir)
+
+	ball1, _ := session.NewBall(tmpDir, "Story One", session.PriorityLow)
+	ball1.State = session.StatePending // conflicts with passes: true
+	store.AppendBall(ball1)
+
+	ball2, _ := session.NewBall(tmpDir, "Story Two", session.PriorityLow) // conflicts with priority 1
+	store.AppendBall(ball2)
+
+	// Detect conflicts
+	conflicts, err := detectConflicts(prdPath, tmpDir)
+	if err != nil {
+		t.Fatalf("detectConflicts failed: %v", err)
+	}
+
+	// Should have at least 2 conflicts (state for story one, priority for both)
+	if len(conflicts) < 2 {
+		t.Errorf("expected at least 2 conflicts, got %d", len(conflicts))
+	}
+}
+
+func TestDetectConflictsNoMatchingBall(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupTestDir(t, tmpDir)
+
+	// Create prd.json with story that has no matching ball
+	prdFile := PRDFile{
+		Project: "TestProject",
+		UserStories: []UserStory{
+			{
+				ID:       "US-001",
+				Title:    "New Story Without Ball",
+				Priority: 5,
+				Passes:   false,
+			},
+		},
+	}
+
+	prdData, _ := json.MarshalIndent(prdFile, "", "  ")
+	prdPath := filepath.Join(tmpDir, "prd.json")
+	os.WriteFile(prdPath, prdData, 0644)
+
+	// Don't create any balls
+
+	// Detect conflicts - should be none (new stories aren't conflicts)
+	conflicts, err := detectConflicts(prdPath, tmpDir)
+	if err != nil {
+		t.Fatalf("detectConflicts failed: %v", err)
+	}
+
+	if len(conflicts) != 0 {
+		t.Errorf("expected 0 conflicts for new story, got %d", len(conflicts))
+	}
+}
+
+func TestDetectConflictsResearchedStateNotConflict(t *testing.T) {
+	tmpDir := t.TempDir()
+	setupTestDir(t, tmpDir)
+
+	// Create prd.json with passes: true
+	prdFile := PRDFile{
+		Project: "TestProject",
+		UserStories: []UserStory{
+			{
+				ID:       "US-001",
+				Title:    "Research Task",
+				Priority: 5,
+				Passes:   true,
+			},
+		},
+	}
+
+	prdData, _ := json.MarshalIndent(prdFile, "", "  ")
+	prdPath := filepath.Join(tmpDir, "prd.json")
+	os.WriteFile(prdPath, prdData, 0644)
+
+	// Create ball with researched state (should match passes: true)
+	store, _ := session.NewStore(tmpDir)
+	ball, _ := session.NewBall(tmpDir, "Research Task", session.PriorityHigh)
+	ball.State = session.StateResearched
+	store.AppendBall(ball)
+
+	// Detect conflicts - researched should not conflict with passes: true
+	conflicts, err := detectConflicts(prdPath, tmpDir)
+	if err != nil {
+		t.Fatalf("detectConflicts failed: %v", err)
+	}
+
+	// Should only have priority conflict, not state conflict
+	for _, c := range conflicts {
+		if c.FieldName == "state/passes" {
+			t.Error("researched state should not conflict with passes: true")
+		}
+	}
+}
+
+func TestStringSlicesEqual(t *testing.T) {
+	tests := []struct {
+		name     string
+		a        []string
+		b        []string
+		expected bool
+	}{
+		{"both empty", []string{}, []string{}, true},
+		{"both nil", nil, nil, true},
+		{"one empty one nil", []string{}, nil, true},
+		{"equal single", []string{"a"}, []string{"a"}, true},
+		{"equal multiple", []string{"a", "b", "c"}, []string{"a", "b", "c"}, true},
+		{"different length", []string{"a"}, []string{"a", "b"}, false},
+		{"different content", []string{"a"}, []string{"b"}, false},
+		{"different order", []string{"a", "b"}, []string{"b", "a"}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := stringSlicesEqual(tt.a, tt.b)
+			if got != tt.expected {
+				t.Errorf("stringSlicesEqual(%v, %v) = %t, want %t", tt.a, tt.b, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestFormatACList(t *testing.T) {
+	tests := []struct {
+		name     string
+		acs      []string
+		expected string
+	}{
+		{"empty", []string{}, "(none)"},
+		{"single", []string{"Single AC"}, "Single AC"},
+		{"multiple", []string{"First AC", "Second AC"}, "2 items: First AC"},
+		{"long first", []string{"This is a very long acceptance criterion that should be truncated", "Second"}, "2 items: This is a very long accepta..."},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := formatACList(tt.acs)
+			if got != tt.expected {
+				t.Errorf("formatACList(%v) = %s, want %s", tt.acs, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestTruncateStr(t *testing.T) {
+	tests := []struct {
+		s        string
+		maxLen   int
+		expected string
+	}{
+		{"short", 10, "short"},
+		{"exactly10!", 10, "exactly10!"},
+		{"this is too long", 10, "this is..."},
+		{"", 5, ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.s, func(t *testing.T) {
+			got := truncateStr(tt.s, tt.maxLen)
+			if got != tt.expected {
+				t.Errorf("truncateStr(%s, %d) = %s, want %s", tt.s, tt.maxLen, got, tt.expected)
+			}
+		})
+	}
+}
+
+// setupTestDir creates the necessary directories for tests
+func setupTestDir(t *testing.T, tmpDir string) {
+	jugglerDir := filepath.Join(tmpDir, ".juggler")
+	if err := os.MkdirAll(jugglerDir, 0755); err != nil {
+		t.Fatalf("failed to create .juggler dir: %v", err)
+	}
+	archiveDir := filepath.Join(jugglerDir, "archive")
+	if err := os.MkdirAll(archiveDir, 0755); err != nil {
+		t.Fatalf("failed to create archive dir: %v", err)
+	}
+}

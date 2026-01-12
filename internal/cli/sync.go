@@ -16,6 +16,7 @@ import (
 var (
 	syncWatch     bool
 	syncWriteBack bool
+	syncCheck     bool
 )
 
 // syncCmd is the parent command for sync operations
@@ -48,13 +49,17 @@ Examples:
   juggle sync ralph --watch
 
   # Write ball state back to prd.json
-  juggle sync ralph --write-back`,
+  juggle sync ralph --write-back
+
+  # Check for conflicts without syncing
+  juggle sync ralph --check`,
 	RunE: runSyncRalph,
 }
 
 func init() {
 	syncRalphCmd.Flags().BoolVarP(&syncWatch, "watch", "w", false, "Watch for changes and sync continuously")
 	syncRalphCmd.Flags().BoolVar(&syncWriteBack, "write-back", false, "Write ball state back to prd.json")
+	syncRalphCmd.Flags().BoolVar(&syncCheck, "check", false, "Check for conflicts without syncing")
 	syncCmd.AddCommand(syncRalphCmd)
 	rootCmd.AddCommand(syncCmd)
 }
@@ -76,6 +81,25 @@ type UserStory struct {
 	Priority           int      `json:"priority"`
 	Passes             bool     `json:"passes"`
 }
+
+// SyncConflict represents a conflict between prd.json and a ball
+type SyncConflict struct {
+	StoryID   string
+	BallID    string
+	Title     string
+	FieldName string
+	PRDValue  string
+	BallValue string
+}
+
+// ConflictResolution represents how to resolve a conflict
+type ConflictResolution int
+
+const (
+	ResolutionUsePRD ConflictResolution = iota
+	ResolutionUseBall
+	ResolutionSkip
+)
 
 func runSyncRalph(cmd *cobra.Command, args []string) error {
 	// Get current directory
@@ -99,6 +123,11 @@ func runSyncRalph(cmd *cobra.Command, args []string) error {
 	// Check if file exists
 	if _, err := os.Stat(prdPath); os.IsNotExist(err) {
 		return fmt.Errorf("prd.json not found: %s", prdPath)
+	}
+
+	// If check mode, detect conflicts only
+	if syncCheck {
+		return checkConflicts(prdPath, cwd)
 	}
 
 	// If write-back mode, sync balls → prd.json
@@ -415,4 +444,168 @@ func watchAndSync(prdPath, projectDir string) error {
 			}
 		}
 	}
+}
+
+// checkConflicts detects and reports conflicts between prd.json and balls
+func checkConflicts(prdPath, projectDir string) error {
+	conflicts, err := detectConflicts(prdPath, projectDir)
+	if err != nil {
+		return err
+	}
+
+	if len(conflicts) == 0 {
+		fmt.Println("No conflicts detected. prd.json and balls are in sync.")
+		return nil
+	}
+
+	fmt.Printf("Found %d conflict(s):\n\n", len(conflicts))
+
+	// Group conflicts by story
+	byStory := make(map[string][]SyncConflict)
+	for _, c := range conflicts {
+		byStory[c.StoryID] = append(byStory[c.StoryID], c)
+	}
+
+	for storyID, storyConflicts := range byStory {
+		first := storyConflicts[0]
+		fmt.Printf("─── %s: %s ───\n", storyID, first.Title)
+		fmt.Printf("Ball: %s\n\n", first.BallID)
+
+		for _, c := range storyConflicts {
+			fmt.Printf("  Field: %s\n", c.FieldName)
+			fmt.Printf("    prd.json: %s\n", c.PRDValue)
+			fmt.Printf("    ball:     %s\n\n", c.BallValue)
+		}
+	}
+
+	fmt.Println("To resolve:")
+	fmt.Println("  - Use 'juggle sync ralph' to apply prd.json values to balls")
+	fmt.Println("  - Use 'juggle sync ralph --write-back' to apply ball values to prd.json")
+
+	return nil
+}
+
+// detectConflicts finds differences between prd.json and matching balls
+func detectConflicts(prdPath, projectDir string) ([]SyncConflict, error) {
+	// Read prd.json
+	data, err := os.ReadFile(prdPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read prd.json: %w", err)
+	}
+
+	var prd PRDFile
+	if err := json.Unmarshal(data, &prd); err != nil {
+		return nil, fmt.Errorf("failed to parse prd.json: %w", err)
+	}
+
+	// Create store for project
+	store, err := NewStoreForCommand(projectDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create store: %w", err)
+	}
+
+	// Load existing balls
+	balls, err := store.LoadBalls()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load balls: %w", err)
+	}
+
+	// Build lookup by title (intent)
+	ballsByTitle := make(map[string]*session.Ball)
+	for _, ball := range balls {
+		ballsByTitle[ball.Intent] = ball
+	}
+
+	var conflicts []SyncConflict
+
+	for _, story := range prd.UserStories {
+		ball, exists := ballsByTitle[story.Title]
+		if !exists {
+			// No matching ball - not a conflict, just new story
+			continue
+		}
+
+		// Check state conflict
+		prdState := mapPassesToState(story.Passes, nil)
+		if ball.State != prdState {
+			// Only report conflict if both sides have meaningful state changes
+			// i.e., if prd says complete but ball is not complete, or vice versa
+			isRealConflict := false
+			if story.Passes && ball.State != session.StateComplete && ball.State != session.StateResearched {
+				isRealConflict = true
+			} else if !story.Passes && (ball.State == session.StateComplete || ball.State == session.StateResearched) {
+				isRealConflict = true
+			}
+
+			if isRealConflict {
+				conflicts = append(conflicts, SyncConflict{
+					StoryID:   story.ID,
+					BallID:    ball.ID,
+					Title:     story.Title,
+					FieldName: "state/passes",
+					PRDValue:  fmt.Sprintf("passes=%t → %s", story.Passes, prdState),
+					BallValue: string(ball.State),
+				})
+			}
+		}
+
+		// Check priority conflict
+		prdPriority := mapPriorityNumber(story.Priority)
+		if ball.Priority != prdPriority {
+			conflicts = append(conflicts, SyncConflict{
+				StoryID:   story.ID,
+				BallID:    ball.ID,
+				Title:     story.Title,
+				FieldName: "priority",
+				PRDValue:  fmt.Sprintf("%d (%s)", story.Priority, prdPriority),
+				BallValue: string(ball.Priority),
+			})
+		}
+
+		// Check acceptance criteria conflict
+		if !stringSlicesEqual(story.AcceptanceCriteria, ball.AcceptanceCriteria) {
+			conflicts = append(conflicts, SyncConflict{
+				StoryID:   story.ID,
+				BallID:    ball.ID,
+				Title:     story.Title,
+				FieldName: "acceptance_criteria",
+				PRDValue:  formatACList(story.AcceptanceCriteria),
+				BallValue: formatACList(ball.AcceptanceCriteria),
+			})
+		}
+	}
+
+	return conflicts, nil
+}
+
+// stringSlicesEqual compares two string slices for equality
+func stringSlicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// formatACList formats acceptance criteria for display
+func formatACList(acs []string) string {
+	if len(acs) == 0 {
+		return "(none)"
+	}
+	if len(acs) == 1 {
+		return acs[0]
+	}
+	return fmt.Sprintf("%d items: %s", len(acs), truncateStr(acs[0], 30))
+}
+
+// truncateStr shortens a string to maxLen characters
+func truncateStr(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen-3] + "..."
 }
