@@ -334,6 +334,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case agentCancelledMsg:
 		m.agentStatus.Running = false
 		m.agentProcess = nil
+		// Close and nil out the output channel to prevent goroutine leaks
+		if m.agentOutputCh != nil {
+			close(m.agentOutputCh)
+			m.agentOutputCh = nil
+		}
 		m.message = "Agent cancelled"
 		m.addActivity("Agent cancelled for session: " + msg.sessionID)
 		m.addAgentOutput("=== Agent cancelled by user ===", true)
@@ -349,6 +354,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case agentFinishedMsg:
 		m.agentStatus.Running = false
 		m.agentProcess = nil // Clear process reference
+		// Close and nil out the output channel to prevent goroutine leaks
+		if m.agentOutputCh != nil {
+			close(m.agentOutputCh)
+			m.agentOutputCh = nil
+		}
 		if msg.err != nil {
 			m.message = "Agent error: " + msg.err.Error()
 			m.addActivity("Agent error: " + msg.err.Error())

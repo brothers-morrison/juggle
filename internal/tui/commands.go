@@ -2,9 +2,12 @@ package tui
 
 import (
 	"bufio"
+	"context"
 	"io"
 	"os"
 	"os/exec"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/charmbracelet/bubbletea"
@@ -175,7 +178,12 @@ type AgentProcess struct {
 	stderr     io.ReadCloser
 	outputCh   chan<- agentOutputMsg
 	sessionID  string
-	cancelled  bool
+	cancelled  atomic.Bool // Thread-safe cancellation flag
+	cancel     context.CancelFunc
+	wg         sync.WaitGroup // Tracks scanner goroutines
+	waitOnce   sync.Once      // Ensures Wait() is only called once
+	waitErr    error          // Stores the Wait() result
+	waitDone   chan struct{}  // Signals when Wait() is complete
 }
 
 // Kill terminates the running agent process
@@ -183,8 +191,56 @@ func (p *AgentProcess) Kill() error {
 	if p == nil || p.cmd == nil || p.cmd.Process == nil {
 		return nil
 	}
-	p.cancelled = true
-	return p.cmd.Process.Kill()
+	p.cancelled.Store(true)
+
+	// Cancel context to signal scanner goroutines to stop
+	if p.cancel != nil {
+		p.cancel()
+	}
+
+	// Kill the process
+	err := p.cmd.Process.Kill()
+
+	// Wait for the process to exit (with timeout) - only if waitDone channel was created
+	if p.waitDone != nil {
+		select {
+		case <-p.waitDone:
+			// Process has exited
+		case <-time.After(5 * time.Second):
+			// Timeout waiting for exit - force continue
+		}
+	}
+
+	// Wait for scanner goroutines to finish
+	p.wg.Wait()
+
+	return err
+}
+
+// IsCancelled returns true if the process was cancelled
+func (p *AgentProcess) IsCancelled() bool {
+	if p == nil {
+		return false
+	}
+	return p.cancelled.Load()
+}
+
+// Wait waits for the process to complete and returns any error
+// It is safe to call multiple times from multiple goroutines
+func (p *AgentProcess) Wait() error {
+	if p == nil || p.cmd == nil {
+		return nil
+	}
+	// If waitDone channel wasn't created, we can't safely wait
+	if p.waitDone == nil {
+		return nil
+	}
+	p.waitOnce.Do(func() {
+		p.waitErr = p.cmd.Wait()
+		close(p.waitDone)
+	})
+	<-p.waitDone
+	return p.waitErr
 }
 
 // launchAgentCmd creates a command that runs the agent for a session
@@ -244,6 +300,9 @@ func launchAgentWithOutputCmd(sessionID string, outputCh chan<- agentOutputMsg) 
 			return agentFinishedMsg{sessionID: sessionID, err: err}
 		}
 
+		// Create context for cancellation
+		ctx, cancel := context.WithCancel(context.Background())
+
 		// Create process reference for cancellation
 		process := &AgentProcess{
 			cmd:       cmd,
@@ -251,28 +310,48 @@ func launchAgentWithOutputCmd(sessionID string, outputCh chan<- agentOutputMsg) 
 			stderr:    stderr,
 			outputCh:  outputCh,
 			sessionID: sessionID,
+			cancel:    cancel,
+			waitDone:  make(chan struct{}),
 		}
 
-		// Stream stdout in a goroutine
+		// Stream stdout in a goroutine (tracked by WaitGroup)
+		process.wg.Add(1)
 		go func() {
+			defer process.wg.Done()
 			scanner := bufio.NewScanner(stdout)
 			for scanner.Scan() {
-				outputCh <- agentOutputMsg{line: scanner.Text(), isError: false}
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					// Non-blocking send to prevent blocking on cancelled processes
+					select {
+					case outputCh <- agentOutputMsg{line: scanner.Text(), isError: false}:
+					case <-ctx.Done():
+						return
+					}
+				}
 			}
 		}()
 
-		// Stream stderr in a goroutine
+		// Stream stderr in a goroutine (tracked by WaitGroup)
+		process.wg.Add(1)
 		go func() {
+			defer process.wg.Done()
 			scanner := bufio.NewScanner(stderr)
 			for scanner.Scan() {
-				outputCh <- agentOutputMsg{line: scanner.Text(), isError: true}
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					// Non-blocking send to prevent blocking on cancelled processes
+					select {
+					case outputCh <- agentOutputMsg{line: scanner.Text(), isError: true}:
+					case <-ctx.Done():
+						return
+					}
+				}
 			}
-		}()
-
-		// Return process reference immediately so TUI can track it for cancellation
-		// Wait for completion in a separate goroutine
-		go func() {
-			cmd.Wait() // Ignore error - will be handled by exit code or cancelled flag
 		}()
 
 		return agentProcessStartedMsg{process: process, sessionID: sessionID}
@@ -286,11 +365,11 @@ func waitForAgentCmd(process *AgentProcess) tea.Cmd {
 			return agentFinishedMsg{sessionID: "", complete: true}
 		}
 
-		// Wait for the command to finish
-		err := process.cmd.Wait()
+		// Wait for the command to finish using the thread-safe Wait method
+		err := process.Wait()
 
-		// Check if cancelled
-		if process.cancelled {
+		// Check if cancelled using the atomic flag
+		if process.IsCancelled() {
 			return agentCancelledMsg{sessionID: process.sessionID}
 		}
 
@@ -308,8 +387,15 @@ func waitForAgentCmd(process *AgentProcess) tea.Cmd {
 // listenForAgentOutput returns a command that waits for an output message on the channel
 func listenForAgentOutput(outputCh <-chan agentOutputMsg) tea.Cmd {
 	return func() tea.Msg {
+		if outputCh == nil {
+			return nil
+		}
 		select {
-		case msg := <-outputCh:
+		case msg, ok := <-outputCh:
+			if !ok {
+				// Channel closed - agent has finished
+				return nil
+			}
 			return msg
 		case <-time.After(100 * time.Millisecond):
 			// Return nil to keep the listener alive without blocking

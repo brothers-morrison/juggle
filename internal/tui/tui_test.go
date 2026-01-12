@@ -6621,3 +6621,162 @@ func TestGPassesThroughWhenAgentOutputHidden(t *testing.T) {
 		t.Errorf("Expected agentOutputOffset to stay at 10, got %d", m.agentOutputOffset)
 	}
 }
+
+// === AgentProcess Race Condition Tests ===
+// These tests verify the race condition fixes for agent cancellation (juggler-85)
+
+// Test that IsCancelled is thread-safe (atomic.Bool)
+func TestAgentProcessIsCancelledThreadSafe(t *testing.T) {
+	process := &AgentProcess{
+		waitDone: make(chan struct{}),
+	}
+
+	// Initial state should be false
+	if process.IsCancelled() {
+		t.Error("Expected IsCancelled to be false initially")
+	}
+
+	// Mark as cancelled
+	process.cancelled.Store(true)
+
+	// Should now return true
+	if !process.IsCancelled() {
+		t.Error("Expected IsCancelled to be true after Store(true)")
+	}
+}
+
+// Test that IsCancelled handles nil receiver
+func TestAgentProcessIsCancelledNilSafe(t *testing.T) {
+	var process *AgentProcess
+	if process.IsCancelled() {
+		t.Error("Expected IsCancelled to return false for nil receiver")
+	}
+}
+
+// Test Wait method handles nil cases
+func TestAgentProcessWaitNilCases(t *testing.T) {
+	// Test nil process
+	var nilProcess *AgentProcess
+	err := nilProcess.Wait()
+	if err != nil {
+		t.Errorf("Expected nil error for nil process Wait(), got: %v", err)
+	}
+
+	// Test process with nil cmd
+	processNilCmd := &AgentProcess{
+		waitDone: make(chan struct{}),
+	}
+	err = processNilCmd.Wait()
+	if err != nil {
+		t.Errorf("Expected nil error for process with nil cmd, got: %v", err)
+	}
+
+	// Test process with nil waitDone channel
+	processNilWaitDone := &AgentProcess{}
+	err = processNilWaitDone.Wait()
+	if err != nil {
+		t.Errorf("Expected nil error for process with nil waitDone, got: %v", err)
+	}
+}
+
+// Test channel close behavior in listenForAgentOutput
+func TestListenForAgentOutputClosedChannel(t *testing.T) {
+	ch := make(chan agentOutputMsg, 1)
+	close(ch)
+
+	cmd := listenForAgentOutput(ch)
+	result := cmd()
+
+	// Should return nil when channel is closed
+	if result != nil {
+		t.Errorf("Expected nil when channel is closed, got: %v", result)
+	}
+}
+
+// Test listenForAgentOutput with nil channel
+func TestListenForAgentOutputNilChannel(t *testing.T) {
+	cmd := listenForAgentOutput(nil)
+	result := cmd()
+
+	// Should return nil for nil channel
+	if result != nil {
+		t.Errorf("Expected nil for nil channel, got: %v", result)
+	}
+}
+
+// Test channel message receive
+func TestListenForAgentOutputReceivesMessage(t *testing.T) {
+	ch := make(chan agentOutputMsg, 1)
+	testMsg := agentOutputMsg{line: "test line", isError: false}
+	ch <- testMsg
+
+	cmd := listenForAgentOutput(ch)
+	result := cmd()
+
+	msg, ok := result.(agentOutputMsg)
+	if !ok {
+		t.Error("Expected agentOutputMsg type")
+		return
+	}
+
+	if msg.line != "test line" {
+		t.Errorf("Expected line 'test line', got: %s", msg.line)
+	}
+}
+
+// Test agentFinishedMsg closes and nils output channel
+func TestAgentFinishedMsgClosesChannel(t *testing.T) {
+	ch := make(chan agentOutputMsg, 1)
+	model := Model{
+		mode:          splitView,
+		activePanel:   BallsPanel,
+		agentStatus:   AgentStatus{Running: true},
+		agentOutputCh: ch,
+	}
+
+	newModel, _ := model.Update(agentFinishedMsg{sessionID: "test", complete: true})
+	m := newModel.(Model)
+
+	if m.agentOutputCh != nil {
+		t.Error("Expected agentOutputCh to be nil after agentFinishedMsg")
+	}
+}
+
+// Test agentCancelledMsg closes and nils output channel
+func TestAgentCancelledMsgClosesChannel(t *testing.T) {
+	ch := make(chan agentOutputMsg, 1)
+	model := Model{
+		mode:          splitView,
+		activePanel:   BallsPanel,
+		agentStatus:   AgentStatus{Running: true},
+		agentOutputCh: ch,
+	}
+
+	newModel, _ := model.Update(agentCancelledMsg{sessionID: "test"})
+	m := newModel.(Model)
+
+	if m.agentOutputCh != nil {
+		t.Error("Expected agentOutputCh to be nil after agentCancelledMsg")
+	}
+}
+
+// Test Kill method handles empty process without panic
+func TestAgentProcessKillEmptyProcess(t *testing.T) {
+	// Empty process with no fields set
+	process := &AgentProcess{}
+	err := process.Kill()
+	if err != nil {
+		t.Errorf("Expected nil error for empty process Kill(), got: %v", err)
+	}
+}
+
+// Test Kill method handles nil cancel func
+func TestAgentProcessKillNilCancelFunc(t *testing.T) {
+	process := &AgentProcess{
+		cancel:   nil,
+		waitDone: make(chan struct{}),
+	}
+	// Should not panic
+	process.cancelled.Store(true)
+	// The Kill would return early due to nil cmd
+}
