@@ -3014,6 +3014,176 @@ func TestAdjustBallsScrollOffsetEmpty(t *testing.T) {
 	}
 }
 
+// Test that last ball is visible when scrolled all the way down
+func TestBallsPanelLastItemVisible(t *testing.T) {
+	// Create balls to test scrolling to the very end
+	balls := make([]*session.Ball, 15)
+	for i := 0; i < 15; i++ {
+		balls[i] = &session.Ball{
+			ID:     fmt.Sprintf("test-%d", i),
+			State:  session.StatePending,
+			Intent: fmt.Sprintf("Ball %d", i),
+		}
+	}
+
+	// Use PseudoSessionAll to return all balls
+	allSession := &session.JuggleSession{ID: PseudoSessionAll}
+
+	model := Model{
+		mode:              splitView,
+		activePanel:       BallsPanel,
+		cursor:            0,
+		ballsScrollOffset: 0,
+		filteredBalls:     balls,
+		selectedSession:   allSession,
+		sessions:          []*session.JuggleSession{allSession},
+		height:            30, // Height that shows limited balls
+		width:             80,
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+		activityLog: make([]ActivityEntry, 0),
+	}
+
+	// Navigate to the very last ball
+	for i := 0; i < 14; i++ {
+		newModel, _ := model.handleSplitViewNavDown()
+		model = newModel.(Model)
+	}
+
+	// Cursor should be at the last ball (index 14)
+	if model.cursor != 14 {
+		t.Errorf("Expected cursor to be 14, got %d", model.cursor)
+	}
+
+	// The last ball should be visible - cursor should be within visible range
+	// Calculate the visible area like the rendering code does
+	mainHeight := model.height - bottomPanelRows - 4
+	ballsHeight := mainHeight - 2 - 4
+	if ballsHeight < 1 {
+		ballsHeight = 1
+	}
+
+	// At maxOffset with top indicator, we can show (ballsHeight - 1) items
+	// So cursor should be >= scrollOffset and < scrollOffset + visibleLines
+	visibleLines := ballsHeight
+	if model.ballsScrollOffset > 0 {
+		visibleLines-- // Account for top indicator
+	}
+
+	if model.cursor < model.ballsScrollOffset {
+		t.Errorf("Cursor %d is above scroll offset %d - last item not visible", model.cursor, model.ballsScrollOffset)
+	}
+	// cursor == scrollOffset + visibleLines - 1 is valid (last visible line)
+	// cursor >= scrollOffset + visibleLines is invalid (beyond visible)
+	if model.cursor > model.ballsScrollOffset+visibleLines-1 {
+		t.Errorf("Cursor %d is beyond visible area (offset %d + visible %d - 1) - last item not visible",
+			model.cursor, model.ballsScrollOffset, visibleLines)
+	}
+}
+
+// Test that bottom indicator is not shown when at the very bottom
+func TestBallsPanelNoBottomIndicatorAtEnd(t *testing.T) {
+	// Create balls
+	balls := make([]*session.Ball, 12)
+	for i := 0; i < 12; i++ {
+		balls[i] = &session.Ball{
+			ID:     fmt.Sprintf("test-%d", i),
+			State:  session.StatePending,
+			Intent: fmt.Sprintf("Ball %d", i),
+		}
+	}
+
+	// Use PseudoSessionAll to return all balls
+	allSession := &session.JuggleSession{ID: PseudoSessionAll}
+
+	model := Model{
+		mode:              splitView,
+		activePanel:       BallsPanel,
+		cursor:            0,
+		ballsScrollOffset: 0,
+		filteredBalls:     balls,
+		selectedSession:   allSession,
+		sessions:          []*session.JuggleSession{allSession},
+		height:            30,
+		width:             80,
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+		activityLog: make([]ActivityEntry, 0),
+	}
+
+	// Navigate to the very last ball
+	for i := 0; i < 11; i++ {
+		newModel, _ := model.handleSplitViewNavDown()
+		model = newModel.(Model)
+	}
+
+	// Cursor should be at the last ball
+	if model.cursor != 11 {
+		t.Errorf("Expected cursor to be 11, got %d", model.cursor)
+	}
+
+	// Render the balls panel and check that bottom indicator is NOT present
+	view := model.renderSplitView()
+
+	// Should NOT contain "more items below" when at the very bottom
+	if strings.Contains(view, "more items below") {
+		t.Error("Bottom scroll indicator shown when at the very end of the list - should not be shown")
+	}
+}
+
+// Test that when all balls fit, no scroll indicators are shown
+func TestBallsPanelNoIndicatorsWhenAllFit(t *testing.T) {
+	// Create just a few balls that all fit
+	balls := make([]*session.Ball, 3)
+	for i := 0; i < 3; i++ {
+		balls[i] = &session.Ball{
+			ID:     fmt.Sprintf("test-%d", i),
+			State:  session.StatePending,
+			Intent: fmt.Sprintf("Ball %d", i),
+		}
+	}
+
+	// Use PseudoSessionAll to return all balls
+	allSession := &session.JuggleSession{ID: PseudoSessionAll}
+
+	model := Model{
+		mode:              splitView,
+		activePanel:       BallsPanel,
+		cursor:            0,
+		ballsScrollOffset: 0,
+		filteredBalls:     balls,
+		selectedSession:   allSession,
+		sessions:          []*session.JuggleSession{allSession},
+		height:            40, // Large height - all balls should fit
+		width:             100,
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+		activityLog: make([]ActivityEntry, 0),
+	}
+
+	view := model.renderSplitView()
+
+	// Should NOT contain any scroll indicators
+	if strings.Contains(view, "more items above") {
+		t.Error("Top scroll indicator shown when all balls fit")
+	}
+	if strings.Contains(view, "more items below") {
+		t.Error("Bottom scroll indicator shown when all balls fit")
+	}
+}
+
 // Test that pressing 't' key opens session selector view
 func TestTagKeyOpensSessionSelector(t *testing.T) {
 	sessions := []*session.JuggleSession{

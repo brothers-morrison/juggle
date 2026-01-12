@@ -1107,8 +1107,8 @@ func (m *Model) adjustBallsScrollOffset(balls []*session.Ball) {
 		m.ballsScrollOffset = m.cursor
 	}
 
-	// If cursor is below the visible area, scroll down
-	// Account for one line used by scroll indicator when scrolled down
+	// Calculate visible area accounting for top scroll indicator
+	// When scrollOffset > 0, we show a top indicator taking one line
 	visibleArea := ballsHeight
 	if m.ballsScrollOffset > 0 {
 		visibleArea-- // One line used by "↑ N more items above"
@@ -1117,13 +1117,29 @@ func (m *Model) adjustBallsScrollOffset(balls []*session.Ball) {
 		visibleArea = 1
 	}
 
+	// If cursor is below the visible area, scroll down
+	// Important: after scrolling down, we'll have a top indicator (unless we scroll to 0)
+	// So use (ballsHeight - 1) as the visible area for the new offset
 	if m.cursor >= m.ballsScrollOffset+visibleArea {
-		m.ballsScrollOffset = m.cursor - visibleArea + 1
+		// Calculate what the new offset should be to make cursor visible
+		// After scrolling, we'll have a top indicator, so visible = ballsHeight - 1
+		newVisibleArea := ballsHeight - 1
+		if newVisibleArea < 1 {
+			newVisibleArea = 1
+		}
+		m.ballsScrollOffset = m.cursor - newVisibleArea + 1
 	}
 
 	// Ensure scroll offset is within valid bounds
-	maxOffset := len(balls) - ballsHeight
+	// When scrolled down (offset > 0), we lose one line to the top indicator
+	// So maxOffset is calculated to ensure all items can be seen when scrolled to max
+	// At maxOffset, we can show (ballsHeight - 1) items due to top indicator
+	maxOffset := len(balls) - (ballsHeight - 1)
 	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	// Special case: if all balls fit without scrolling, maxOffset should be 0
+	if len(balls) <= ballsHeight {
 		maxOffset = 0
 	}
 	if m.ballsScrollOffset > maxOffset {

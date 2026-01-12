@@ -295,19 +295,27 @@ func (m Model) renderBallsPanel(width, height int) string {
 
 	// Calculate visible range using scroll offset
 	startIdx := m.ballsScrollOffset
-	endIdx := startIdx + ballsHeight
+
+	// Calculate if we need scroll indicators
+	needTopIndicator := startIdx > 0 && m.activePanel == BallsPanel
+
+	// Calculate actual visible lines, accounting for top indicator
+	actualVisible := ballsHeight
+	if needTopIndicator {
+		actualVisible--
+	}
+	if actualVisible < 1 {
+		actualVisible = 1
+	}
+
+	endIdx := startIdx + actualVisible
 	if endIdx > len(balls) {
 		endIdx = len(balls)
 	}
 
 	// Show scroll indicator at top if not at beginning
-	if startIdx > 0 && m.activePanel == BallsPanel {
+	if needTopIndicator {
 		b.WriteString(helpStyle.Render(fmt.Sprintf("  ↑ %d more items above", startIdx)) + "\n")
-		ballsHeight-- // Reduce visible entries to make room for indicator
-		endIdx = startIdx + ballsHeight
-		if endIdx > len(balls) {
-			endIdx = len(balls)
-		}
 	}
 
 	// Render balls list
