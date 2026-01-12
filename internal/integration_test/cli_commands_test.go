@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/ohare93/juggle/internal/cli"
@@ -816,6 +818,81 @@ func TestExportIncludesTestsState(t *testing.T) {
 	if !bytes.Contains([]byte(jsonStr), []byte("needed")) {
 		t.Error("JSON export should contain tests state value 'needed'")
 	}
+}
+
+// TestPlanOutputDoesNotRepeatAcceptanceCriteria verifies that the plan command
+// output does not redundantly display acceptance criteria after the user enters them
+func TestPlanOutputDoesNotRepeatAcceptanceCriteria(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Run plan command with non-interactive flags
+	output := runPlanCommand(t, env, "Test intent for AC output", "--ac", "First AC", "--ac", "Second AC")
+
+	// The output should contain the confirmation message
+	if !strings.Contains(output, "Planned ball added") {
+		t.Errorf("Expected 'Planned ball added' in output, got: %s", output)
+	}
+
+	// The output should NOT contain "Acceptance Criteria:" because
+	// the user already provided them via flags and we don't need to repeat
+	if strings.Contains(output, "Acceptance Criteria:") {
+		t.Errorf("Output should NOT contain 'Acceptance Criteria:' - user already entered them. Got: %s", output)
+	}
+
+	// Verify the ball was created with the ACs
+	store := env.GetStore(t)
+	balls, _ := store.LoadBalls()
+	if len(balls) == 0 {
+		t.Fatal("No balls created")
+	}
+
+	// Find the ball we just created
+	var ball *session.Ball
+	for _, b := range balls {
+		if b.Intent == "Test intent for AC output" {
+			ball = b
+			break
+		}
+	}
+	if ball == nil {
+		t.Fatal("Could not find created ball")
+	}
+
+	if len(ball.AcceptanceCriteria) != 2 {
+		t.Errorf("Expected 2 acceptance criteria, got %d", len(ball.AcceptanceCriteria))
+	}
+}
+
+// runPlanCommand runs the plan command and returns its output
+func runPlanCommand(t *testing.T, env *TestEnv, intent string, args ...string) string {
+	t.Helper()
+
+	jugglerRoot := "/home/jmo/Development/juggler"
+	juggleBinary := filepath.Join(jugglerRoot, "juggle")
+
+	// Build juggle binary if needed
+	if _, err := os.Stat(juggleBinary); os.IsNotExist(err) {
+		buildCmd := exec.Command("go", "build", "-o", "juggle", "./cmd/juggle")
+		buildCmd.Dir = jugglerRoot
+		if output, err := buildCmd.CombinedOutput(); err != nil {
+			t.Fatalf("Failed to build juggle: %v\nOutput: %s", err, output)
+		}
+	}
+
+	// Build command arguments
+	cmdArgs := []string{"--config-home", env.ConfigHome, "plan", intent}
+	cmdArgs = append(cmdArgs, args...)
+
+	cmd := exec.Command(juggleBinary, cmdArgs...)
+	cmd.Dir = env.ProjectDir
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("Plan command failed: %v\nOutput: %s", err, output)
+	}
+
+	return string(output)
 }
 
 // TestTestsStateTransitions tests all valid tests state transitions

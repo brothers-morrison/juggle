@@ -143,12 +143,6 @@ func runPlan(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("✓ Planned ball added: %s\n", ball.ID)
 	fmt.Printf("  Intent: %s\n", ball.Intent)
-	if len(ball.AcceptanceCriteria) > 0 {
-		fmt.Printf("  Acceptance Criteria:\n")
-		for i, ac := range ball.AcceptanceCriteria {
-			fmt.Printf("    %d. %s\n", i+1, ac)
-		}
-	}
 	fmt.Printf("  Priority: %s\n", ball.Priority)
 	if len(ball.Tags) > 0 {
 		fmt.Printf("  Tags: %s\n", strings.Join(ball.Tags, ", "))
