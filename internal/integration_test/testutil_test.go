@@ -220,3 +220,82 @@ func (env *TestEnv) GetBallUpdateCount(t *testing.T, ballID string) int {
 	ball := env.AssertBallExists(t, ballID)
 	return ball.UpdateCount
 }
+
+// CreateSecondaryProject creates an additional project in the test environment for cross-project testing.
+// Returns the path to the new project directory.
+func (env *TestEnv) CreateSecondaryProject(t *testing.T, name string) string {
+	t.Helper()
+
+	projectDir := filepath.Join(env.TempDir, name)
+	jugglerDir := filepath.Join(projectDir, ".juggler")
+
+	if err := os.MkdirAll(jugglerDir, 0755); err != nil {
+		t.Fatalf("Failed to create secondary project dir: %v", err)
+	}
+
+	return projectDir
+}
+
+// AddProjectToConfig adds a project directory to the config's search paths for cross-project testing.
+func (env *TestEnv) AddProjectToConfig(t *testing.T, projectDir string) {
+	t.Helper()
+
+	config, err := session.LoadConfigWithOptions(session.ConfigOptions{
+		ConfigHome:     env.ConfigHome,
+		JugglerDirName: ".juggler",
+	})
+	if err != nil {
+		t.Fatalf("Failed to load config: %v", err)
+	}
+
+	config.AddSearchPath(projectDir)
+
+	if err := config.SaveWithOptions(session.ConfigOptions{
+		ConfigHome:     env.ConfigHome,
+		JugglerDirName: ".juggler",
+	}); err != nil {
+		t.Fatalf("Failed to save config: %v", err)
+	}
+}
+
+// CreateSessionInProject creates a session in a specific project directory.
+func (env *TestEnv) CreateSessionInProject(t *testing.T, projectDir, id, description string) *session.JuggleSession {
+	t.Helper()
+
+	sessionStore, err := session.NewSessionStoreWithConfig(projectDir, session.StoreConfig{
+		JugglerDirName: ".juggler",
+	})
+	if err != nil {
+		t.Fatalf("Failed to create session store for project %s: %v", projectDir, err)
+	}
+
+	sess, err := sessionStore.CreateSession(id, description)
+	if err != nil {
+		t.Fatalf("Failed to create session: %v", err)
+	}
+
+	return sess
+}
+
+// CreateBallInProject creates a ball in a specific project directory.
+func (env *TestEnv) CreateBallInProject(t *testing.T, projectDir, intent string, priority session.Priority) *session.Ball {
+	t.Helper()
+
+	store, err := session.NewStoreWithConfig(projectDir, session.StoreConfig{
+		JugglerDirName: ".juggler",
+	})
+	if err != nil {
+		t.Fatalf("Failed to create store for project %s: %v", projectDir, err)
+	}
+
+	ball, err := session.NewBall(projectDir, intent, priority)
+	if err != nil {
+		t.Fatalf("Failed to create ball: %v", err)
+	}
+
+	if err := store.AppendBall(ball); err != nil {
+		t.Fatalf("Failed to save ball: %v", err)
+	}
+
+	return ball
+}

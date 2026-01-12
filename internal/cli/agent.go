@@ -553,11 +553,13 @@ func selectSessionForAgent(cwd string) (*SessionSelection, error) {
 		for _, projectPath := range projects {
 			projSessionStore, err := session.NewSessionStore(projectPath)
 			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to create session store for %s: %v\n", projectPath, err)
 				continue
 			}
 
 			projSessions, err := projSessionStore.ListSessions()
 			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to list sessions for %s: %v\n", projectPath, err)
 				continue
 			}
 
@@ -656,6 +658,90 @@ func selectSessionForAgent(cwd string) (*SessionSelection, error) {
 // SelectSessionForAgentForTest is an exported wrapper for testing
 func SelectSessionForAgentForTest(cwd string) (*SessionSelection, error) {
 	return selectSessionForAgent(cwd)
+}
+
+// SessionInfo holds information about a session for testing/display
+type SessionInfo struct {
+	ID          string
+	Description string
+	ProjectDir  string
+	BallCount   int
+}
+
+// GetSessionsForSelectorForTest returns the list of sessions that would be shown in the selector.
+// This is for testing purposes to verify cross-project session discovery.
+func GetSessionsForSelectorForTest(cwd string) ([]SessionInfo, error) {
+	// Load config to discover projects
+	config, err := LoadConfigForCommand()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Create store for current directory
+	store, err := NewStoreForCommand(cwd)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create store: %w", err)
+	}
+
+	// Get session store for local sessions
+	sessionStore, err := session.NewSessionStoreWithConfig(cwd, GetStoreConfig())
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize session store: %w", err)
+	}
+
+	var sessions []SessionInfo
+
+	if GlobalOpts.AllProjects {
+		// Discover all projects and their sessions
+		projects, err := DiscoverProjectsForCommand(config, store)
+		if err != nil {
+			return nil, fmt.Errorf("failed to discover projects: %w", err)
+		}
+
+		for _, projectPath := range projects {
+			projSessionStore, err := session.NewSessionStore(projectPath)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to create session store for %s: %v\n", projectPath, err)
+				continue
+			}
+
+			projSessions, err := projSessionStore.ListSessions()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to list sessions for %s: %v\n", projectPath, err)
+				continue
+			}
+
+			for _, s := range projSessions {
+				// Count balls for this session
+				balls, _ := session.LoadBallsBySession([]string{projectPath}, s.ID)
+				sessions = append(sessions, SessionInfo{
+					ID:          s.ID,
+					Description: s.Description,
+					ProjectDir:  projectPath,
+					BallCount:   len(balls),
+				})
+			}
+		}
+	} else {
+		// Local sessions only
+		localSessions, err := sessionStore.ListSessions()
+		if err != nil {
+			return nil, fmt.Errorf("failed to list sessions: %w", err)
+		}
+
+		for _, s := range localSessions {
+			// Count balls for this session
+			balls, _ := session.LoadBallsBySession([]string{cwd}, s.ID)
+			sessions = append(sessions, SessionInfo{
+				ID:          s.ID,
+				Description: s.Description,
+				ProjectDir:  cwd,
+				BallCount:   len(balls),
+			})
+		}
+	}
+
+	return sessions, nil
 }
 
 func runAgentRun(cmd *cobra.Command, args []string) error {
