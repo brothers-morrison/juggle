@@ -22,6 +22,7 @@ var (
 	agentMaxWait     time.Duration
 	agentBallID      string
 	agentInteractive bool
+	agentModel       string
 )
 
 // agentCmd is the parent command for agent operations
@@ -81,6 +82,9 @@ Examples:
 
   # Run in interactive mode (full Claude TUI)
   juggle agent run my-feature --interactive
+
+  # Run with specific model (small for quick tasks, large for complex work)
+  juggle agent run my-feature --model sonnet
 
   # Run with full permissions (dangerous)
   juggle agent run my-feature --trust
@@ -143,6 +147,7 @@ func init() {
 	agentRunCmd.Flags().DurationVar(&agentMaxWait, "max-wait", 0, "Maximum wait time for rate limits before giving up (e.g., 30m). 0 = wait indefinitely")
 	agentRunCmd.Flags().StringVarP(&agentBallID, "ball", "b", "", "Work on a specific ball only (defaults to 1 iteration, interactive)")
 	agentRunCmd.Flags().BoolVarP(&agentInteractive, "interactive", "i", false, "Run in interactive mode (full Claude TUI, defaults to 1 iteration)")
+	agentRunCmd.Flags().StringVarP(&agentModel, "model", "m", "", "Model to use (opus, sonnet, haiku). Default: opus for large balls, sonnet for others")
 
 	agentCmd.AddCommand(agentRunCmd)
 	agentCmd.AddCommand(agentRefineCmd)
@@ -178,6 +183,7 @@ type AgentLoopConfig struct {
 	MaxWait       time.Duration // Maximum time to wait for rate limits (0 = wait indefinitely)
 	BallID        string        // Specific ball to work on (empty = all session balls)
 	Interactive   bool          // Run in interactive mode (full Claude TUI)
+	Model         string        // Model to use (opus, sonnet, haiku). Empty = auto-select based on ball model_size
 }
 
 // sessionStorageID returns the session ID used for storage (progress, output, lock)
@@ -269,6 +275,7 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 			Mode:       agent.ModeHeadless,
 			Permission: agent.PermissionAcceptEdits,
 			Timeout:    config.Timeout,
+			Model:      config.Model,
 		}
 		if config.Interactive {
 			opts.Mode = agent.ModeInteractive
@@ -676,6 +683,9 @@ func runAgentRun(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Max iterations: %d\n", iterations)
 		fmt.Printf("Trust mode: %v\n", agentTrust)
 		fmt.Printf("Interactive mode: %v\n", interactive)
+		if agentModel != "" {
+			fmt.Printf("Model: %s\n", agentModel)
+		}
 		if agentTimeout > 0 {
 			fmt.Printf("Timeout per iteration: %v\n", agentTimeout)
 		}
@@ -734,6 +744,7 @@ func runAgentRun(cmd *cobra.Command, args []string) error {
 		MaxWait:       agentMaxWait,
 		BallID:        agentBallID,
 		Interactive:   interactive,
+		Model:         agentModel,
 	}
 
 	result, err := RunAgentLoop(loopConfig)

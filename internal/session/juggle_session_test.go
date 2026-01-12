@@ -62,6 +62,96 @@ func TestJuggleSession_SetDescription(t *testing.T) {
 	}
 }
 
+func TestJuggleSession_SetDefaultModel(t *testing.T) {
+	session := NewJuggleSession("test", "desc")
+	originalUpdatedAt := session.UpdatedAt
+
+	// Sleep briefly to ensure time difference
+	time.Sleep(10 * time.Millisecond)
+
+	session.SetDefaultModel(ModelSizeMedium)
+
+	if session.DefaultModel != ModelSizeMedium {
+		t.Errorf("expected DefaultModel 'medium', got '%s'", session.DefaultModel)
+	}
+	if !session.UpdatedAt.After(originalUpdatedAt) {
+		t.Error("expected UpdatedAt to be updated")
+	}
+}
+
+func TestValidateModelSize(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected bool
+	}{
+		{"", true},        // Blank is valid
+		{"small", true},
+		{"medium", true},
+		{"large", true},
+		{"invalid", false},
+		{"SMALL", false},  // Case sensitive
+		{"opus", false},   // Model name, not size
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			if got := ValidateModelSize(tt.input); got != tt.expected {
+				t.Errorf("ValidateModelSize(%q) = %v, want %v", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestBall_SetModelSize(t *testing.T) {
+	ball := &Ball{
+		ID:       "test-1",
+		Intent:   "Test ball",
+		Priority: PriorityMedium,
+		State:    StatePending,
+	}
+
+	ball.SetModelSize(ModelSizeSmall)
+
+	if ball.ModelSize != ModelSizeSmall {
+		t.Errorf("expected ModelSize 'small', got '%s'", ball.ModelSize)
+	}
+}
+
+func TestBall_ModelSize_JSON(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, err := NewStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+
+	// Create ball with model size
+	ball, _ := NewBall(tmpDir, "Test ball with model", PriorityMedium)
+	ball.SetModelSize(ModelSizeLarge)
+
+	if err := store.AppendBall(ball); err != nil {
+		t.Fatalf("failed to save ball: %v", err)
+	}
+
+	// Load balls back
+	balls, err := store.LoadBalls()
+	if err != nil {
+		t.Fatalf("failed to load balls: %v", err)
+	}
+
+	if len(balls) != 1 {
+		t.Fatalf("expected 1 ball, got %d", len(balls))
+	}
+
+	if balls[0].ModelSize != ModelSizeLarge {
+		t.Errorf("expected ModelSize 'large' after reload, got '%s'", balls[0].ModelSize)
+	}
+}
+
 func TestSessionStore_CreateAndLoadSession(t *testing.T) {
 	// Create temp directory
 	tmpDir, err := os.MkdirTemp("", "juggler-test-*")

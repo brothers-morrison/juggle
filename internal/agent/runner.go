@@ -42,6 +42,7 @@ type RunOptions struct {
 	Permission   PermissionMode // acceptEdits, plan, bypassPermissions
 	Timeout      time.Duration  // timeout per invocation (0 = no timeout)
 	SystemPrompt string         // optional additional system prompt to append
+	Model        string         // optional model to use (e.g., "opus", "sonnet", "haiku")
 }
 
 // RunResult represents the outcome of a single agent run
@@ -105,6 +106,11 @@ func (r *ClaudeRunner) runHeadless(opts RunOptions) (*RunResult, error) {
 	// Append system prompt if provided
 	if opts.SystemPrompt != "" {
 		args = append(args, "--append-system-prompt", opts.SystemPrompt)
+	}
+
+	// Set model if provided
+	if opts.Model != "" {
+		args = append(args, "--model", opts.Model)
 	}
 
 	// Set permission mode
@@ -198,6 +204,11 @@ func (r *ClaudeRunner) runInteractive(opts RunOptions) (*RunResult, error) {
 	// Append system prompt if provided
 	if opts.SystemPrompt != "" {
 		args = append(args, "--append-system-prompt", opts.SystemPrompt)
+	}
+
+	// Set model if provided
+	if opts.Model != "" {
+		args = append(args, "--model", opts.Model)
 	}
 
 	// Set permission mode

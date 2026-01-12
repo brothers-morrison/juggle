@@ -20,6 +20,7 @@ var (
 	updateBlockReason string
 	updateTestsState  string
 	updateOutput      string
+	updateModelSize   string
 	updateJSONFlag    bool
 )
 
@@ -40,7 +41,8 @@ Examples:
   juggle update my-app-1 --criteria "User can log in" --criteria "Session persists"
   juggle update my-app-1 --tags bug-fix,security
   juggle update my-app-1 --tests-state needed
-  juggle update my-app-1 --output "Research findings: ..."`,
+  juggle update my-app-1 --output "Research findings: ..."
+  juggle update my-app-1 --model-size small`,
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: CompleteBallIDs,
 	RunE:              runUpdate,
@@ -55,6 +57,7 @@ func init() {
 	updateCmd.Flags().StringVar(&updateBlockReason, "reason", "", "Blocked reason (required when setting state to blocked)")
 	updateCmd.Flags().StringVar(&updateTestsState, "tests-state", "", "Update tests state (not_needed|needed|done)")
 	updateCmd.Flags().StringVar(&updateOutput, "output", "", "Set research output/results")
+	updateCmd.Flags().StringVar(&updateModelSize, "model-size", "", "Set preferred model size (small|medium|large)")
 	updateCmd.Flags().BoolVar(&updateJSONFlag, "json", false, "Output updated ball as JSON")
 
 	// Add completion for flags
@@ -64,6 +67,9 @@ func init() {
 	})
 	updateCmd.RegisterFlagCompletionFunc("tests-state", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"not_needed", "needed", "done"}, cobra.ShellCompDirectiveNoFileComp
+	})
+	updateCmd.RegisterFlagCompletionFunc("model-size", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"small", "medium", "large"}, cobra.ShellCompDirectiveNoFileComp
 	})
 }
 
@@ -80,7 +86,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	}
 
 	// If no flags provided (except --json), enter interactive mode
-	if updateIntent == "" && updatePriority == "" && updateState == "" && updateCriteria == nil && updateTags == "" && updateTestsState == "" && updateOutput == "" && !updateJSONFlag {
+	if updateIntent == "" && updatePriority == "" && updateState == "" && updateCriteria == nil && updateTags == "" && updateTestsState == "" && updateOutput == "" && updateModelSize == "" && !updateJSONFlag {
 		return runInteractiveUpdate(foundBall, foundStore)
 	}
 
@@ -193,6 +199,21 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		modified = true
 		if !updateJSONFlag {
 			fmt.Printf("✓ Updated tests state: %s\n", updateTestsState)
+		}
+	}
+
+	if updateModelSize != "" {
+		if !session.ValidateModelSize(updateModelSize) {
+			err := fmt.Errorf("invalid model size: %s (must be small|medium|large)", updateModelSize)
+			if updateJSONFlag {
+				return printJSONError(err)
+			}
+			return err
+		}
+		foundBall.SetModelSize(session.ModelSize(updateModelSize))
+		modified = true
+		if !updateJSONFlag {
+			fmt.Printf("✓ Updated model size: %s\n", updateModelSize)
 		}
 	}
 
@@ -367,6 +388,21 @@ func runInteractiveUpdate(ball *session.Ball, store *session.Store) error {
 		}
 	}
 
+	// Edit model size
+	currentModelSize := string(ball.ModelSize)
+	if currentModelSize == "" {
+		currentModelSize = "unset"
+	}
+	fmt.Printf("Model Size [%s] (small|medium|large): ", currentModelSize)
+	input, _ = reader.ReadString('\n')
+	input = strings.TrimSpace(input)
+	if input != "" {
+		if !session.ValidateModelSize(input) {
+			return fmt.Errorf("invalid model size: %s", input)
+		}
+		ball.SetModelSize(session.ModelSize(input))
+	}
+
 	// Save changes
 	ball.UpdateActivity()
 	if err := store.UpdateBall(ball); err != nil {
@@ -392,6 +428,9 @@ func runInteractiveUpdate(ball *session.Ball, store *session.Store) error {
 	}
 	if ball.Output != "" {
 		fmt.Printf("  Output: %d characters\n", len(ball.Output))
+	}
+	if ball.ModelSize != "" {
+		fmt.Printf("  Model Size: %s\n", ball.ModelSize)
 	}
 
 	return nil

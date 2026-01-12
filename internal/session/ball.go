@@ -419,9 +419,25 @@ func ValidateTestsState(s string) bool {
 	}
 }
 
+// ValidateModelSize checks if a model size string is valid
+func ValidateModelSize(s string) bool {
+	switch ModelSize(s) {
+	case ModelSizeBlank, ModelSizeSmall, ModelSizeMedium, ModelSizeLarge:
+		return true
+	default:
+		return false
+	}
+}
+
 // SetTestsState sets the tests state for the ball
 func (b *Ball) SetTestsState(state TestsState) {
 	b.TestsState = state
+	b.UpdateActivity()
+}
+
+// SetModelSize sets the preferred model size for the ball
+func (b *Ball) SetModelSize(size ModelSize) {
+	b.ModelSize = size
 	b.UpdateActivity()
 }
 

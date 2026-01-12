@@ -16,6 +16,7 @@ A ball is a unit of work with:
 - **Acceptance Criteria**: Verifiable conditions that define "done"
 - **State**: pending → in_progress → complete (or blocked)
 - **Tags**: Links to sessions and categories
+- **Model Size** (optional): Preferred model size (`small`, `medium`, `large`) for cost optimization
 
 ### Sessions = Groupings
 
@@ -161,6 +162,26 @@ juggle list
 | `in_progress` | Currently being worked on |
 | `blocked` | Stuck (reason in `blocked_reason` field) |
 | `complete` | Done and archived |
+
+### Model Size
+
+Model size indicates the preferred LLM model for cost optimization:
+
+| Size | Model | Use For |
+|------|-------|---------|
+| `small` | haiku | Simple fixes, docs, straightforward implementations |
+| `medium` | sonnet | Standard features, moderate complexity |
+| `large` | opus | Complex refactoring, architectural changes |
+
+When running the agent with a specific model (`--model`), balls matching that model size are prioritized. This allows running cheaper models for simple tasks.
+
+```bash
+# Run with sonnet model (good for medium complexity)
+juggle agent run my-feature --model sonnet
+
+# Set model size when creating or updating a ball
+juggle update myapp-5 --model-size small
+```
 
 ### In-Progress Ball Handling
 

@@ -17,11 +17,12 @@ const (
 // JuggleSession represents a grouping of balls by tag
 // Session ID equals the tag, providing a simple mapping
 type JuggleSession struct {
-	ID          string    `json:"id"`          // Session ID (same as tag)
-	Description string    `json:"description"` // Human-readable description
-	Context     string    `json:"context"`     // Rich context for agent memory
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID           string    `json:"id"`                      // Session ID (same as tag)
+	Description  string    `json:"description"`             // Human-readable description
+	Context      string    `json:"context"`                 // Rich context for agent memory
+	DefaultModel ModelSize `json:"default_model,omitempty"` // Default model size for balls in this session
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 // NewJuggleSession creates a new session with the given ID and description
@@ -45,6 +46,12 @@ func (s *JuggleSession) SetContext(context string) {
 // SetDescription updates the session description
 func (s *JuggleSession) SetDescription(description string) {
 	s.Description = description
+	s.UpdatedAt = time.Now()
+}
+
+// SetDefaultModel updates the session's default model size
+func (s *JuggleSession) SetDefaultModel(model ModelSize) {
+	s.DefaultModel = model
 	s.UpdatedAt = time.Now()
 }
 

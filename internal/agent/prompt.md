@@ -22,6 +22,14 @@ Review these sections to understand the current state.
 2. **pending balls by priority** - urgent > high > medium > low
 3. **blocked balls** - Review if blockers have been resolved
 
+**Model size preference:**
+- Balls may have a `model` field indicating preferred model size: `small` (haiku), `medium` (sonnet), or `large` (opus)
+- When the agent is running with a specific model, prioritize balls matching that model size
+- Small/haiku: Simple fixes, documentation updates, straightforward implementations
+- Medium/sonnet: Standard features, moderate complexity
+- Large/opus: Complex refactoring, architectural changes, multi-file coordinated changes
+- If no model is specified on a ball, any model can handle it
+
 **Dependency handling:**
 - Some balls have a `Depends On` field listing ball IDs that must be completed first
 - **Always complete dependencies before dependent balls**
