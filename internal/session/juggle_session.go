@@ -215,9 +215,17 @@ func (s *SessionStore) DeleteSession(id string) error {
 
 // AppendProgress appends content to a session's progress file
 func (s *SessionStore) AppendProgress(id, content string) error {
-	// Verify session exists
-	if _, err := s.LoadSession(id); err != nil {
-		return err
+	// Verify session exists (skip for "_all" virtual session)
+	if id != "_all" {
+		if _, err := s.LoadSession(id); err != nil {
+			return err
+		}
+	} else {
+		// For "_all", ensure the directory exists
+		sessionDir := s.sessionPath(id)
+		if err := os.MkdirAll(sessionDir, 0755); err != nil {
+			return fmt.Errorf("failed to create _all session directory: %w", err)
+		}
 	}
 
 	progressPath := s.progressFilePath(id)
@@ -238,9 +246,11 @@ func (s *SessionStore) AppendProgress(id, content string) error {
 
 // LoadProgress reads the contents of a session's progress file
 func (s *SessionStore) LoadProgress(id string) (string, error) {
-	// Verify session exists
-	if _, err := s.LoadSession(id); err != nil {
-		return "", err
+	// Verify session exists (skip for "_all" virtual session)
+	if id != "_all" {
+		if _, err := s.LoadSession(id); err != nil {
+			return "", err
+		}
 	}
 
 	progressPath := s.progressFilePath(id)

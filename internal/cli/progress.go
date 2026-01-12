@@ -87,8 +87,14 @@ func runProgressAppend(cmd *cobra.Command, args []string) error {
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
 	entry := fmt.Sprintf("[%s] %s\n", timestamp, text)
 
+	// Map "all" meta-session to "_all" for storage
+	storageID := sessionID
+	if sessionID == "all" {
+		storageID = "_all"
+	}
+
 	// Append to progress file
-	if err := store.AppendProgress(sessionID, entry); err != nil {
+	if err := store.AppendProgress(storageID, entry); err != nil {
 		err = fmt.Errorf("failed to append progress: %w", err)
 		if progressAppendJSONFlag {
 			return printProgressAppendJSONError(err)

@@ -31,8 +31,12 @@ var exportCmd = &cobra.Command{
 By default exports active balls (excluding done) from the current project only.
 Use --all to export from all discovered projects.
 
+Special session "all":
+Use --session all to export ALL balls in the repo without session filtering.
+This is useful for working on balls that aren't tagged to any specific session.
+
 Filters are applied in order:
-1. --session (if specified, exports only balls with matching session tag)
+1. --session (if specified, exports only balls with matching session tag; "all" = no filter)
 2. --ball-ids (if specified, only these balls)
 3. --filter-state (if specified, only balls in these states)
 4. --include-done (if false, excludes completed balls)
@@ -58,6 +62,9 @@ Examples:
 
   # Export session in Ralph format for agent use
   juggler export --session my-feature --format ralph
+
+  # Export ALL balls in repo as agent prompt (no session filter)
+  juggle export --session all --format agent | claude -p
 
   # Export session as complete agent prompt
   juggler export --session my-feature --format agent | claude -p
@@ -89,9 +96,9 @@ func runExport(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid format: %s (must be json, csv, ralph, or agent)", exportFormat)
 	}
 
-	// Ralph and agent formats require --session
+	// Ralph and agent formats require --session (but "all" is a special meta-session)
 	if (exportFormat == "ralph" || exportFormat == "agent") && exportSession == "" {
-		return fmt.Errorf("%s format requires --session flag", exportFormat)
+		return fmt.Errorf("%s format requires --session flag (use 'all' for all balls in repo)", exportFormat)
 	}
 
 	// Get current directory
@@ -132,7 +139,8 @@ func runExport(cmd *cobra.Command, args []string) error {
 	balls := allBalls
 
 	// Filter 0: --session (if specified, filter by session tag)
-	if exportSession != "" {
+	// "all" is a special meta-session that means "all balls in repo" (no session filtering)
+	if exportSession != "" && exportSession != "all" {
 		filteredBalls := make([]*session.Ball, 0)
 		for _, ball := range balls {
 			for _, tag := range ball.Tags {

@@ -40,6 +40,11 @@ var agentRunCmd = &cobra.Command{
 If no session-id is provided, a selector will be shown to choose from
 available sessions. Use --all to show sessions from all discovered projects.
 
+Special session "all":
+Use "all" as the session-id to run the agent against ALL balls in the current
+repo, without requiring a session file. This is useful for working on balls
+that aren't tagged to any specific session.
+
 The agent will:
 1. Generate a prompt using 'juggle export --format agent'
 2. Spawn claude with the prepared prompt
@@ -58,6 +63,9 @@ Examples:
 
   # Run agent for 10 iterations (default)
   juggle agent run my-feature
+
+  # Run agent against ALL balls in repo (no session filter)
+  juggle agent run all
 
   # Run for specific number of iterations
   juggle agent run my-feature --iterations 5
@@ -169,30 +177,53 @@ type AgentLoopConfig struct {
 	Interactive   bool          // Run in interactive mode (full Claude TUI)
 }
 
+// sessionStorageID returns the session ID used for storage (progress, output, lock)
+// For the "all" meta-session, this returns "_all" since "all" is reserved as a meta-session name
+func sessionStorageID(sessionID string) string {
+	if sessionID == "all" {
+		return "_all"
+	}
+	return sessionID
+}
+
 // RunAgentLoop executes the agent loop with the given configuration.
 // This is the testable core of the agent run command.
 func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 	startTime := time.Now()
 
-	// Verify session exists
 	sessionStore, err := session.NewSessionStore(config.ProjectDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create session store: %w", err)
 	}
 
-	if _, err := sessionStore.LoadSession(config.SessionID); err != nil {
-		return nil, fmt.Errorf("session not found: %s", config.SessionID)
+	// "all" is a special meta-session that targets all balls in repo without requiring a session file
+	isAllSession := config.SessionID == "all"
+
+	// Verify session exists (unless using "all" meta-session)
+	if !isAllSession {
+		if _, err := sessionStore.LoadSession(config.SessionID); err != nil {
+			return nil, fmt.Errorf("session not found: %s", config.SessionID)
+		}
 	}
 
 	// Acquire exclusive lock on session to prevent concurrent agent runs
-	lock, err := sessionStore.AcquireSessionLock(config.SessionID)
+	// For "all" meta-session, we lock with "_all" as the storage ID
+	storageID := sessionStorageID(config.SessionID)
+	lock, err := sessionStore.AcquireSessionLock(storageID)
 	if err != nil {
 		return nil, err
 	}
 	defer lock.Release()
 
-	// Create output file path
-	outputPath := filepath.Join(config.ProjectDir, ".juggler", "sessions", config.SessionID, "last_output.txt")
+	// Create output file path using storage ID
+	// For "all" meta-session, ensure the _all session directory exists
+	if isAllSession {
+		allDir := filepath.Join(config.ProjectDir, ".juggler", "sessions", "_all")
+		if err := os.MkdirAll(allDir, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create _all session directory: %w", err)
+		}
+	}
+	outputPath := filepath.Join(config.ProjectDir, ".juggler", "sessions", storageID, "last_output.txt")
 
 	result := &AgentResult{
 		StartedAt: startTime,
@@ -220,7 +251,8 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 		rateLimitRetrying = false // Reset for next iteration
 
 		// Record progress state before iteration (for validation)
-		progressBefore := getProgressLineCount(sessionStore, config.SessionID)
+		// Use storageID (maps "all" to "_all") for progress tracking
+		progressBefore := getProgressLineCount(sessionStore, storageID)
 
 		// Generate prompt using export command
 		prompt, err := generateAgentPrompt(config.ProjectDir, config.SessionID, config.Debug, config.BallID)
@@ -260,13 +292,13 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 			if config.MaxWait > 0 && totalWaitTime+waitTime > config.MaxWait {
 				result.RateLimitExceded = true
 				result.TotalWaitTime = totalWaitTime
-				logRateLimitToProgress(config.ProjectDir, config.SessionID,
+				logRateLimitToProgress(config.ProjectDir, storageID,
 					fmt.Sprintf("Rate limit exceeded max-wait of %v (total waited: %v)", config.MaxWait, totalWaitTime))
 				break
 			}
 
 			// Log waiting status
-			logRateLimitToProgress(config.ProjectDir, config.SessionID,
+			logRateLimitToProgress(config.ProjectDir, storageID,
 				fmt.Sprintf("Rate limited, waiting %v before retry (attempt %d)", waitTime, rateLimitRetries+1))
 
 			fmt.Printf("⏳ Rate limited. Waiting %v before retry...\n", waitTime)
@@ -291,7 +323,7 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 			result.TimedOut = true
 			result.TimeoutMessage = fmt.Sprintf("Iteration %d timed out after %v", iteration, config.Timeout)
 			// Log timeout to progress
-			logTimeoutToProgress(config.ProjectDir, config.SessionID, result.TimeoutMessage)
+			logTimeoutToProgress(config.ProjectDir, storageID, result.TimeoutMessage)
 			break
 		}
 
@@ -301,7 +333,7 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 		// Check for completion signals (already parsed by Runner)
 		if runResult.Complete {
 			// VALIDATE: Check if progress was updated this iteration
-			progressAfter := getProgressLineCount(sessionStore, config.SessionID)
+			progressAfter := getProgressLineCount(sessionStore, storageID)
 			if progressAfter <= progressBefore {
 				fmt.Println()
 				fmt.Printf("⚠️  Agent signaled COMPLETE but did not update progress. Continuing iteration...\n")
@@ -325,7 +357,7 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 
 		if runResult.Continue {
 			// VALIDATE: Check if progress was updated this iteration
-			progressAfter := getProgressLineCount(sessionStore, config.SessionID)
+			progressAfter := getProgressLineCount(sessionStore, storageID)
 			if progressAfter <= progressBefore {
 				fmt.Println()
 				fmt.Printf("⚠️  Agent signaled CONTINUE but did not update progress. Continuing iteration...\n")
@@ -347,7 +379,7 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 
 		if runResult.Blocked {
 			// VALIDATE: Check if progress was updated this iteration
-			progressAfter := getProgressLineCount(sessionStore, config.SessionID)
+			progressAfter := getProgressLineCount(sessionStore, storageID)
 			if progressAfter <= progressBefore {
 				fmt.Println()
 				fmt.Printf("⚠️  Agent signaled BLOCKED but did not update progress. Continuing iteration...\n")
@@ -728,7 +760,9 @@ func runAgentRun(cmd *cobra.Command, args []string) error {
 		fmt.Println("Status: Max iterations reached")
 	}
 
-	outputPath := filepath.Join(projectDir, ".juggler", "sessions", sessionID, "last_output.txt")
+	// Map "all" meta-session to "_all" for output path
+	outputStorageID := sessionStorageID(sessionID)
+	outputPath := filepath.Join(projectDir, ".juggler", "sessions", outputStorageID, "last_output.txt")
 	fmt.Printf("\nOutput saved to: %s\n", outputPath)
 
 	return nil
@@ -768,12 +802,18 @@ func generateAgentPrompt(projectDir, sessionID string, debug bool, ballID string
 	}
 
 	// Filter by session tag
-	balls := make([]*session.Ball, 0)
-	for _, ball := range allBalls {
-		for _, tag := range ball.Tags {
-			if tag == sessionID {
-				balls = append(balls, ball)
-				break
+	// "all" is a special meta-session that means "all balls in repo" (no session filtering)
+	var balls []*session.Ball
+	if sessionID == "all" {
+		balls = allBalls
+	} else {
+		balls = make([]*session.Ball, 0)
+		for _, ball := range allBalls {
+			for _, tag := range ball.Tags {
+				if tag == sessionID {
+					balls = append(balls, ball)
+					break
+				}
 			}
 		}
 	}
@@ -806,6 +846,7 @@ func generateAgentPrompt(projectDir, sessionID string, debug bool, ballID string
 
 // checkBallsTerminal returns counts of balls in terminal states (complete or blocked) and total balls for session
 // If ballID is specified, only counts that specific ball
+// "all" is a special meta-session that includes all balls in the repo without filtering by tag
 func checkBallsTerminal(projectDir, sessionID, ballID string) (terminal, complete, blocked, total int) {
 	// Load config
 	config, err := LoadConfigForCommand()
@@ -831,23 +872,35 @@ func checkBallsTerminal(projectDir, sessionID, ballID string) (terminal, complet
 		return 0, 0, 0, 0
 	}
 
-	// Count balls with session tag
+	// "all" is a meta-session that means "all balls in repo"
+	isAllSession := sessionID == "all"
+
+	// Count balls with session tag (or all balls if using "all" meta-session)
 	for _, ball := range allBalls {
-		for _, tag := range ball.Tags {
-			if tag == sessionID {
-				// If filtering by specific ball, skip others
-				if ballID != "" && ball.ID != ballID && ball.ShortID() != ballID {
+		var matchesSession bool
+		if isAllSession {
+			matchesSession = true // Include all balls
+		} else {
+			for _, tag := range ball.Tags {
+				if tag == sessionID {
+					matchesSession = true
 					break
 				}
-				total++
-				if ball.State == session.StateComplete {
-					complete++
-					terminal++
-				} else if ball.State == session.StateBlocked {
-					blocked++
-					terminal++
-				}
-				break
+			}
+		}
+
+		if matchesSession {
+			// If filtering by specific ball, skip others
+			if ballID != "" && ball.ID != ballID && ball.ShortID() != ballID {
+				continue
+			}
+			total++
+			if ball.State == session.StateComplete {
+				complete++
+				terminal++
+			} else if ball.State == session.StateBlocked {
+				blocked++
+				terminal++
 			}
 		}
 	}

@@ -29,10 +29,20 @@ type SessionLock struct {
 
 // AcquireSessionLock attempts to acquire an exclusive lock on the session.
 // Returns a SessionLock on success, or an error if the session is already locked.
+// Special case: "_all" is a virtual session for the "all" meta-session and skips
+// session verification (used by "juggle agent run all").
 func (s *SessionStore) AcquireSessionLock(sessionID string) (*SessionLock, error) {
-	// Verify session exists
-	if _, err := s.LoadSession(sessionID); err != nil {
-		return nil, err
+	// Verify session exists (skip for "_all" virtual session)
+	if sessionID != "_all" {
+		if _, err := s.LoadSession(sessionID); err != nil {
+			return nil, err
+		}
+	} else {
+		// For "_all", ensure the directory exists
+		sessionDir := s.sessionPath(sessionID)
+		if err := os.MkdirAll(sessionDir, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create _all session directory: %w", err)
+		}
 	}
 
 	lockPath := filepath.Join(s.sessionPath(sessionID), lockFile)
