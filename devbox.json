@@ -12,7 +12,10 @@
       "build": [
         "go build -o juggle ./cmd/juggle"
       ],
-      "test": [
+      "test-quiet": [
+        "./scripts/test-quiet.sh"
+      ],
+      "test-verbose": [
         "go test -v ./internal/integration_test/..."
       ],
       "test-all": [
