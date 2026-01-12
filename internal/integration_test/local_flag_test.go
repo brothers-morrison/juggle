@@ -267,4 +267,100 @@ func TestLocalFlag(t *testing.T) {
 			t.Errorf("Expected current directory %s, got %s", noJugglerDir, projects[0])
 		}
 	})
+
+	t.Run("FindBallByID_LocalOnly", func(t *testing.T) {
+		// Reset global opts
+		cli.GlobalOpts.AllProjects = false
+		cli.GlobalOpts.LocalOnly = false
+		cli.GlobalOpts.ProjectDir = project1
+
+		// When searching for a ball from project2 while in project1 (local only mode),
+		// the ball should not be found and should suggest using --all
+		config, err := cli.LoadConfigForCommand()
+		if err != nil {
+			t.Fatalf("Failed to load config: %v", err)
+		}
+
+		cwd, _ := cli.GetWorkingDir()
+		store, _ := cli.NewStoreForCommand(cwd)
+
+		projects, err := cli.DiscoverProjectsForCommand(config, store)
+		if err != nil {
+			t.Fatalf("Failed to discover projects: %v", err)
+		}
+
+		// Load balls from discovered projects (local only)
+		allBalls, err := session.LoadAllBalls(projects)
+		if err != nil {
+			t.Fatalf("Failed to load balls: %v", err)
+		}
+
+		// Should only have ball1 from project1
+		if len(allBalls) != 1 {
+			t.Errorf("Expected 1 ball in local mode, got %d", len(allBalls))
+		}
+
+		// ball2 (test2-1) should not be found
+		found := false
+		for _, ball := range allBalls {
+			if ball.ID == "test2-1" {
+				found = true
+				break
+			}
+		}
+		if found {
+			t.Error("Ball from project2 should not be found in local mode")
+		}
+
+		// ball1 (test1-1) should be found
+		found = false
+		for _, ball := range allBalls {
+			if ball.ID == "test1-1" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Error("Ball from project1 should be found in local mode")
+		}
+	})
+
+	t.Run("FindBallByID_WithAll", func(t *testing.T) {
+		// With --all flag, balls from both projects should be discoverable
+		cli.GlobalOpts.AllProjects = true
+		cli.GlobalOpts.LocalOnly = false
+		cli.GlobalOpts.ProjectDir = project1
+
+		projects, err := cli.DiscoverProjectsForCommand(config, store1)
+		if err != nil {
+			t.Fatalf("Failed to discover projects: %v", err)
+		}
+
+		allBalls, err := session.LoadAllBalls(projects)
+		if err != nil {
+			t.Fatalf("Failed to load balls: %v", err)
+		}
+
+		// Should have both balls
+		if len(allBalls) != 2 {
+			t.Errorf("Expected 2 balls with --all, got %d", len(allBalls))
+		}
+
+		// Both balls should be found
+		foundBall1, foundBall2 := false, false
+		for _, ball := range allBalls {
+			if ball.ID == "test1-1" {
+				foundBall1 = true
+			}
+			if ball.ID == "test2-1" {
+				foundBall2 = true
+			}
+		}
+		if !foundBall1 || !foundBall2 {
+			t.Error("Both balls should be found with --all flag")
+		}
+
+		// Reset
+		cli.GlobalOpts.AllProjects = false
+	})
 }

@@ -965,3 +965,175 @@ func writeBallForRalphTest(buf *strings.Builder, ball *session.Ball) {
 		buf.WriteString("Tags: " + strings.Join(ball.Tags, ", ") + "\n")
 	}
 }
+
+// TestExportSessionWithAllFlag verifies session-filtered export across projects
+func TestExportSessionWithAllFlag(t *testing.T) {
+	// Create two test projects
+	project1 := t.TempDir()
+	project2 := t.TempDir()
+
+	// Setup project 1 with a ball tagged with a session
+	store1, err := session.NewStoreWithConfig(project1, session.StoreConfig{JugglerDirName: ".juggler"})
+	if err != nil {
+		t.Fatalf("Failed to create store1: %v", err)
+	}
+
+	ball1 := &session.Ball{
+		ID:           "project1-1",
+		WorkingDir:   project1,
+		Intent:       "Feature A in project 1",
+		Priority:     session.PriorityMedium,
+		State:        session.StateInProgress,
+		Tags:         []string{"shared-session"},
+		StartedAt:    time.Now(),
+		LastActivity: time.Now(),
+	}
+	if err := store1.Save(ball1); err != nil {
+		t.Fatalf("Failed to save ball1: %v", err)
+	}
+
+	// Add a ball without the session tag
+	ball1NoSession := &session.Ball{
+		ID:           "project1-2",
+		WorkingDir:   project1,
+		Intent:       "Unrelated feature in project 1",
+		Priority:     session.PriorityLow,
+		State:        session.StatePending,
+		Tags:         []string{"other-tag"},
+		StartedAt:    time.Now(),
+		LastActivity: time.Now(),
+	}
+	if err := store1.Save(ball1NoSession); err != nil {
+		t.Fatalf("Failed to save ball1NoSession: %v", err)
+	}
+
+	// Setup project 2 with a ball also tagged with the same session
+	store2, err := session.NewStoreWithConfig(project2, session.StoreConfig{JugglerDirName: ".juggler"})
+	if err != nil {
+		t.Fatalf("Failed to create store2: %v", err)
+	}
+
+	ball2 := &session.Ball{
+		ID:           "project2-1",
+		WorkingDir:   project2,
+		Intent:       "Feature B in project 2",
+		Priority:     session.PriorityHigh,
+		State:        session.StateInProgress,
+		Tags:         []string{"shared-session"},
+		StartedAt:    time.Now(),
+		LastActivity: time.Now(),
+	}
+	if err := store2.Save(ball2); err != nil {
+		t.Fatalf("Failed to save ball2: %v", err)
+	}
+
+	// Create a config with both projects in search paths
+	config := &session.Config{
+		SearchPaths: []string{project1, project2},
+	}
+
+	t.Run("SessionFilterWithAll_FindsBallsFromBothProjects", func(t *testing.T) {
+		// With --all flag, should find balls from both projects with the session tag
+		cli.GlobalOpts.AllProjects = true
+		cli.GlobalOpts.LocalOnly = false
+		cli.GlobalOpts.ProjectDir = project1
+		defer func() { cli.GlobalOpts.AllProjects = false }()
+
+		projects, err := cli.DiscoverProjectsForCommand(config, store1)
+		if err != nil {
+			t.Fatalf("Failed to discover projects: %v", err)
+		}
+
+		if len(projects) != 2 {
+			t.Errorf("Expected 2 projects with --all, got %d", len(projects))
+		}
+
+		allBalls, err := session.LoadAllBalls(projects)
+		if err != nil {
+			t.Fatalf("Failed to load balls: %v", err)
+		}
+
+		// Should have 3 balls total (2 from project1, 1 from project2)
+		if len(allBalls) != 3 {
+			t.Errorf("Expected 3 total balls with --all, got %d", len(allBalls))
+		}
+
+		// Filter by session tag (like export --session does)
+		filteredBalls := make([]*session.Ball, 0)
+		for _, ball := range allBalls {
+			for _, tag := range ball.Tags {
+				if tag == "shared-session" {
+					filteredBalls = append(filteredBalls, ball)
+					break
+				}
+			}
+		}
+
+		// Should have 2 balls with the session tag from both projects
+		if len(filteredBalls) != 2 {
+			t.Errorf("Expected 2 balls with session tag from both projects, got %d", len(filteredBalls))
+		}
+
+		// Verify we got balls from both projects
+		foundProject1, foundProject2 := false, false
+		for _, ball := range filteredBalls {
+			if ball.WorkingDir == project1 {
+				foundProject1 = true
+			}
+			if ball.WorkingDir == project2 {
+				foundProject2 = true
+			}
+		}
+		if !foundProject1 || !foundProject2 {
+			t.Errorf("Expected balls from both projects, got: project1=%v, project2=%v", foundProject1, foundProject2)
+		}
+	})
+
+	t.Run("SessionFilterWithoutAll_OnlyLocalBalls", func(t *testing.T) {
+		// Without --all, should only find balls from current project
+		cli.GlobalOpts.AllProjects = false
+		cli.GlobalOpts.LocalOnly = false
+		cli.GlobalOpts.ProjectDir = project1
+
+		projects, err := cli.DiscoverProjectsForCommand(config, store1)
+		if err != nil {
+			t.Fatalf("Failed to discover projects: %v", err)
+		}
+
+		// Should only return current project
+		if len(projects) != 1 {
+			t.Errorf("Expected 1 project (local), got %d", len(projects))
+		}
+
+		allBalls, err := session.LoadAllBalls(projects)
+		if err != nil {
+			t.Fatalf("Failed to load balls: %v", err)
+		}
+
+		// Should have 2 balls from project1 only
+		if len(allBalls) != 2 {
+			t.Errorf("Expected 2 balls from local project, got %d", len(allBalls))
+		}
+
+		// Filter by session tag
+		filteredBalls := make([]*session.Ball, 0)
+		for _, ball := range allBalls {
+			for _, tag := range ball.Tags {
+				if tag == "shared-session" {
+					filteredBalls = append(filteredBalls, ball)
+					break
+				}
+			}
+		}
+
+		// Should only have 1 ball with the session tag (from local project only)
+		if len(filteredBalls) != 1 {
+			t.Errorf("Expected 1 ball with session tag from local project, got %d", len(filteredBalls))
+		}
+
+		// Verify it's from project1
+		if len(filteredBalls) > 0 && filteredBalls[0].WorkingDir != project1 {
+			t.Errorf("Expected ball from project1, got ball from %s", filteredBalls[0].WorkingDir)
+		}
+	})
+}

@@ -26,8 +26,8 @@ var exportCmd = &cobra.Command{
 	Short: "Export balls to JSON, CSV, Ralph, or agent format",
 	Long: `Export session data to JSON, CSV, Ralph, or agent format for analysis or agent use.
 
-By default exports all active balls (excluding done) across all discovered projects.
-Use --local to restrict to current project only.
+By default exports active balls (excluding done) from the current project only.
+Use --all to export from all discovered projects.
 
 Filters are applied in order:
 1. --session (if specified, exports only balls with matching session tag)
@@ -48,11 +48,11 @@ The Agent format (--format agent) is a self-contained prompt for AI agents:
 Can be piped directly to 'claude -p'.
 
 Examples:
-  # Export all active balls across all projects
+  # Export current project balls
   juggler export --format json --output balls.json
 
-  # Export only current project balls
-  juggler export --local --format csv
+  # Export all discovered project balls
+  juggler export --all --format csv
 
   # Export session in Ralph format for agent use
   juggler export --session my-feature --format ralph
@@ -66,8 +66,8 @@ Examples:
   # Export only in_progress balls
   juggler export --filter-state in_progress --format json
 
-  # Combine filters: export local pending and in_progress balls
-  juggler export --local --filter-state "pending,in_progress" --format csv`,
+  # Combine filters: export pending and in_progress balls from all projects
+  juggler export --all --filter-state "pending,in_progress" --format csv`,
 	RunE: runExport,
 }
 

@@ -23,11 +23,11 @@ var statusCmd = &cobra.Command{
 	Short: "Show all active sessions",
 	Long: `Display a table of all active sessions with their current status.
 
-By default, shows balls from all discovered projects. Use --local to restrict to current project only.
+By default, shows balls from the current project only. Use --all to show balls from all discovered projects.
 
 Examples:
-  juggle status                    # Show all projects
-  juggle status --local            # Show only current project
+  juggle status                    # Show current project only
+  juggle status --all              # Show all discovered projects
   juggle status --tags feature     # Filter by tags
   juggle status --priority high    # Filter by priority`,
 	RunE:  runStatus,
