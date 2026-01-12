@@ -4742,3 +4742,194 @@ func TestTUILocalScopeDefault(t *testing.T) {
 		}
 	})
 }
+
+// TestBuildBallsStats verifies stats are calculated correctly
+func TestBuildBallsStats(t *testing.T) {
+	tests := []struct {
+		name     string
+		balls    []*session.Ball
+		expected string
+	}{
+		{
+			name:     "Empty balls list",
+			balls:    []*session.Ball{},
+			expected: "P:0 I:0 B:0 C:0",
+		},
+		{
+			name: "All pending",
+			balls: []*session.Ball{
+				{State: session.StatePending},
+				{State: session.StatePending},
+			},
+			expected: "P:2 I:0 B:0 C:0",
+		},
+		{
+			name: "All in progress",
+			balls: []*session.Ball{
+				{State: session.StateInProgress},
+			},
+			expected: "P:0 I:1 B:0 C:0",
+		},
+		{
+			name: "All blocked",
+			balls: []*session.Ball{
+				{State: session.StateBlocked},
+				{State: session.StateBlocked},
+				{State: session.StateBlocked},
+			},
+			expected: "P:0 I:0 B:3 C:0",
+		},
+		{
+			name: "All complete",
+			balls: []*session.Ball{
+				{State: session.StateComplete},
+			},
+			expected: "P:0 I:0 B:0 C:1",
+		},
+		{
+			name: "Mixed states",
+			balls: []*session.Ball{
+				{State: session.StatePending},
+				{State: session.StatePending},
+				{State: session.StateInProgress},
+				{State: session.StateBlocked},
+				{State: session.StateComplete},
+				{State: session.StateComplete},
+			},
+			expected: "P:2 I:1 B:1 C:2",
+		},
+		{
+			name: "Researched counts as complete",
+			balls: []*session.Ball{
+				{State: session.StateResearched},
+				{State: session.StateComplete},
+			},
+			expected: "P:0 I:0 B:0 C:2",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			model := Model{}
+			result := model.buildBallsStats(tt.balls)
+			if result != tt.expected {
+				t.Errorf("buildBallsStats() = %q, want %q", result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestBallsPanelDisplaysStats verifies stats appear in the balls panel
+func TestBallsPanelDisplaysStats(t *testing.T) {
+	balls := []*session.Ball{
+		{ID: "test-1", Intent: "First ball", State: session.StatePending, Tags: []string{"test-session"}},
+		{ID: "test-2", Intent: "Second ball", State: session.StateInProgress, Tags: []string{"test-session"}},
+		{ID: "test-3", Intent: "Third ball", State: session.StateBlocked, Tags: []string{"test-session"}},
+	}
+
+	model := Model{
+		mode:        splitView,
+		activePanel: BallsPanel,
+		cursor:      0,
+		balls:       balls,
+		filteredBalls: balls,
+		selectedSession: &session.JuggleSession{ID: "test-session"},
+		width:       120,
+		height:      40,
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+	}
+
+	// Render the balls panel
+	content := model.renderBallsPanel(80, 20)
+
+	// Verify stats string is present
+	if !strings.Contains(content, "P:1") {
+		t.Error("Expected balls panel to show pending count P:1")
+	}
+	if !strings.Contains(content, "I:1") {
+		t.Error("Expected balls panel to show in-progress count I:1")
+	}
+	if !strings.Contains(content, "B:1") {
+		t.Error("Expected balls panel to show blocked count B:1")
+	}
+	if !strings.Contains(content, "C:0") {
+		t.Error("Expected balls panel to show complete count C:0")
+	}
+}
+
+// TestStatsUpdateOnStateChange verifies stats reflect current ball states
+func TestStatsUpdateOnStateChange(t *testing.T) {
+	balls := []*session.Ball{
+		{ID: "test-1", Intent: "Ball 1", State: session.StatePending},
+		{ID: "test-2", Intent: "Ball 2", State: session.StatePending},
+	}
+
+	model := Model{}
+
+	// Initial state: 2 pending
+	stats := model.buildBallsStats(balls)
+	if stats != "P:2 I:0 B:0 C:0" {
+		t.Errorf("Initial stats should be P:2 I:0 B:0 C:0, got %s", stats)
+	}
+
+	// Change one ball to in_progress
+	balls[0].State = session.StateInProgress
+	stats = model.buildBallsStats(balls)
+	if stats != "P:1 I:1 B:0 C:0" {
+		t.Errorf("After state change stats should be P:1 I:1 B:0 C:0, got %s", stats)
+	}
+
+	// Change one ball to complete
+	balls[1].State = session.StateComplete
+	stats = model.buildBallsStats(balls)
+	if stats != "P:0 I:1 B:0 C:1" {
+		t.Errorf("After second state change stats should be P:0 I:1 B:0 C:1, got %s", stats)
+	}
+}
+
+// TestStatsPanelPosition verifies stats appear at the right position
+func TestStatsPanelPosition(t *testing.T) {
+	balls := []*session.Ball{
+		{ID: "test-1", Intent: "Ball 1", State: session.StatePending, Tags: []string{"test-session"}},
+	}
+
+	model := Model{
+		mode:        splitView,
+		activePanel: BallsPanel,
+		cursor:      0,
+		balls:       balls,
+		filteredBalls: balls,
+		selectedSession: &session.JuggleSession{ID: "test-session"},
+		width:       120,
+		height:      40,
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+	}
+
+	content := model.renderBallsPanel(80, 20)
+	lines := strings.Split(content, "\n")
+
+	// First line should contain both the title and stats
+	if len(lines) == 0 {
+		t.Fatal("Expected at least one line in balls panel")
+	}
+
+	firstLine := lines[0]
+	// Should have title on the left
+	if !strings.Contains(firstLine, "Balls:") {
+		t.Error("Expected first line to contain 'Balls:'")
+	}
+	// Should have stats on the line
+	if !strings.Contains(firstLine, "P:1") {
+		t.Error("Expected first line to contain stats 'P:1'")
+	}
+}

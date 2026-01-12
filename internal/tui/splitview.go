@@ -234,10 +234,31 @@ func (m Model) renderBallsPanel(width, height int) string {
 		title = fmt.Sprintf("%s [%s]", title, m.panelSearchQuery)
 	}
 
+	// Build stats string for the balls in the current view
+	statsStr := m.buildBallsStats(balls)
+
+	// Render title row with stats on the right
 	if m.activePanel == BallsPanel {
-		b.WriteString(activePanelTitleStyle.Render(truncate(title, width-2)) + "\n")
+		titleRendered := activePanelTitleStyle.Render(truncate(title, width-len(statsStr)-4))
+		statsRendered := lipgloss.NewStyle().Faint(true).Render(statsStr)
+		// Calculate padding to right-align stats
+		titleLen := lipgloss.Width(titleRendered)
+		statsLen := lipgloss.Width(statsRendered)
+		padding := width - titleLen - statsLen - 1
+		if padding < 1 {
+			padding = 1
+		}
+		b.WriteString(titleRendered + strings.Repeat(" ", padding) + statsRendered + "\n")
 	} else {
-		b.WriteString(panelTitleStyle.Render(truncate(title, width-2)) + "\n")
+		titleRendered := panelTitleStyle.Render(truncate(title, width-len(statsStr)-4))
+		statsRendered := lipgloss.NewStyle().Faint(true).Render(statsStr)
+		titleLen := lipgloss.Width(titleRendered)
+		statsLen := lipgloss.Width(statsRendered)
+		padding := width - titleLen - statsLen - 1
+		if padding < 1 {
+			padding = 1
+		}
+		b.WriteString(titleRendered + strings.Repeat(" ", padding) + statsRendered + "\n")
 	}
 	b.WriteString(strings.Repeat("─", width) + "\n")
 
@@ -835,4 +856,30 @@ func getStateIcon(state session.BallState) string {
 	default:
 		return "?"
 	}
+}
+
+// buildBallsStats builds a compact stats string showing ball counts by state
+func (m Model) buildBallsStats(balls []*session.Ball) string {
+	pending := 0
+	inProgress := 0
+	blocked := 0
+	complete := 0
+
+	for _, ball := range balls {
+		switch ball.State {
+		case session.StatePending:
+			pending++
+		case session.StateInProgress:
+			inProgress++
+		case session.StateBlocked:
+			blocked++
+		case session.StateComplete:
+			complete++
+		case session.StateResearched:
+			complete++ // Count researched as complete for stats purposes
+		}
+	}
+
+	// Build compact stats: P:2 I:1 B:0 C:3
+	return fmt.Sprintf("P:%d I:%d B:%d C:%d", pending, inProgress, blocked, complete)
 }
