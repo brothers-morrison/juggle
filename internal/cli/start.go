@@ -229,7 +229,7 @@ func showSessionSelector(store *session.Store, sessionStore *session.SessionStor
 	}
 
 	// Initialize the TUI in split view mode
-	model := tui.InitialSplitModelWithWatcher(store, sessionStore, config, GlobalOpts.LocalOnly, w, "")
+	model := tui.InitialSplitModelWithWatcher(store, sessionStore, config, !GlobalOpts.AllProjects, w, "")
 
 	// Run the TUI
 	p := tea.NewProgram(model, tea.WithAltScreen())

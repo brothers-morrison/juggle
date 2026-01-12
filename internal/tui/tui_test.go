@@ -4642,3 +4642,103 @@ func TestActivityLogScrollingInActivityMode(t *testing.T) {
 		t.Errorf("Expected detailScrollOffset to remain 0 in activity mode, got %d", m.detailScrollOffset)
 	}
 }
+
+// TestTUILocalScopeDefault verifies that TUI defaults to local scope (juggler-102)
+func TestTUILocalScopeDefault(t *testing.T) {
+	t.Run("InitialModel defaults to local when passed true", func(t *testing.T) {
+		var store *session.Store
+		var config *session.Config
+
+		model := InitialModel(store, config, true)
+		if !model.localOnly {
+			t.Error("Expected InitialModel with localOnly=true to have localOnly=true")
+		}
+	})
+
+	t.Run("InitialModel shows all when passed false", func(t *testing.T) {
+		var store *session.Store
+		var config *session.Config
+
+		model := InitialModel(store, config, false)
+		if model.localOnly {
+			t.Error("Expected InitialModel with localOnly=false to have localOnly=false")
+		}
+	})
+
+	t.Run("InitialSplitModel defaults to local when passed true", func(t *testing.T) {
+		var store *session.Store
+		var sessionStore *session.SessionStore
+		var config *session.Config
+
+		model := InitialSplitModel(store, sessionStore, config, true)
+		if !model.localOnly {
+			t.Error("Expected InitialSplitModel with localOnly=true to have localOnly=true")
+		}
+	})
+
+	t.Run("InitialSplitModel shows all when passed false", func(t *testing.T) {
+		var store *session.Store
+		var sessionStore *session.SessionStore
+		var config *session.Config
+
+		model := InitialSplitModel(store, sessionStore, config, false)
+		if model.localOnly {
+			t.Error("Expected InitialSplitModel with localOnly=false to have localOnly=false")
+		}
+	})
+
+	t.Run("P key toggles localOnly in split view", func(t *testing.T) {
+		var store *session.Store
+		var sessionStore *session.SessionStore
+		var config *session.Config
+
+		model := InitialSplitModel(store, sessionStore, config, true)
+		if !model.localOnly {
+			t.Error("Expected initial localOnly to be true")
+		}
+
+		// Press P to toggle
+		newModel, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'P'}})
+		m := newModel.(Model)
+		if m.localOnly {
+			t.Error("Expected localOnly to be false after pressing P")
+		}
+
+		// Press P again to toggle back
+		newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'P'}})
+		m = newModel.(Model)
+		if !m.localOnly {
+			t.Error("Expected localOnly to be true after pressing P again")
+		}
+	})
+
+	t.Run("Status bar shows Local indicator when localOnly is true", func(t *testing.T) {
+		model := Model{
+			mode:        splitView,
+			activePanel: BallsPanel,
+			localOnly:   true,
+			width:       80,
+			height:      24,
+		}
+
+		view := model.View()
+		if !strings.Contains(view, "[Local]") {
+			t.Error("Expected status bar to show [Local] indicator when localOnly is true")
+		}
+	})
+
+	t.Run("Status bar shows All indicator when localOnly is false", func(t *testing.T) {
+		model := Model{
+			mode:        splitView,
+			activePanel: BallsPanel,
+			localOnly:   false,
+			width:       80,
+			height:      24,
+		}
+
+		view := model.View()
+		if !strings.Contains(view, "[All]") {
+			t.Error("Expected status bar to show [All] indicator when localOnly is false")
+		}
+	})
+}

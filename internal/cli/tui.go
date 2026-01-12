@@ -24,8 +24,8 @@ sessions, balls, and todos. Use keyboard navigation for quick actions.
 Use --legacy flag to launch the old single-panel list view:
   juggle tui --legacy
 
-Use --local flag to restrict view to current project only:
-  juggle --local tui
+Use --all flag to show balls from all discovered projects:
+  juggle --all tui
 
 Use --session to start with a session pre-selected:
   juggle tui --session my-feature
@@ -91,7 +91,7 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	// Default is split view, use --legacy for old list view
 	if tuiLegacy {
 		// Initialize legacy TUI model (old list view)
-		model = tui.InitialModel(store, config, GlobalOpts.LocalOnly)
+		model = tui.InitialModel(store, config, !GlobalOpts.AllProjects)
 	} else {
 		// Initialize split view with file watcher (default)
 		sessionStore, err := session.NewSessionStore(workingDir)
@@ -115,7 +115,7 @@ func runTUI(cmd *cobra.Command, args []string) error {
 			w.Start()
 		}
 
-		model = tui.InitialSplitModelWithWatcher(store, sessionStore, config, GlobalOpts.LocalOnly, w, tuiSessionFilter)
+		model = tui.InitialSplitModelWithWatcher(store, sessionStore, config, !GlobalOpts.AllProjects, w, tuiSessionFilter)
 	}
 
 	// Create program with alternate screen
