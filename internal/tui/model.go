@@ -134,6 +134,11 @@ type Model struct {
 	// Sort order for balls
 	sortOrder SortOrder
 
+	// Column visibility for balls panel
+	showPriorityColumn bool // Show priority column in balls list
+	showTagsColumn     bool // Show tags column in balls list
+	showTestsColumn    bool // Show tests state column in balls list
+
 	// Filter state
 	filterStates      map[string]bool // State visibility toggles
 	filterPriority    string
@@ -237,11 +242,15 @@ func InitialSplitModelWithWatcher(store *session.Store, sessionStore *session.Se
 			"blocked":     true,
 			"complete":    false, // Hidden by default
 		},
-		cursor:        0,
-		sessionCursor: 0,
-		activityLog:   make([]ActivityEntry, 0),
-		textInput:     ti,
-		fileWatcher:   w,
+		// Column visibility defaults (all hidden by default for compact view)
+		showPriorityColumn: false,
+		showTagsColumn:     false,
+		showTestsColumn:    false,
+		cursor:             0,
+		sessionCursor:      0,
+		activityLog:        make([]ActivityEntry, 0),
+		textInput:          ti,
+		fileWatcher:        w,
 	}
 }
 

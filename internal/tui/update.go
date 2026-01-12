@@ -467,6 +467,12 @@ func (m Model) handleSplitViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleToggleKeySequence(key)
 	}
 
+	// Handle two-key sequences for view columns (vc, vp, vt, va)
+	if m.pendingKeySequence == "v" {
+		m.pendingKeySequence = ""
+		return m.handleViewColumnKeySequence(key)
+	}
+
 	switch key {
 	case "ctrl+c", "q":
 		return m, tea.Quit
@@ -677,6 +683,15 @@ func (m Model) handleSplitViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Toggle sort order for balls
 		return m.handleToggleSortOrder()
 
+	case "v":
+		// Start two-key sequence for view column toggles (vp=priority, vt=tags, vs=tests, va=all)
+		if m.activePanel == BallsPanel {
+			m.pendingKeySequence = "v"
+			m.message = "v: View columns... (p=priority, t=tags, s=tests, a=all)"
+			return m, nil
+		}
+		return m, nil
+
 	case "O":
 		// Toggle agent output panel visibility
 		return m.handleToggleAgentOutput()
@@ -791,6 +806,73 @@ func (m Model) handleToggleKeySequence(key string) (tea.Model, tea.Cmd) {
 		return m, nil
 	default:
 		m.message = "Unknown toggle: " + key + " (use c/b/i/p/a)"
+		return m, nil
+	}
+}
+
+// handleViewColumnKeySequence handles the second key in a view column sequence (v+key)
+func (m Model) handleViewColumnKeySequence(key string) (tea.Model, tea.Cmd) {
+	m.message = ""
+
+	switch key {
+	case "p":
+		// vp = Toggle priority column visibility
+		m.showPriorityColumn = !m.showPriorityColumn
+		if m.showPriorityColumn {
+			m.addActivity("Showing priority column")
+			m.message = "Priority column: visible"
+		} else {
+			m.addActivity("Hiding priority column")
+			m.message = "Priority column: hidden"
+		}
+		return m, nil
+	case "t":
+		// vt = Toggle tags column visibility
+		m.showTagsColumn = !m.showTagsColumn
+		if m.showTagsColumn {
+			m.addActivity("Showing tags column")
+			m.message = "Tags column: visible"
+		} else {
+			m.addActivity("Hiding tags column")
+			m.message = "Tags column: hidden"
+		}
+		return m, nil
+	case "s":
+		// vs = Toggle tests state column visibility
+		m.showTestsColumn = !m.showTestsColumn
+		if m.showTestsColumn {
+			m.addActivity("Showing tests column")
+			m.message = "Tests column: visible"
+		} else {
+			m.addActivity("Hiding tests column")
+			m.message = "Tests column: hidden"
+		}
+		return m, nil
+	case "a":
+		// va = Toggle all columns visibility
+		allVisible := m.showPriorityColumn && m.showTagsColumn && m.showTestsColumn
+		if allVisible {
+			// Hide all
+			m.showPriorityColumn = false
+			m.showTagsColumn = false
+			m.showTestsColumn = false
+			m.addActivity("Hiding all optional columns")
+			m.message = "All columns: hidden"
+		} else {
+			// Show all
+			m.showPriorityColumn = true
+			m.showTagsColumn = true
+			m.showTestsColumn = true
+			m.addActivity("Showing all optional columns")
+			m.message = "All columns: visible"
+		}
+		return m, nil
+	case "esc":
+		// Cancel sequence
+		m.message = ""
+		return m, nil
+	default:
+		m.message = "Unknown view column: " + key + " (use p/t/s/a)"
 		return m, nil
 	}
 }

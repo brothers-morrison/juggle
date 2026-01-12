@@ -3770,8 +3770,8 @@ func TestStatusBarBallsPanel(t *testing.T) {
 
 	statusBar := model.renderStatusBar()
 
-	// Should contain ball-specific keybinds including state change keys
-	expectedKeys := []string{"j/k:nav", "s:start", "c:done", "b:block", "a:add", "e:edit", "t:tag", "d:del", "[/]:session", "o:sort", "?:help"}
+	// Should contain ball-specific keybinds including state change and view column keys
+	expectedKeys := []string{"j/k:nav", "s:state", "t:filter", "a:add", "e:edit", "d:del", "v:view", "[/]:session", "o:sort", "?:help"}
 	for _, key := range expectedKeys {
 		if !strings.Contains(statusBar, key) {
 			t.Errorf("Expected status bar to contain '%s', got: %s", key, statusBar)
@@ -7407,6 +7407,258 @@ func TestHelpViewContainsTwoKeyBindings(t *testing.T) {
 
 	// Check for specific bindings
 	bindings := []string{"sc", "ss", "sb", "sp", "sa", "tc", "tb", "ti", "tp", "ta"}
+	for _, binding := range bindings {
+		if !strings.Contains(helpContent, binding) {
+			t.Errorf("Help should contain '%s' keybinding", binding)
+		}
+	}
+}
+
+// Test view column toggle - vp toggles priority column
+func TestViewColumnToggle_Priority(t *testing.T) {
+	model := Model{
+		mode:               splitView,
+		activePanel:        BallsPanel,
+		showPriorityColumn: false,
+		activityLog:        make([]ActivityEntry, 0),
+	}
+
+	// Press 'v' to start sequence
+	model.pendingKeySequence = "v"
+
+	// Press 'p' to toggle priority column
+	newModel, _ := model.handleViewColumnKeySequence("p")
+	m := newModel.(Model)
+
+	if !m.showPriorityColumn {
+		t.Error("Expected showPriorityColumn to be true after vp")
+	}
+
+	if m.message != "Priority column: visible" {
+		t.Errorf("Expected message 'Priority column: visible', got '%s'", m.message)
+	}
+
+	// Toggle again to hide
+	newModel, _ = m.handleViewColumnKeySequence("p")
+	m = newModel.(Model)
+
+	if m.showPriorityColumn {
+		t.Error("Expected showPriorityColumn to be false after second vp")
+	}
+
+	if m.message != "Priority column: hidden" {
+		t.Errorf("Expected message 'Priority column: hidden', got '%s'", m.message)
+	}
+}
+
+// Test view column toggle - vt toggles tags column
+func TestViewColumnToggle_Tags(t *testing.T) {
+	model := Model{
+		mode:           splitView,
+		activePanel:    BallsPanel,
+		showTagsColumn: false,
+		activityLog:    make([]ActivityEntry, 0),
+	}
+
+	// Toggle tags column on
+	newModel, _ := model.handleViewColumnKeySequence("t")
+	m := newModel.(Model)
+
+	if !m.showTagsColumn {
+		t.Error("Expected showTagsColumn to be true after vt")
+	}
+
+	// Toggle off
+	newModel, _ = m.handleViewColumnKeySequence("t")
+	m = newModel.(Model)
+
+	if m.showTagsColumn {
+		t.Error("Expected showTagsColumn to be false after second vt")
+	}
+}
+
+// Test view column toggle - vs toggles tests column
+func TestViewColumnToggle_Tests(t *testing.T) {
+	model := Model{
+		mode:            splitView,
+		activePanel:     BallsPanel,
+		showTestsColumn: false,
+		activityLog:     make([]ActivityEntry, 0),
+	}
+
+	// Toggle tests column on
+	newModel, _ := model.handleViewColumnKeySequence("s")
+	m := newModel.(Model)
+
+	if !m.showTestsColumn {
+		t.Error("Expected showTestsColumn to be true after vs")
+	}
+
+	// Toggle off
+	newModel, _ = m.handleViewColumnKeySequence("s")
+	m = newModel.(Model)
+
+	if m.showTestsColumn {
+		t.Error("Expected showTestsColumn to be false after second vs")
+	}
+}
+
+// Test view column toggle - va toggles all columns
+func TestViewColumnToggle_All(t *testing.T) {
+	model := Model{
+		mode:               splitView,
+		activePanel:        BallsPanel,
+		showPriorityColumn: false,
+		showTagsColumn:     false,
+		showTestsColumn:    false,
+		activityLog:        make([]ActivityEntry, 0),
+	}
+
+	// Toggle all columns on
+	newModel, _ := model.handleViewColumnKeySequence("a")
+	m := newModel.(Model)
+
+	if !m.showPriorityColumn || !m.showTagsColumn || !m.showTestsColumn {
+		t.Error("Expected all columns to be visible after va")
+	}
+
+	if m.message != "All columns: visible" {
+		t.Errorf("Expected message 'All columns: visible', got '%s'", m.message)
+	}
+
+	// Toggle all columns off
+	newModel, _ = m.handleViewColumnKeySequence("a")
+	m = newModel.(Model)
+
+	if m.showPriorityColumn || m.showTagsColumn || m.showTestsColumn {
+		t.Error("Expected all columns to be hidden after second va")
+	}
+
+	if m.message != "All columns: hidden" {
+		t.Errorf("Expected message 'All columns: hidden', got '%s'", m.message)
+	}
+}
+
+// Test view column toggle - escape cancels sequence
+func TestViewColumnToggle_Escape(t *testing.T) {
+	model := Model{
+		mode:               splitView,
+		activePanel:        BallsPanel,
+		showPriorityColumn: false,
+		message:            "some message",
+		activityLog:        make([]ActivityEntry, 0),
+	}
+
+	// Press escape to cancel sequence
+	newModel, _ := model.handleViewColumnKeySequence("esc")
+	m := newModel.(Model)
+
+	// Columns should remain unchanged
+	if m.showPriorityColumn {
+		t.Error("Expected showPriorityColumn to remain false after escape")
+	}
+
+	// Message should be cleared
+	if m.message != "" {
+		t.Errorf("Expected message to be cleared, got '%s'", m.message)
+	}
+}
+
+// Test view column toggle - unknown key shows error
+func TestViewColumnToggle_UnknownKey(t *testing.T) {
+	model := Model{
+		mode:        splitView,
+		activePanel: BallsPanel,
+		activityLog: make([]ActivityEntry, 0),
+	}
+
+	// Press unknown key
+	newModel, _ := model.handleViewColumnKeySequence("x")
+	m := newModel.(Model)
+
+	if m.message != "Unknown view column: x (use p/t/s/a)" {
+		t.Errorf("Expected error message, got '%s'", m.message)
+	}
+}
+
+// Test v key starts view column sequence only in balls panel
+func TestViewColumnSequence_OnlyInBallsPanel(t *testing.T) {
+	// Test in balls panel - should start sequence
+	model := Model{
+		mode:        splitView,
+		activePanel: BallsPanel,
+		activityLog: make([]ActivityEntry, 0),
+	}
+
+	newModel, _ := model.handleSplitViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
+	m := newModel.(Model)
+
+	if m.pendingKeySequence != "v" {
+		t.Errorf("Expected pendingKeySequence 'v' in BallsPanel, got '%s'", m.pendingKeySequence)
+	}
+
+	// Test in sessions panel - should not start sequence
+	model = Model{
+		mode:        splitView,
+		activePanel: SessionsPanel,
+		activityLog: make([]ActivityEntry, 0),
+	}
+
+	newModel, _ = model.handleSplitViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
+	m = newModel.(Model)
+
+	if m.pendingKeySequence != "" {
+		t.Errorf("Expected empty pendingKeySequence in SessionsPanel, got '%s'", m.pendingKeySequence)
+	}
+
+	// Test in activity panel - should not start sequence
+	model = Model{
+		mode:        splitView,
+		activePanel: ActivityPanel,
+		activityLog: make([]ActivityEntry, 0),
+	}
+
+	newModel, _ = model.handleSplitViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
+	m = newModel.(Model)
+
+	if m.pendingKeySequence != "" {
+		t.Errorf("Expected empty pendingKeySequence in ActivityPanel, got '%s'", m.pendingKeySequence)
+	}
+}
+
+// Test column visibility defaults in model initialization
+func TestViewColumnDefaults(t *testing.T) {
+	model := InitialSplitModel(nil, nil, nil, true)
+
+	// All columns should be hidden by default
+	if model.showPriorityColumn {
+		t.Error("Expected showPriorityColumn to be false by default")
+	}
+	if model.showTagsColumn {
+		t.Error("Expected showTagsColumn to be false by default")
+	}
+	if model.showTestsColumn {
+		t.Error("Expected showTestsColumn to be false by default")
+	}
+}
+
+// Test help view contains view column keybinds
+func TestHelpViewContainsViewColumnKeybinds(t *testing.T) {
+	model := Model{
+		mode:   splitHelpView,
+		width:  100,
+		height: 200, // Large height to show all sections without scrolling
+	}
+
+	helpContent := model.renderSplitHelpView()
+
+	// Check for view columns section (title includes "Balls Panel - ")
+	if !strings.Contains(helpContent, "View Columns (v + key)") {
+		t.Error("Help should contain 'View Columns (v + key)' section")
+	}
+
+	// Check for specific bindings (rendered with leading spaces as keys)
+	bindings := []string{"vp", "vt", "vs", "va"}
 	for _, binding := range bindings {
 		if !strings.Contains(helpContent, binding) {
 			t.Errorf("Help should contain '%s' keybinding", binding)

@@ -671,6 +671,16 @@ func (m Model) renderSplitHelpView() string {
 			},
 		},
 		{
+			title: "Balls Panel - View Columns (v + key)",
+			items: []helpItem{
+				{"v", "Start two-key view columns sequence:"},
+				{"  vp", "  Toggle priority column visibility"},
+				{"  vt", "  Toggle tags column visibility"},
+				{"  vs", "  Toggle tests state column visibility"},
+				{"  va", "  Toggle all optional columns on/off"},
+			},
+		},
+		{
 			title: "View Options",
 			items: []helpItem{
 				{"i", "Cycle bottom pane (activity → detail → split → activity)"},

@@ -336,9 +336,25 @@ func (m Model) renderBallsPanel(width, height int) string {
 			}
 		}
 
-		// Build tests state suffix if set
+		// Build optional column suffixes based on visibility settings
+		prioritySuffix := ""
+		if m.showPriorityColumn {
+			prioritySuffix = fmt.Sprintf(" [%s]", string(ball.Priority)[0:1]) // First letter: l/m/h/u
+		}
+
+		tagsSuffix := ""
+		if m.showTagsColumn && len(ball.Tags) > 0 {
+			// Show truncated tags
+			tagsStr := strings.Join(ball.Tags, ",")
+			if len(tagsStr) > 15 {
+				tagsStr = tagsStr[:12] + "..."
+			}
+			tagsSuffix = fmt.Sprintf(" [%s]", tagsStr)
+		}
+
+		// Build tests state suffix if set and visible
 		testsSuffix := ""
-		if ball.TestsState != "" {
+		if m.showTestsColumn && ball.TestsState != "" {
 			switch ball.TestsState {
 			case session.TestsStateNeeded:
 				testsSuffix = " [T:!]"
@@ -364,27 +380,34 @@ func (m Model) renderBallsPanel(width, height int) string {
 		// ID prefix (shown before intent)
 		idPrefix := fmt.Sprintf("[%s] ", idDisplay)
 
+		// Calculate total suffix length for width calculation
+		suffixLen := len(prioritySuffix) + len(tagsSuffix) + len(testsSuffix) + len(outputMarker) + len(depMarker)
+
 		if ball.State == session.StateBlocked && ball.BlockedReason != "" {
 			// Show blocked reason inline for blocked balls
-			intent := truncate(ball.Intent, width-25-len(idPrefix)-len(testsSuffix)-len(outputMarker)-len(depMarker))
-			reason := truncate(ball.BlockedReason, width-len(intent)-15-len(idPrefix)-len(testsSuffix)-len(outputMarker)-len(depMarker))
-			line = fmt.Sprintf("%s %s%s [%s]%s%s%s",
+			intent := truncate(ball.Intent, width-25-len(idPrefix)-suffixLen)
+			reason := truncate(ball.BlockedReason, width-len(intent)-15-len(idPrefix)-suffixLen)
+			line = fmt.Sprintf("%s %s%s [%s]%s%s%s%s%s",
 				stateIcon,
 				idPrefix,
 				intent,
 				reason,
+				prioritySuffix,
+				tagsSuffix,
 				testsSuffix,
 				outputMarker,
 				depMarker,
 			)
 		} else {
-			availWidth := width - 15 - len(idPrefix) - len(testsSuffix) - len(outputMarker) - len(depMarker)
-			line = fmt.Sprintf("%s %s%-*s %s%s%s%s",
+			availWidth := width - 15 - len(idPrefix) - suffixLen
+			line = fmt.Sprintf("%s %s%-*s %s%s%s%s%s%s",
 				stateIcon,
 				idPrefix,
 				availWidth,
 				truncate(ball.Intent, availWidth),
 				string(ball.State),
+				prioritySuffix,
+				tagsSuffix,
 				testsSuffix,
 				outputMarker,
 				depMarker,
@@ -749,9 +772,9 @@ func (m Model) renderStatusBar() string {
 		}
 	case BallsPanel:
 		hints = []string{
-			"j/k:nav", "s:start", "c:done", "b:block",
-			"a:add", "e:edit", "t:tag", "d:del",
-			"[/]:session", "o:sort", "H:history", "?:help",
+			"j/k:nav", "s:state", "t:filter",
+			"a:add", "e:edit", "d:del", "v:view",
+			"[/]:session", "o:sort", "?:help",
 		}
 	case ActivityPanel:
 		hints = []string{
