@@ -3770,8 +3770,8 @@ func TestStatusBarBallsPanel(t *testing.T) {
 
 	statusBar := model.renderStatusBar()
 
-	// Should contain ball-specific keybinds including state change and view column keys
-	expectedKeys := []string{"j/k:nav", "s:state", "t:filter", "a:add", "e:edit", "d:del", "v:view", "[/]:session", "o:sort", "?:help"}
+	// Should contain ball-specific keybinds including two-key state change and filter keys
+	expectedKeys := []string{"j/k:nav", "s+c/s/b/p:state", "t+c/b/i/p:filter", "a:add", "e:edit", "d:del", "v+p/t/s:columns", "[/]:session", "o:sort", "?:help"}
 	for _, key := range expectedKeys {
 		if !strings.Contains(statusBar, key) {
 			t.Errorf("Expected status bar to contain '%s', got: %s", key, statusBar)

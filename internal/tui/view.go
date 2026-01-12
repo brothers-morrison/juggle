@@ -92,9 +92,9 @@ func (m Model) renderListView() string {
 	// Footer with keybindings
 	b.WriteString("\n")
 	b.WriteString(helpStyle.Render("Navigation: ↑/k up • ↓/j down • enter details • esc exit\n"))
-	b.WriteString(helpStyle.Render("Actions: s start • c complete • d drop • x delete • p cycle priority\n"))
-	b.WriteString(helpStyle.Render("Filter: 1 all • 2 toggle pending • 3 toggle in_progress • 4 toggle blocked • 5 toggle complete\n"))
-	b.WriteString(helpStyle.Render("Other: r set pending • R refresh • tab cycle state • ? help • q quit\n"))
+	b.WriteString(helpStyle.Render("State (s+key): sc complete • ss start • sb block • sp pending • sa archive\n"))
+	b.WriteString(helpStyle.Render("Filter (t+key): tc complete • tb blocked • ti in_progress • tp pending • ta all\n"))
+	b.WriteString(helpStyle.Render("Other: a add • e edit • d delete • o sort • R refresh • ? help • q quit\n"))
 
 	// Message
 	if m.message != "" {
@@ -125,25 +125,27 @@ func (m Model) renderHelpView() string {
 		{"Esc", "Back to list (or exit from list view)"},
 	}))
 
-	b.WriteString(helpSection("Quick Actions", []helpItem{
-		{"s", "Start ball (→ in_progress)"},
-		{"c", "Complete ball (→ complete, archives)"},
-		{"d", "Block ball (→ blocked)"},
-		{"x", "Delete ball (with confirmation)"},
-		{"p", "Cycle priority (low → medium → high → urgent → low)"},
-		{"r", "Set ball to pending state"},
-		{"tab", "Cycle state (pending → in_progress → complete → blocked → pending)"},
+	b.WriteString(helpSection("State Changes (s + key)", []helpItem{
+		{"sc", "Complete ball (→ complete, archives)"},
+		{"ss", "Start ball (→ in_progress)"},
+		{"sb", "Block ball (prompts for reason)"},
+		{"sp", "Set to pending"},
+		{"sa", "Archive completed ball"},
 	}))
 
-	b.WriteString(helpSection("Filters", []helpItem{
-		{"1", "Show all balls"},
-		{"2", "Toggle pending balls"},
-		{"3", "Toggle in_progress balls"},
-		{"4", "Toggle blocked balls"},
-		{"5", "Toggle complete balls"},
+	b.WriteString(helpSection("Toggle Filters (t + key)", []helpItem{
+		{"tc", "Toggle complete balls visibility"},
+		{"tb", "Toggle blocked balls visibility"},
+		{"ti", "Toggle in_progress balls visibility"},
+		{"tp", "Toggle pending balls visibility"},
+		{"ta", "Show all states"},
 	}))
 
 	b.WriteString(helpSection("Other", []helpItem{
+		{"a", "Add new ball"},
+		{"e", "Edit ball"},
+		{"d", "Delete ball (with confirmation)"},
+		{"o", "Cycle sort order"},
 		{"R", "Refresh/reload balls"},
 		{"?", "Toggle this help"},
 		{"q / Ctrl+C", "Quit"},

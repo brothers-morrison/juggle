@@ -772,8 +772,8 @@ func (m Model) renderStatusBar() string {
 		}
 	case BallsPanel:
 		hints = []string{
-			"j/k:nav", "s:state", "t:filter",
-			"a:add", "e:edit", "d:del", "v:view",
+			"j/k:nav", "s+c/s/b/p:state", "t+c/b/i/p:filter",
+			"a:add", "e:edit", "d:del", "v+p/t/s:columns",
 			"[/]:session", "o:sort", "?:help",
 		}
 	case ActivityPanel:
