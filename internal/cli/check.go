@@ -120,7 +120,7 @@ func handleSingleInProgressBall(ball *session.Ball, pendingBalls []*session.Ball
 	valueStyle := lipgloss.NewStyle()
 
 	// Get state style
-	stateStyle := StyleInAir // in_progress uses the in-air style
+	stateStyle := StyleInProgress
 	stateStr := string(ball.State)
 
 	fmt.Println(focusStyle.Render("🎯 Currently in progress: " + ball.ShortID()))
@@ -176,7 +176,7 @@ func handleMultipleInProgressBalls(inProgressBalls []*session.Ball, pendingBalls
 	// Show all in-progress balls with numbers
 	for i, ball := range inProgressBalls {
 		stateStr := string(ball.State)
-		stateStyle := StyleInAir // in_progress uses the in-air style
+		stateStyle := StyleInProgress
 
 		fmt.Printf("%d. %s: %s [%s]\n",
 			i+1,

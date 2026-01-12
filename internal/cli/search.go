@@ -210,9 +210,9 @@ func renderSearchResults(balls []*session.Ball) {
 	headerStyle := StyleHeader.Padding(0, 1)
 
 	// Use consistent styles from styles.go
-	activeStyle := StyleInAir        // In-progress (actively working)
-	blockedStyle := StyleNeedsThrown // Blocked
-	plannedStyle := StyleReady       // Pending (planned)
+	activeStyle := StyleInProgress // In-progress (actively working)
+	blockedStyle := StyleBlocked   // Blocked
+	plannedStyle := StylePending   // Pending (planned)
 
 	// Table header
 	fmt.Println(

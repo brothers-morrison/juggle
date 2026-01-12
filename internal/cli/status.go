@@ -198,9 +198,9 @@ func runStatus(cmd *cobra.Command, args []string) error {
 func renderGroupedSessions(ballsByProject map[string][]*session.Ball, cwd string, currentBallID string) {
 	// Use consistent styles from styles.go
 	headerStyle := StyleHeader
-	activeStyle := StyleInAir        // In-progress (actively working)
-	blockedStyle := StyleNeedsThrown // Blocked
-	plannedStyle := StyleReady       // Pending (planned)
+	activeStyle := StyleInProgress // In-progress (actively working)
+	blockedStyle := StyleBlocked   // Blocked
+	plannedStyle := StylePending   // Pending (planned)
 
 	// Get sorted project names
 	projectNames := make([]string, 0, len(ballsByProject))

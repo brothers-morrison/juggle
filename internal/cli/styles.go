@@ -4,16 +4,11 @@ import "github.com/charmbracelet/lipgloss"
 
 // Consistent color scheme for ball states across all views
 var (
-	// Juggle states (sub-states within juggling)
-	StyleNeedsCaught = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))  // Red - needs user attention
-	StyleNeedsThrown = lipgloss.NewStyle().Foreground(lipgloss.Color("11")) // Yellow - needs user input
-	StyleInAir       = lipgloss.NewStyle().Foreground(lipgloss.Color("10")) // Green - actively working
-
-	// Active states (top-level states)
-	StyleJuggling   = lipgloss.NewStyle().Foreground(lipgloss.Color("10")) // Green - active
-	StyleReady      = lipgloss.NewStyle().Foreground(lipgloss.Color("12")) // Blue - planned/ready
-	StyleDropped    = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))  // Red - dropped
-	StyleComplete   = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))  // Gray - archived
+	// Ball states
+	StyleInProgress = lipgloss.NewStyle().Foreground(lipgloss.Color("10")) // Green - actively working
+	StylePending    = lipgloss.NewStyle().Foreground(lipgloss.Color("12")) // Blue - planned/ready
+	StyleBlocked    = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))  // Red - blocked
+	StyleComplete   = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))  // Gray - complete
 	StyleResearched = lipgloss.NewStyle().Foreground(lipgloss.Color("14")) // Cyan - researched
 
 	// Priority levels

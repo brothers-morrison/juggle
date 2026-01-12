@@ -43,7 +43,7 @@ func runUnarchive(cmd *cobra.Command, args []string) error {
 
 	// Show success message
 	fmt.Printf("✓ Unarchived ball: %s\n", StyleHighlight.Render(restoredBall.ID))
-	fmt.Printf("  State: %s\n", StyleReady.Render(string(restoredBall.State)))
+	fmt.Printf("  State: %s\n", StylePending.Render(string(restoredBall.State)))
 	fmt.Printf("  Intent: %s\n", restoredBall.Intent)
 
 	return nil
@@ -65,7 +65,7 @@ func handleBallUnarchive(ball *session.Ball, store *session.Store) error {
 
 	// Show success message
 	fmt.Printf("✓ Unarchived ball: %s\n", StyleHighlight.Render(restoredBall.ID))
-	fmt.Printf("  State: %s\n", StyleReady.Render(string(restoredBall.State)))
+	fmt.Printf("  State: %s\n", StylePending.Render(string(restoredBall.State)))
 	fmt.Printf("  Intent: %s\n", restoredBall.Intent)
 
 	return nil

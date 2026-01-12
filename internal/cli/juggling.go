@@ -75,7 +75,7 @@ func listJugglingBalls(cmd *cobra.Command) error {
 	fmt.Printf("\n🎯 Currently Juggling (%d ball%s)\n\n", len(juggling), pluralize(len(juggling)))
 
 	// Use consistent styles from styles.go
-	inAirStyle := StyleInAir
+	inProgressStyle := StyleInProgress
 	cwdHighlight := StyleHighlight
 	projectStyle := StyleProject
 	dimStyle := StyleDim
@@ -97,7 +97,7 @@ func listJugglingBalls(cmd *cobra.Command) error {
 	for _, ball := range juggling {
 		// Determine style based on state
 		stateStr := string(ball.State)
-		stateStyle := inAirStyle // in_progress uses in-air style
+		stateStyle := inProgressStyle
 
 		// Format columns without styling first (for padding)
 		idStr := ball.ShortID()
@@ -220,18 +220,12 @@ func listAllBalls(cmd *cobra.Command) error {
 	projectStyle := StyleProject.Bold(true)
 	
 	// State styles
-	jugglingStyle := StyleJuggling
-	readyStyle := StyleReady
-	droppedStyle := StyleDropped
-	completeStyle := StyleComplete
-	researchedStyle := StyleResearched
-
 	stateStyles := map[session.BallState]lipgloss.Style{
-		session.StateInProgress: jugglingStyle,
-		session.StatePending:    readyStyle,
-		session.StateBlocked:    droppedStyle,
-		session.StateComplete:   completeStyle,
-		session.StateResearched: researchedStyle,
+		session.StateInProgress: StyleInProgress,
+		session.StatePending:    StylePending,
+		session.StateBlocked:    StyleBlocked,
+		session.StateComplete:   StyleComplete,
+		session.StateResearched: StyleResearched,
 	}
 
 	// Sort projects for consistent ordering
