@@ -166,6 +166,13 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 		return nil, fmt.Errorf("session not found: %s", config.SessionID)
 	}
 
+	// Acquire exclusive lock on session to prevent concurrent agent runs
+	lock, err := sessionStore.AcquireSessionLock(config.SessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer lock.Release()
+
 	// Create output file path
 	outputPath := filepath.Join(config.ProjectDir, ".juggler", "sessions", config.SessionID, "last_output.txt")
 

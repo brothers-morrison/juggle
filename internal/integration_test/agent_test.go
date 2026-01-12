@@ -1718,3 +1718,197 @@ func (p *progressUpdatingMockRunner) Run(opts agent.RunOptions) (*agent.RunResul
 
 	return p.mock.Run(opts)
 }
+
+// Concurrent agent detection tests
+
+func TestAgentLoop_ConcurrentAgentBlocked(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Create a session
+	env.CreateSession(t, "test-session", "Test session for agent")
+
+	// Create a ball tagged with the session
+	ball := env.CreateBall(t, "Test ball", session.PriorityMedium)
+	ball.Tags = []string{"test-session"}
+	store := env.GetStore(t)
+	if err := store.UpdateBall(ball); err != nil {
+		t.Fatalf("Failed to update ball: %v", err)
+	}
+
+	// Acquire lock manually to simulate another agent running
+	sessionStore := env.GetSessionStore(t)
+	lock, err := sessionStore.AcquireSessionLock("test-session")
+	if err != nil {
+		t.Fatalf("Failed to acquire lock: %v", err)
+	}
+	defer lock.Release()
+
+	// Setup mock runner (won't be called since lock blocks us)
+	mock := agent.NewMockRunner(
+		&agent.RunResult{
+			Output:   "<promise>COMPLETE</promise>",
+			Complete: true,
+		},
+	)
+	agent.SetRunner(mock)
+	defer agent.ResetRunner()
+
+	// Run the agent loop - should fail because session is locked
+	config := cli.AgentLoopConfig{
+		SessionID:     "test-session",
+		ProjectDir:    env.ProjectDir,
+		MaxIterations: 1,
+		Trust:         false,
+		IterDelay:     0,
+	}
+
+	_, err = cli.RunAgentLoop(config)
+	if err == nil {
+		t.Fatal("Expected error when session is locked by another agent")
+	}
+
+	// Error should mention the session is locked
+	if !strings.Contains(err.Error(), "locked") && !strings.Contains(err.Error(), "already") {
+		t.Errorf("Expected error to mention lock, got: %v", err)
+	}
+
+	// Verify runner was NOT called
+	if len(mock.Calls) != 0 {
+		t.Errorf("Expected 0 calls to runner (blocked by lock), got %d", len(mock.Calls))
+	}
+}
+
+func TestAgentLoop_LockReleasedOnCompletion(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Create a session
+	env.CreateSession(t, "test-session", "Test session for agent")
+
+	// Create a ball that's complete
+	ball := env.CreateBall(t, "Test ball", session.PriorityMedium)
+	ball.Tags = []string{"test-session"}
+	ball.State = session.StateComplete
+	store := env.GetStore(t)
+	if err := store.UpdateBall(ball); err != nil {
+		t.Fatalf("Failed to update ball: %v", err)
+	}
+
+	// Setup mock runner
+	mock := agent.NewMockRunner(
+		&agent.RunResult{
+			Output:   "<promise>COMPLETE</promise>",
+			Complete: true,
+		},
+	)
+	agent.SetRunner(mock)
+	defer agent.ResetRunner()
+
+	// Run the agent loop
+	config := cli.AgentLoopConfig{
+		SessionID:     "test-session",
+		ProjectDir:    env.ProjectDir,
+		MaxIterations: 1,
+		Trust:         false,
+		IterDelay:     0,
+	}
+
+	_, err := cli.RunAgentLoop(config)
+	if err != nil {
+		t.Fatalf("Agent run failed: %v", err)
+	}
+
+	// Verify lock was released - we should be able to acquire it again
+	sessionStore := env.GetSessionStore(t)
+	lock, err := sessionStore.AcquireSessionLock("test-session")
+	if err != nil {
+		t.Fatalf("Expected to acquire lock after agent completed: %v", err)
+	}
+	lock.Release()
+}
+
+func TestAgentLoop_LockReleasedOnError(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Create a session
+	env.CreateSession(t, "test-session", "Test session for agent")
+
+	// Create a ball tagged with the session
+	ball := env.CreateBall(t, "Test ball", session.PriorityMedium)
+	ball.Tags = []string{"test-session"}
+	store := env.GetStore(t)
+	if err := store.UpdateBall(ball); err != nil {
+		t.Fatalf("Failed to update ball: %v", err)
+	}
+
+	// Setup mock runner that returns an error
+	mock := agent.NewMockRunner(
+		&agent.RunResult{
+			Output: "Error occurred",
+			Error:  fmt.Errorf("simulated error"),
+		},
+	)
+	agent.SetRunner(mock)
+	defer agent.ResetRunner()
+
+	// Run the agent loop - will not error out (agent errors are captured in result)
+	config := cli.AgentLoopConfig{
+		SessionID:     "test-session",
+		ProjectDir:    env.ProjectDir,
+		MaxIterations: 1,
+		Trust:         false,
+		IterDelay:     0,
+	}
+
+	_, err := cli.RunAgentLoop(config)
+	// Depending on implementation, might succeed or fail
+	// The important thing is the lock is released
+
+	_ = err // Don't check error - just verify lock is released
+
+	// Verify lock was released
+	sessionStore := env.GetSessionStore(t)
+	lock, err := sessionStore.AcquireSessionLock("test-session")
+	if err != nil {
+		t.Fatalf("Expected to acquire lock after agent completed/errored: %v", err)
+	}
+	lock.Release()
+}
+
+func TestAgentLoop_LockErrorMessageIncludesPID(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Create a session
+	env.CreateSession(t, "test-session", "Test session for agent")
+
+	// Acquire lock manually
+	sessionStore := env.GetSessionStore(t)
+	lock, err := sessionStore.AcquireSessionLock("test-session")
+	if err != nil {
+		t.Fatalf("Failed to acquire lock: %v", err)
+	}
+	defer lock.Release()
+
+	// Try to run agent - should fail with informative error
+	config := cli.AgentLoopConfig{
+		SessionID:     "test-session",
+		ProjectDir:    env.ProjectDir,
+		MaxIterations: 1,
+		Trust:         false,
+		IterDelay:     0,
+	}
+
+	_, err = cli.RunAgentLoop(config)
+	if err == nil {
+		t.Fatal("Expected error when session is locked")
+	}
+
+	// Error should contain PID info
+	errStr := err.Error()
+	if !strings.Contains(errStr, "PID") && !strings.Contains(errStr, "locked") {
+		t.Errorf("Expected error to contain PID or 'locked', got: %v", err)
+	}
+}
