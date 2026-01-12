@@ -184,7 +184,7 @@ func runExport(cmd *cobra.Command, args []string) error {
 	case "ralph":
 		output, err = exportRalph(cwd, exportSession, balls)
 	case "agent":
-		output, err = exportAgent(cwd, exportSession, balls, false)
+		output, err = exportAgent(cwd, exportSession, balls, false) // debug only via agent run --debug
 	}
 
 	if err != nil {

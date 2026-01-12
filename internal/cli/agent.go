@@ -125,6 +125,10 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 		StartedAt: startTime,
 	}
 
+	// Track rate limit state
+	var totalWaitTime time.Duration
+	rateLimitRetries := 0
+
 	for iteration := 1; iteration <= config.MaxIterations; iteration++ {
 		result.Iterations = iteration
 
@@ -139,6 +143,39 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to run agent: %w", err)
 		}
+
+		// Check for rate limit
+		if runResult.RateLimited {
+			waitTime := calculateWaitTime(runResult.RetryAfter, rateLimitRetries)
+
+			// Check if we've exceeded max wait
+			if config.MaxWait > 0 && totalWaitTime+waitTime > config.MaxWait {
+				result.RateLimitExceded = true
+				result.TotalWaitTime = totalWaitTime
+				logRateLimitToProgress(config.ProjectDir, config.SessionID,
+					fmt.Sprintf("Rate limit exceeded max-wait of %v (total waited: %v)", config.MaxWait, totalWaitTime))
+				break
+			}
+
+			// Log waiting status
+			logRateLimitToProgress(config.ProjectDir, config.SessionID,
+				fmt.Sprintf("Rate limited, waiting %v before retry (attempt %d)", waitTime, rateLimitRetries+1))
+
+			fmt.Printf("⏳ Rate limited. Waiting %v before retry...\n", waitTime)
+
+			// Wait with countdown display
+			waitWithCountdown(waitTime)
+
+			totalWaitTime += waitTime
+			rateLimitRetries++
+
+			// Retry this iteration (don't increment)
+			iteration--
+			continue
+		}
+
+		// Reset retry counter on successful run
+		rateLimitRetries = 0
 
 		// Check for timeout
 		if runResult.TimedOut {
@@ -204,8 +241,59 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 		}
 	}
 
+	result.TotalWaitTime = totalWaitTime
 	result.EndedAt = time.Now()
 	return result, nil
+}
+
+// calculateWaitTime determines how long to wait before retrying after rate limit
+// Uses the explicit retry-after time if provided, otherwise exponential backoff
+func calculateWaitTime(retryAfter time.Duration, retryCount int) time.Duration {
+	if retryAfter > 0 {
+		// Use the time specified by Claude, with a small buffer
+		return retryAfter + 5*time.Second
+	}
+
+	// Exponential backoff: 30s, 1m, 2m, 4m, 8m, 16m (capped at 16m)
+	baseWait := 30 * time.Second
+	maxWait := 16 * time.Minute
+
+	wait := baseWait * time.Duration(1<<retryCount) // 2^retryCount
+	if wait > maxWait {
+		wait = maxWait
+	}
+
+	return wait
+}
+
+// waitWithCountdown waits for the specified duration, showing periodic countdown updates
+func waitWithCountdown(duration time.Duration) {
+	remaining := duration
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for remaining > 0 {
+		select {
+		case <-ticker.C:
+			remaining -= 10 * time.Second
+			if remaining > 0 {
+				fmt.Printf("  ... %v remaining\n", remaining.Round(time.Second))
+			}
+		case <-time.After(remaining):
+			return
+		}
+	}
+}
+
+// logRateLimitToProgress logs a rate limit event to the session's progress file
+func logRateLimitToProgress(projectDir, sessionID, message string) {
+	sessionStore, err := session.NewSessionStore(projectDir)
+	if err != nil {
+		return // Ignore errors - logging is best-effort
+	}
+
+	entry := fmt.Sprintf("[RATE_LIMIT] %s", message)
+	_ = sessionStore.AppendProgress(sessionID, entry)
 }
 
 func runAgentRun(cmd *cobra.Command, args []string) error {
@@ -242,6 +330,7 @@ func runAgentRun(cmd *cobra.Command, args []string) error {
 		Debug:         agentDebug,
 		IterDelay:     2 * time.Second,
 		Timeout:       agentTimeout,
+		MaxWait:       agentMaxWait,
 	}
 
 	result, err := RunAgentLoop(loopConfig)
@@ -258,12 +347,18 @@ func runAgentRun(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Balls: %d complete, %d blocked, %d total\n", result.BallsComplete, result.BallsBlocked, result.BallsTotal)
 	fmt.Printf("Time elapsed: %s\n", elapsed.Round(time.Second))
 
+	if result.TotalWaitTime > 0 {
+		fmt.Printf("Rate limit wait time: %v\n", result.TotalWaitTime.Round(time.Second))
+	}
+
 	if result.Complete {
 		fmt.Println("Status: COMPLETE")
 	} else if result.Blocked {
 		fmt.Printf("Status: BLOCKED (%s)\n", result.BlockedReason)
 	} else if result.TimedOut {
 		fmt.Printf("Status: TIMEOUT (%s)\n", result.TimeoutMessage)
+	} else if result.RateLimitExceded {
+		fmt.Printf("Status: RATE_LIMIT_EXCEEDED (max-wait: %v)\n", agentMaxWait)
 	} else {
 		fmt.Println("Status: Max iterations reached")
 	}

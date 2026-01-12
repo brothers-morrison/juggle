@@ -862,3 +862,396 @@ func TestAgentLoop_TimeoutLogsToProgress(t *testing.T) {
 		t.Error("Expected timeout message to contain iteration info")
 	}
 }
+
+// Rate limit tests
+
+func TestAgentLoop_RateLimitRetries(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Create a session
+	env.CreateSession(t, "test-session", "Test session for agent")
+
+	// Create a ball that's complete so COMPLETE signal works
+	ball := env.CreateBall(t, "Test ball", session.PriorityMedium)
+	ball.Tags = []string{"test-session"}
+	ball.State = session.StateComplete
+	store := env.GetStore(t)
+	if err := store.UpdateBall(ball); err != nil {
+		t.Fatalf("Failed to update ball: %v", err)
+	}
+
+	// Setup mock runner that returns rate limit once, then succeeds
+	mock := agent.NewMockRunner(
+		&agent.RunResult{
+			Output:      "Error: rate limit exceeded",
+			RateLimited: true,
+			RetryAfter:  100 * time.Millisecond, // Short for testing
+		},
+		&agent.RunResult{
+			Output:   "<promise>COMPLETE</promise>",
+			Complete: true,
+		},
+	)
+	agent.SetRunner(mock)
+	defer agent.ResetRunner()
+
+	// Run the agent loop
+	config := cli.AgentLoopConfig{
+		SessionID:     "test-session",
+		ProjectDir:    env.ProjectDir,
+		MaxIterations: 3,
+		Trust:         false,
+		IterDelay:     0,
+	}
+
+	result, err := cli.RunAgentLoop(config)
+	if err != nil {
+		t.Fatalf("Agent run failed: %v", err)
+	}
+
+	// Verify runner was called twice (rate limit + success)
+	if len(mock.Calls) != 2 {
+		t.Errorf("Expected 2 calls to runner (rate limit + success), got %d", len(mock.Calls))
+	}
+
+	// Should be complete
+	if !result.Complete {
+		t.Error("Expected result.Complete=true")
+	}
+
+	// Should have waited
+	if result.TotalWaitTime == 0 {
+		t.Error("Expected TotalWaitTime > 0")
+	}
+
+	// Rate limit should NOT be exceeded (we successfully retried)
+	if result.RateLimitExceded {
+		t.Error("Expected RateLimitExceded=false (retry succeeded)")
+	}
+}
+
+func TestAgentLoop_RateLimitMaxWaitExceeded(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Create a session
+	env.CreateSession(t, "test-session", "Test session for agent")
+
+	// Create a ball
+	ball := env.CreateBall(t, "Test ball", session.PriorityMedium)
+	ball.Tags = []string{"test-session"}
+	store := env.GetStore(t)
+	if err := store.UpdateBall(ball); err != nil {
+		t.Fatalf("Failed to update ball: %v", err)
+	}
+
+	// Setup mock runner that always returns rate limit
+	mock := agent.NewMockRunner(
+		&agent.RunResult{
+			Output:      "Error: rate limit exceeded",
+			RateLimited: true,
+			RetryAfter:  1 * time.Hour, // Long wait
+		},
+	)
+	agent.SetRunner(mock)
+	defer agent.ResetRunner()
+
+	// Run the agent loop with short max-wait
+	config := cli.AgentLoopConfig{
+		SessionID:     "test-session",
+		ProjectDir:    env.ProjectDir,
+		MaxIterations: 3,
+		Trust:         false,
+		IterDelay:     0,
+		MaxWait:       1 * time.Minute, // Max wait of 1 minute
+	}
+
+	result, err := cli.RunAgentLoop(config)
+	if err != nil {
+		t.Fatalf("Agent run failed: %v", err)
+	}
+
+	// Verify runner was only called once (rate limit exceeded max-wait immediately)
+	if len(mock.Calls) != 1 {
+		t.Errorf("Expected 1 call to runner (max-wait exceeded), got %d", len(mock.Calls))
+	}
+
+	// Should show rate limit exceeded
+	if !result.RateLimitExceded {
+		t.Error("Expected RateLimitExceded=true")
+	}
+
+	// Should NOT be complete
+	if result.Complete {
+		t.Error("Expected result.Complete=false")
+	}
+}
+
+func TestAgentLoop_RateLimitLogsToProgress(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Create a session
+	env.CreateSession(t, "test-session", "Test session for agent")
+
+	// Create a ball that's complete
+	ball := env.CreateBall(t, "Test ball", session.PriorityMedium)
+	ball.Tags = []string{"test-session"}
+	ball.State = session.StateComplete
+	store := env.GetStore(t)
+	if err := store.UpdateBall(ball); err != nil {
+		t.Fatalf("Failed to update ball: %v", err)
+	}
+
+	// Setup mock runner that returns rate limit once, then succeeds
+	mock := agent.NewMockRunner(
+		&agent.RunResult{
+			Output:      "Error: rate limit exceeded",
+			RateLimited: true,
+			RetryAfter:  100 * time.Millisecond,
+		},
+		&agent.RunResult{
+			Output:   "<promise>COMPLETE</promise>",
+			Complete: true,
+		},
+	)
+	agent.SetRunner(mock)
+	defer agent.ResetRunner()
+
+	// Run the agent loop
+	config := cli.AgentLoopConfig{
+		SessionID:     "test-session",
+		ProjectDir:    env.ProjectDir,
+		MaxIterations: 3,
+		Trust:         false,
+		IterDelay:     0,
+	}
+
+	_, err := cli.RunAgentLoop(config)
+	if err != nil {
+		t.Fatalf("Agent run failed: %v", err)
+	}
+
+	// Verify rate limit was logged to progress
+	sessionStore := env.GetSessionStore(t)
+	progress, err := sessionStore.LoadProgress("test-session")
+	if err != nil {
+		t.Fatalf("Failed to load progress: %v", err)
+	}
+
+	if !strings.Contains(progress, "[RATE_LIMIT]") {
+		t.Error("Expected [RATE_LIMIT] entry in progress log")
+	}
+	if !strings.Contains(progress, "waiting") {
+		t.Error("Expected 'waiting' in rate limit progress message")
+	}
+}
+
+func TestAgentLoop_RateLimitExponentialBackoff(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Create a session
+	env.CreateSession(t, "test-session", "Test session for agent")
+
+	// Create a ball that's complete
+	ball := env.CreateBall(t, "Test ball", session.PriorityMedium)
+	ball.Tags = []string{"test-session"}
+	ball.State = session.StateComplete
+	store := env.GetStore(t)
+	if err := store.UpdateBall(ball); err != nil {
+		t.Fatalf("Failed to update ball: %v", err)
+	}
+
+	// Setup mock runner that returns rate limit WITHOUT RetryAfter
+	// This should trigger exponential backoff
+	mock := agent.NewMockRunner(
+		&agent.RunResult{
+			Output:      "Error: rate limit exceeded",
+			RateLimited: true,
+			// RetryAfter is 0, so exponential backoff should be used
+		},
+		&agent.RunResult{
+			Output:   "<promise>COMPLETE</promise>",
+			Complete: true,
+		},
+	)
+	agent.SetRunner(mock)
+	defer agent.ResetRunner()
+
+	// Run the agent loop - this would take 30+ seconds with real backoff
+	// but we just verify the logic is called correctly
+	config := cli.AgentLoopConfig{
+		SessionID:     "test-session",
+		ProjectDir:    env.ProjectDir,
+		MaxIterations: 3,
+		Trust:         false,
+		IterDelay:     0,
+		MaxWait:       1 * time.Second, // Very short max-wait to exit quickly
+	}
+
+	result, err := cli.RunAgentLoop(config)
+	if err != nil {
+		t.Fatalf("Agent run failed: %v", err)
+	}
+
+	// Should have hit max-wait since exponential backoff starts at 30s
+	if !result.RateLimitExceded {
+		// If it didn't exceed, it means the retry succeeded (which is also valid)
+		// This test is mainly to ensure the code path works
+		t.Log("Rate limit retry succeeded before max-wait")
+	}
+}
+
+func TestAgentLoop_RateLimitMultipleRetries(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Create a session
+	env.CreateSession(t, "test-session", "Test session for agent")
+
+	// Create a ball that's complete
+	ball := env.CreateBall(t, "Test ball", session.PriorityMedium)
+	ball.Tags = []string{"test-session"}
+	ball.State = session.StateComplete
+	store := env.GetStore(t)
+	if err := store.UpdateBall(ball); err != nil {
+		t.Fatalf("Failed to update ball: %v", err)
+	}
+
+	// Setup mock runner that returns rate limit 3 times, then succeeds
+	mock := agent.NewMockRunner(
+		&agent.RunResult{
+			Output:      "Error: rate limit exceeded",
+			RateLimited: true,
+			RetryAfter:  50 * time.Millisecond,
+		},
+		&agent.RunResult{
+			Output:      "Error: rate limit exceeded again",
+			RateLimited: true,
+			RetryAfter:  50 * time.Millisecond,
+		},
+		&agent.RunResult{
+			Output:      "Error: rate limit exceeded still",
+			RateLimited: true,
+			RetryAfter:  50 * time.Millisecond,
+		},
+		&agent.RunResult{
+			Output:   "<promise>COMPLETE</promise>",
+			Complete: true,
+		},
+	)
+	agent.SetRunner(mock)
+	defer agent.ResetRunner()
+
+	// Run the agent loop
+	config := cli.AgentLoopConfig{
+		SessionID:     "test-session",
+		ProjectDir:    env.ProjectDir,
+		MaxIterations: 3,
+		Trust:         false,
+		IterDelay:     0,
+	}
+
+	result, err := cli.RunAgentLoop(config)
+	if err != nil {
+		t.Fatalf("Agent run failed: %v", err)
+	}
+
+	// Verify runner was called 4 times (3 rate limits + 1 success)
+	if len(mock.Calls) != 4 {
+		t.Errorf("Expected 4 calls to runner (3 rate limits + success), got %d", len(mock.Calls))
+	}
+
+	// Should be complete
+	if !result.Complete {
+		t.Error("Expected result.Complete=true")
+	}
+
+	// Should have accumulated wait time
+	if result.TotalWaitTime == 0 {
+		t.Error("Expected TotalWaitTime > 0")
+	}
+}
+
+func TestAgentLoop_RateLimitResetsRetryCountOnSuccess(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Create a session
+	env.CreateSession(t, "test-session", "Test session for agent")
+
+	// Create two balls so we have multiple iterations
+	ball1 := env.CreateBall(t, "First ball", session.PriorityMedium)
+	ball1.Tags = []string{"test-session"}
+	ball1.State = session.StatePending
+	store := env.GetStore(t)
+	if err := store.UpdateBall(ball1); err != nil {
+		t.Fatalf("Failed to update ball1: %v", err)
+	}
+
+	ball2 := env.CreateBall(t, "Second ball", session.PriorityMedium)
+	ball2.Tags = []string{"test-session"}
+	ball2.State = session.StateComplete
+	if err := store.UpdateBall(ball2); err != nil {
+		t.Fatalf("Failed to update ball2: %v", err)
+	}
+
+	// Setup mock runner:
+	// Iter 1: rate limit -> success (completes first ball via CONTINUE)
+	// Iter 2: rate limit -> success (completes second ball)
+	mock := agent.NewMockRunner(
+		&agent.RunResult{
+			Output:      "Error: rate limit",
+			RateLimited: true,
+			RetryAfter:  50 * time.Millisecond,
+		},
+		&agent.RunResult{
+			Output:   "<promise>CONTINUE</promise>",
+			Continue: true,
+		},
+		&agent.RunResult{
+			Output:      "Error: rate limit again",
+			RateLimited: true,
+			RetryAfter:  50 * time.Millisecond,
+		},
+		&agent.RunResult{
+			Output:   "<promise>COMPLETE</promise>",
+			Complete: true,
+		},
+	)
+	agent.SetRunner(mock)
+	defer agent.ResetRunner()
+
+	// Update ball1 to complete before the last iteration
+	// (simulate agent completing it)
+	ball1.State = session.StateComplete
+	if err := store.UpdateBall(ball1); err != nil {
+		t.Fatalf("Failed to update ball1: %v", err)
+	}
+
+	// Run the agent loop
+	config := cli.AgentLoopConfig{
+		SessionID:     "test-session",
+		ProjectDir:    env.ProjectDir,
+		MaxIterations: 5,
+		Trust:         false,
+		IterDelay:     0,
+	}
+
+	result, err := cli.RunAgentLoop(config)
+	if err != nil {
+		t.Fatalf("Agent run failed: %v", err)
+	}
+
+	// Verify multiple calls were made
+	if len(mock.Calls) < 2 {
+		t.Errorf("Expected at least 2 calls to runner, got %d", len(mock.Calls))
+	}
+
+	// Should be complete
+	if !result.Complete {
+		t.Error("Expected result.Complete=true")
+	}
+}

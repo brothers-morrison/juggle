@@ -260,3 +260,155 @@ func TestDefaultRunner(t *testing.T) {
 		}
 	})
 }
+
+func TestClaudeRunner_parseRateLimit(t *testing.T) {
+	runner := &ClaudeRunner{}
+
+	testCases := []struct {
+		name        string
+		output      string
+		wantLimited bool
+	}{
+		{
+			name:        "rate limit in output",
+			output:      "Error: rate limit exceeded",
+			wantLimited: true,
+		},
+		{
+			name:        "rate_limit underscore variant",
+			output:      "Error: rate_limit_error",
+			wantLimited: true,
+		},
+		{
+			name:        "too many requests",
+			output:      "Error: too many requests",
+			wantLimited: true,
+		},
+		{
+			name:        "429 status code",
+			output:      "HTTP 429 error returned",
+			wantLimited: true,
+		},
+		{
+			name:        "overloaded message",
+			output:      "Claude is currently overloaded",
+			wantLimited: true,
+		},
+		{
+			name:        "capacity message",
+			output:      "No capacity available",
+			wantLimited: true,
+		},
+		{
+			name:        "try again message",
+			output:      "Please try again later",
+			wantLimited: true,
+		},
+		{
+			name:        "throttled message",
+			output:      "Request throttled",
+			wantLimited: true,
+		},
+		{
+			name:        "normal output",
+			output:      "Task completed successfully",
+			wantLimited: false,
+		},
+		{
+			name:        "empty output",
+			output:      "",
+			wantLimited: false,
+		},
+		{
+			name:        "case insensitive",
+			output:      "RATE LIMIT EXCEEDED",
+			wantLimited: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := &RunResult{Output: tc.output}
+			runner.parseRateLimit(result)
+
+			if result.RateLimited != tc.wantLimited {
+				t.Errorf("expected RateLimited=%v, got %v", tc.wantLimited, result.RateLimited)
+			}
+		})
+	}
+}
+
+func TestParseRetryAfter(t *testing.T) {
+	testCases := []struct {
+		name     string
+		output   string
+		wantWait time.Duration
+	}{
+		{
+			name:     "30 seconds",
+			output:   "Rate limited. Try again in 30 seconds.",
+			wantWait: 30 * time.Second,
+		},
+		{
+			name:     "2 minutes",
+			output:   "Please retry after 2 minutes",
+			wantWait: 2 * time.Minute,
+		},
+		{
+			name:     "1 hour",
+			output:   "Wait 1 hour before retrying",
+			wantWait: 1 * time.Hour,
+		},
+		{
+			name:     "5 minute singular",
+			output:   "Retry in 5 minute",
+			wantWait: 5 * time.Minute,
+		},
+		{
+			name:     "no time specified",
+			output:   "Rate limit exceeded",
+			wantWait: 0,
+		},
+		{
+			name:     "empty output",
+			output:   "",
+			wantWait: 0,
+		},
+		{
+			name:     "60 seconds",
+			output:   "Wait 60 seconds",
+			wantWait: 60 * time.Second,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := parseRetryAfter(tc.output)
+			if got != tc.wantWait {
+				t.Errorf("expected %v, got %v", tc.wantWait, got)
+			}
+		})
+	}
+}
+
+func TestMockRunner_RateLimited(t *testing.T) {
+	t.Run("returns rate limited result", func(t *testing.T) {
+		mock := NewMockRunner(&RunResult{
+			Output:      "Rate limit exceeded",
+			RateLimited: true,
+			RetryAfter:  30 * time.Second,
+		})
+
+		result, err := mock.Run("prompt", false, 0)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !result.RateLimited {
+			t.Error("expected RateLimited=true")
+		}
+		if result.RetryAfter != 30*time.Second {
+			t.Errorf("expected RetryAfter=30s, got %v", result.RetryAfter)
+		}
+	})
+}
