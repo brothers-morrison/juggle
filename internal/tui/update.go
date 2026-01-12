@@ -583,9 +583,17 @@ func (m Model) handleSplitViewNavUp() (tea.Model, tea.Cmd) {
 			m.adjustBallsScrollOffset(balls)
 		}
 	case ActivityPanel:
-		// Scroll up one line in activity log
-		if m.activityLogOffset > 0 {
-			m.activityLogOffset--
+		// Scroll based on bottom pane mode
+		if m.bottomPaneMode == BottomPaneDetail {
+			// Scroll up in detail view
+			if m.detailScrollOffset > 0 {
+				m.detailScrollOffset--
+			}
+		} else {
+			// Scroll up one line in activity log
+			if m.activityLogOffset > 0 {
+				m.activityLogOffset--
+			}
 		}
 	}
 	return m, nil
@@ -612,10 +620,17 @@ func (m Model) handleSplitViewNavDown() (tea.Model, tea.Cmd) {
 			m.adjustBallsScrollOffset(balls)
 		}
 	case ActivityPanel:
-		// Scroll down one line in activity log
-		maxOffset := m.getActivityLogMaxOffset()
-		if m.activityLogOffset < maxOffset {
-			m.activityLogOffset++
+		// Scroll based on bottom pane mode
+		if m.bottomPaneMode == BottomPaneDetail {
+			// Scroll down in detail view
+			m.detailScrollOffset++
+			// The max offset will be clamped in the render function
+		} else {
+			// Scroll down one line in activity log
+			maxOffset := m.getActivityLogMaxOffset()
+			if m.activityLogOffset < maxOffset {
+				m.activityLogOffset++
+			}
 		}
 	}
 	return m, nil
@@ -655,12 +670,17 @@ func (m Model) handleSessionSwitchNext() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// handleToggleBottomPane toggles between activity log and ball detail in bottom pane
+// handleToggleBottomPane cycles through activity log, ball detail, and split view
 func (m Model) handleToggleBottomPane() (tea.Model, tea.Cmd) {
-	if m.bottomPaneMode == BottomPaneActivity {
+	switch m.bottomPaneMode {
+	case BottomPaneActivity:
 		m.bottomPaneMode = BottomPaneDetail
+		m.detailScrollOffset = 0 // Reset scroll on mode change
 		m.addActivity("Showing ball details in bottom pane")
-	} else {
+	case BottomPaneDetail:
+		m.bottomPaneMode = BottomPaneSplit
+		m.addActivity("Showing split view (details + activity)")
+	case BottomPaneSplit:
 		m.bottomPaneMode = BottomPaneActivity
 		m.addActivity("Showing activity log in bottom pane")
 	}
@@ -767,44 +787,67 @@ func (m *Model) adjustBallsScrollOffset(balls []*session.Ball) {
 	}
 }
 
-// handleActivityLogPageDown scrolls down half a page in the activity log
+// handleActivityLogPageDown scrolls down half a page in the activity log (or detail view)
 func (m Model) handleActivityLogPageDown() (tea.Model, tea.Cmd) {
 	m.lastKey = "" // Clear gg state
 	pageSize := (bottomPanelRows - 3) / 2
 	if pageSize < 1 {
 		pageSize = 1
 	}
-	maxOffset := m.getActivityLogMaxOffset()
-	m.activityLogOffset += pageSize
-	if m.activityLogOffset > maxOffset {
-		m.activityLogOffset = maxOffset
+	if m.bottomPaneMode == BottomPaneDetail {
+		// Scroll detail view
+		m.detailScrollOffset += pageSize
+		// Will be clamped in render
+	} else {
+		maxOffset := m.getActivityLogMaxOffset()
+		m.activityLogOffset += pageSize
+		if m.activityLogOffset > maxOffset {
+			m.activityLogOffset = maxOffset
+		}
 	}
 	return m, nil
 }
 
-// handleActivityLogPageUp scrolls up half a page in the activity log
+// handleActivityLogPageUp scrolls up half a page in the activity log (or detail view)
 func (m Model) handleActivityLogPageUp() (tea.Model, tea.Cmd) {
 	m.lastKey = "" // Clear gg state
 	pageSize := (bottomPanelRows - 3) / 2
 	if pageSize < 1 {
 		pageSize = 1
 	}
-	m.activityLogOffset -= pageSize
-	if m.activityLogOffset < 0 {
+	if m.bottomPaneMode == BottomPaneDetail {
+		// Scroll detail view
+		m.detailScrollOffset -= pageSize
+		if m.detailScrollOffset < 0 {
+			m.detailScrollOffset = 0
+		}
+	} else {
+		m.activityLogOffset -= pageSize
+		if m.activityLogOffset < 0 {
+			m.activityLogOffset = 0
+		}
+	}
+	return m, nil
+}
+
+// handleActivityLogGoToTop scrolls to the top of the activity log (or detail view)
+func (m Model) handleActivityLogGoToTop() (tea.Model, tea.Cmd) {
+	if m.bottomPaneMode == BottomPaneDetail {
+		m.detailScrollOffset = 0
+	} else {
 		m.activityLogOffset = 0
 	}
 	return m, nil
 }
 
-// handleActivityLogGoToTop scrolls to the top of the activity log
-func (m Model) handleActivityLogGoToTop() (tea.Model, tea.Cmd) {
-	m.activityLogOffset = 0
-	return m, nil
-}
-
-// handleActivityLogGoToBottom scrolls to the bottom of the activity log
+// handleActivityLogGoToBottom scrolls to the bottom of the activity log (or detail view)
 func (m Model) handleActivityLogGoToBottom() (tea.Model, tea.Cmd) {
-	m.activityLogOffset = m.getActivityLogMaxOffset()
+	if m.bottomPaneMode == BottomPaneDetail {
+		// Set to large number, will be clamped in render
+		m.detailScrollOffset = 1000
+	} else {
+		m.activityLogOffset = m.getActivityLogMaxOffset()
+	}
 	return m, nil
 }
 

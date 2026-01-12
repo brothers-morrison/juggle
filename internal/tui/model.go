@@ -62,6 +62,7 @@ type BottomPaneMode int
 const (
 	BottomPaneActivity BottomPaneMode = iota // Show activity log
 	BottomPaneDetail                         // Show highlighted ball details
+	BottomPaneSplit                          // Show both activity and details side by side
 )
 
 // SortOrder represents how balls are sorted
@@ -108,11 +109,12 @@ type Model struct {
 	activePanel Panel
 
 	// Activity log
-	activityLog       []ActivityEntry
-	activityLogOffset int    // Scroll offset for activity log
-	lastKey           string // Last key pressed (for gg detection)
-	helpScrollOffset  int    // Scroll offset for help view
-	ballsScrollOffset int    // Scroll offset for balls panel viewport
+	activityLog        []ActivityEntry
+	activityLogOffset  int    // Scroll offset for activity log
+	lastKey            string // Last key pressed (for gg detection)
+	helpScrollOffset   int    // Scroll offset for help view
+	ballsScrollOffset  int    // Scroll offset for balls panel viewport
+	detailScrollOffset int    // Scroll offset for ball detail panel
 
 	// Bottom pane mode (toggle between activity log and ball detail)
 	bottomPaneMode BottomPaneMode

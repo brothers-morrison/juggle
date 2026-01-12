@@ -77,9 +77,12 @@ func (m Model) renderSplitView() string {
 
 	// Render bottom panel based on mode
 	var bottomPanel string
-	if m.bottomPaneMode == BottomPaneDetail {
+	switch m.bottomPaneMode {
+	case BottomPaneDetail:
 		bottomPanel = m.renderBallDetailPanel(m.width-2, bottomPanelRows-2)
-	} else {
+	case BottomPaneSplit:
+		bottomPanel = m.renderSplitBottomPane(m.width-2, bottomPanelRows-2)
+	default:
 		bottomPanel = m.renderActivityPanel(m.width-2, bottomPanelRows-2)
 	}
 
@@ -416,14 +419,6 @@ func (m Model) renderActivityPanel(width, height int) string {
 func (m Model) renderBallDetailPanel(width, height int) string {
 	var b strings.Builder
 
-	// Title
-	title := "Ball Details"
-	if m.activePanel == ActivityPanel {
-		b.WriteString(activePanelTitleStyle.Render(title) + "\n")
-	} else {
-		b.WriteString(panelTitleStyle.Render(title) + "\n")
-	}
-
 	// Get the currently highlighted ball based on active panel
 	var ball *session.Ball
 	if m.activePanel == BallsPanel {
@@ -436,58 +431,245 @@ func (m Model) renderBallDetailPanel(width, height int) string {
 		ball = m.selectedBall
 	}
 
+	// Title with scroll indicator
+	title := "Ball Details"
+	if m.activePanel == ActivityPanel {
+		b.WriteString(activePanelTitleStyle.Render(title) + "\n")
+	} else {
+		b.WriteString(panelTitleStyle.Render(title) + "\n")
+	}
+
 	if ball == nil {
 		b.WriteString(helpStyle.Render("  No ball selected - navigate to a ball to see details"))
 		b.WriteString("\n")
-		b.WriteString(helpStyle.Render("  Press 'i' to toggle back to activity log"))
+		b.WriteString(helpStyle.Render("  Press 'i' to cycle views"))
 		return b.String()
 	}
 
-	// Calculate column widths for two-column layout
-	labelWidth := 12
-	availableWidth := width - labelWidth - 4
+	// Build content lines for the ball details
+	lines := m.buildBallDetailLines(ball, width)
 
-	// Render ball properties in a compact format
+	// Calculate visible lines
+	availableHeight := height - 1 // Account for title
+	if availableHeight < 1 {
+		availableHeight = 1
+	}
+
+	totalLines := len(lines)
+	maxOffset := totalLines - availableHeight
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+
+	// Clamp scroll offset
+	scrollOffset := m.detailScrollOffset
+	if scrollOffset > maxOffset {
+		scrollOffset = maxOffset
+	}
+	if scrollOffset < 0 {
+		scrollOffset = 0
+	}
+
+	// Show scroll indicator at top if not at beginning
+	if scrollOffset > 0 {
+		b.WriteString(helpStyle.Render(fmt.Sprintf("  ↑ %d more lines above", scrollOffset)) + "\n")
+		availableHeight--
+	}
+
+	// Render visible lines
+	endIdx := scrollOffset + availableHeight
+	if endIdx > totalLines {
+		endIdx = totalLines
+	}
+
+	for i := scrollOffset; i < endIdx; i++ {
+		b.WriteString(lines[i] + "\n")
+	}
+
+	// Show scroll indicator at bottom if more content
+	remaining := totalLines - endIdx
+	if remaining > 0 {
+		b.WriteString(helpStyle.Render(fmt.Sprintf("  ↓ %d more lines below (j/k to scroll)", remaining)))
+	}
+
+	return b.String()
+}
+
+// buildBallDetailLines builds the content lines for ball details
+func (m Model) buildBallDetailLines(ball *session.Ball, width int) []string {
+	var lines []string
+	labelWidth := 12
 	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6")).Width(labelWidth)
 	valueStyle := lipgloss.NewStyle()
 
 	// Row 1: ID and State
 	idLabel := labelStyle.Render("ID:")
-	idValue := truncate(ball.ID, 20)
+	idValue := ball.ID
 	stateLabel := labelStyle.Render("State:")
 	stateValue := string(ball.State)
 	if ball.State == session.StateBlocked && ball.BlockedReason != "" {
-		stateValue += " (" + truncate(ball.BlockedReason, 20) + ")"
+		stateValue += " (" + truncate(ball.BlockedReason, 30) + ")"
 	}
-	b.WriteString(fmt.Sprintf("  %s %s    %s %s\n", idLabel, valueStyle.Render(idValue), stateLabel, styleBallByState(ball, stateValue)))
+	lines = append(lines, fmt.Sprintf("  %s %s    %s %s", idLabel, valueStyle.Render(idValue), stateLabel, styleBallByState(ball, stateValue)))
 
 	// Row 2: Priority and Intent
 	priorityLabel := labelStyle.Render("Priority:")
 	priorityValue := string(ball.Priority)
 	intentLabel := labelStyle.Render("Intent:")
-	intentValue := truncate(ball.Intent, availableWidth-30)
-	b.WriteString(fmt.Sprintf("  %s %s    %s %s\n", priorityLabel, valueStyle.Render(priorityValue), intentLabel, valueStyle.Render(intentValue)))
+	intentValue := truncate(ball.Intent, width-50)
+	lines = append(lines, fmt.Sprintf("  %s %s    %s %s", priorityLabel, valueStyle.Render(priorityValue), intentLabel, valueStyle.Render(intentValue)))
 
 	// Row 3: Tags and Tests State
 	tagsLabel := labelStyle.Render("Tags:")
 	tagsValue := "(none)"
 	if len(ball.Tags) > 0 {
-		tagsValue = truncate(strings.Join(ball.Tags, ", "), 30)
+		tagsValue = strings.Join(ball.Tags, ", ")
+		if len(tagsValue) > 40 {
+			tagsValue = truncate(tagsValue, 40)
+		}
 	}
 	testsLabel := labelStyle.Render("Tests:")
 	testsValue := "(not set)"
 	if ball.TestsState != "" {
 		testsValue = ball.TestsStateLabel()
 	}
-	b.WriteString(fmt.Sprintf("  %s %s    %s %s\n", tagsLabel, valueStyle.Render(tagsValue), testsLabel, valueStyle.Render(testsValue)))
+	lines = append(lines, fmt.Sprintf("  %s %s    %s %s", tagsLabel, valueStyle.Render(tagsValue), testsLabel, valueStyle.Render(testsValue)))
 
-	// Row 4: Acceptance Criteria count
+	// Acceptance Criteria section
 	acLabel := labelStyle.Render("Criteria:")
-	acValue := fmt.Sprintf("%d items", len(ball.AcceptanceCriteria))
-	b.WriteString(fmt.Sprintf("  %s %s\n", acLabel, valueStyle.Render(acValue)))
+	if len(ball.AcceptanceCriteria) == 0 {
+		lines = append(lines, fmt.Sprintf("  %s %s", acLabel, valueStyle.Render("(none)")))
+	} else {
+		lines = append(lines, fmt.Sprintf("  %s (%d items)", acLabel, len(ball.AcceptanceCriteria)))
+		// Add each acceptance criterion
+		acStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+		for i, ac := range ball.AcceptanceCriteria {
+			acLine := fmt.Sprintf("    %d. %s", i+1, truncate(ac, width-10))
+			lines = append(lines, acStyle.Render(acLine))
+		}
+	}
 
-	// Footer hint
-	b.WriteString(helpStyle.Render("  Press 'i' to toggle to activity log | 'e' to edit ball in $EDITOR"))
+	// Output section if present
+	if ball.HasOutput() {
+		outputLabel := labelStyle.Render("Output:")
+		lines = append(lines, fmt.Sprintf("  %s", outputLabel))
+		outputStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("10")) // Green for output
+		// Split output into lines and add each
+		outputLines := strings.Split(ball.Output, "\n")
+		for _, line := range outputLines {
+			if line != "" {
+				lines = append(lines, outputStyle.Render("    "+truncate(line, width-8)))
+			}
+		}
+	}
+
+	return lines
+}
+
+// renderSplitBottomPane renders both activity log and ball details side by side
+func (m Model) renderSplitBottomPane(width, height int) string {
+	// Split width between activity and details (60% details, 40% activity)
+	detailWidth := int(float64(width) * 0.6)
+	activityWidth := width - detailWidth - 1
+
+	// Build detail panel
+	detailContent := m.renderBallDetailPanelCompact(detailWidth-2, height)
+	// Build activity panel
+	activityContent := m.renderActivityPanelCompact(activityWidth-2, height)
+
+	// Apply borders
+	detailBorder := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder(), false, true, false, false).
+		BorderForeground(lipgloss.Color("240")).
+		Width(detailWidth)
+
+	// Join side by side
+	return lipgloss.JoinHorizontal(
+		lipgloss.Top,
+		detailBorder.Render(detailContent),
+		activityContent,
+	)
+}
+
+// renderBallDetailPanelCompact renders a compact version of ball details for split view
+func (m Model) renderBallDetailPanelCompact(width, height int) string {
+	var b strings.Builder
+
+	// Get the currently highlighted ball
+	var ball *session.Ball
+	if m.activePanel == BallsPanel {
+		balls := m.filterBallsForSession()
+		if m.cursor < len(balls) {
+			ball = balls[m.cursor]
+		}
+	}
+	if ball == nil && m.selectedBall != nil {
+		ball = m.selectedBall
+	}
+
+	b.WriteString(panelTitleStyle.Render("Details") + "\n")
+
+	if ball == nil {
+		b.WriteString(helpStyle.Render("No ball selected"))
+		return b.String()
+	}
+
+	// Compact format: show key info
+	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))
+	valueStyle := lipgloss.NewStyle()
+
+	b.WriteString(fmt.Sprintf("%s %s\n", labelStyle.Render("ID:"), valueStyle.Render(ball.ID)))
+	b.WriteString(fmt.Sprintf("%s %s\n", labelStyle.Render("State:"), styleBallByState(ball, string(ball.State))))
+
+	// Show first 2-3 ACs that fit
+	if len(ball.AcceptanceCriteria) > 0 {
+		acStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+		maxACs := height - 3
+		if maxACs > len(ball.AcceptanceCriteria) {
+			maxACs = len(ball.AcceptanceCriteria)
+		}
+		if maxACs > 3 {
+			maxACs = 3
+		}
+		for i := 0; i < maxACs; i++ {
+			b.WriteString(acStyle.Render(fmt.Sprintf("%d. %s\n", i+1, truncate(ball.AcceptanceCriteria[i], width-5))))
+		}
+		if len(ball.AcceptanceCriteria) > maxACs {
+			b.WriteString(helpStyle.Render(fmt.Sprintf("  +%d more...", len(ball.AcceptanceCriteria)-maxACs)))
+		}
+	}
+
+	return b.String()
+}
+
+// renderActivityPanelCompact renders a compact activity log for split view
+func (m Model) renderActivityPanelCompact(width, height int) string {
+	var b strings.Builder
+
+	b.WriteString(panelTitleStyle.Render("Activity") + "\n")
+
+	if len(m.activityLog) == 0 {
+		b.WriteString(activityLogStyle.Render("No activity"))
+		return b.String()
+	}
+
+	// Show most recent entries that fit
+	visibleLines := height - 1
+	if visibleLines < 1 {
+		visibleLines = 1
+	}
+
+	startIdx := len(m.activityLog) - visibleLines
+	if startIdx < 0 {
+		startIdx = 0
+	}
+
+	for i := startIdx; i < len(m.activityLog); i++ {
+		entry := m.activityLog[i]
+		timeStr := entry.Time.Format("15:04")
+		line := fmt.Sprintf("%s %s", timeStr, truncate(entry.Message, width-8))
+		b.WriteString(activityLogStyle.Render(line) + "\n")
+	}
 
 	return b.String()
 }
@@ -503,31 +685,42 @@ func (m Model) renderStatusBar() string {
 		hints = []string{
 			"j/k:nav", "Enter:select", "a:add", "A:agent",
 			"e:edit", "d:del", "/:filter", "P:scope",
-			"i:detail", "?:help", "q:quit",
+			"i:view", "?:help", "q:quit",
 		}
 	case BallsPanel:
 		hints = []string{
 			"j/k:nav", "s:start", "c:done", "b:block",
 			"a:add", "e:edit", "t:tag", "d:del",
-			"[/]:session", "o:sort", "?:help",
+			"[/]:session", "o:sort", "i:view", "?:help",
 		}
 	case ActivityPanel:
 		hints = []string{
 			"j/k:scroll", "Ctrl+d/u:page", "gg:top", "G:bottom",
-			"Tab:panels", "i:detail", "?:help", "q:quit",
+			"Tab:panels", "i:view", "?:help", "q:quit",
 		}
 	}
 
 	status := strings.Join(hints, " | ")
+
+	// Add bottom pane mode indicator
+	var modeIndicator string
+	switch m.bottomPaneMode {
+	case BottomPaneActivity:
+		modeIndicator = "[Act]"
+	case BottomPaneDetail:
+		modeIndicator = "[Detail]"
+	case BottomPaneSplit:
+		modeIndicator = "[Split]"
+	}
 
 	// Add project scope indicator
 	var scopeIndicator string
 	if m.localOnly {
 		scopeIndicator = "[Local]"
 	} else {
-		scopeIndicator = "[All Projects]"
+		scopeIndicator = "[All]"
 	}
-	status = scopeIndicator + " " + status
+	status = modeIndicator + " " + scopeIndicator + " " + status
 
 	// Add agent status indicator if running
 	if m.agentStatus.Running {

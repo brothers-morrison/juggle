@@ -603,10 +603,18 @@ func (m Model) renderSplitHelpView() string {
 		{
 			title: "View Options",
 			items: []helpItem{
-				{"i", "Toggle bottom pane (activity log ↔ ball details)"},
+				{"i", "Cycle bottom pane (activity → detail → split → activity)"},
 				{"P", "Toggle project scope (local ↔ all projects)"},
 				{"R", "Refresh / Reload data"},
 				{"?", "Toggle this help"},
+			},
+		},
+		{
+			title: "Bottom Pane Modes",
+			items: []helpItem{
+				{"[Act]", "Activity log - shows recent actions"},
+				{"[Detail]", "Ball details - shows full ball info with ACs"},
+				{"[Split]", "Split view - shows both details and activity"},
 			},
 		},
 		{

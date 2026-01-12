@@ -917,7 +917,7 @@ func TestCountBallsForSession(t *testing.T) {
 	}
 }
 
-// Test bottom pane mode toggle
+// Test bottom pane mode toggle cycles through all three modes
 func TestBottomPaneModeToggle(t *testing.T) {
 	model := Model{
 		bottomPaneMode: BottomPaneActivity,
@@ -928,14 +928,21 @@ func TestBottomPaneModeToggle(t *testing.T) {
 	newModel, _ := model.handleToggleBottomPane()
 	m := newModel.(Model)
 	if m.bottomPaneMode != BottomPaneDetail {
-		t.Errorf("Expected BottomPaneDetail after toggle, got %v", m.bottomPaneMode)
+		t.Errorf("Expected BottomPaneDetail after first toggle, got %v", m.bottomPaneMode)
+	}
+
+	// Toggle to split
+	newModel, _ = m.handleToggleBottomPane()
+	m = newModel.(Model)
+	if m.bottomPaneMode != BottomPaneSplit {
+		t.Errorf("Expected BottomPaneSplit after second toggle, got %v", m.bottomPaneMode)
 	}
 
 	// Toggle back to activity
 	newModel, _ = m.handleToggleBottomPane()
 	m = newModel.(Model)
 	if m.bottomPaneMode != BottomPaneActivity {
-		t.Errorf("Expected BottomPaneActivity after second toggle, got %v", m.bottomPaneMode)
+		t.Errorf("Expected BottomPaneActivity after third toggle, got %v", m.bottomPaneMode)
 	}
 }
 
@@ -3046,8 +3053,8 @@ func TestStatusBarBallsPanel(t *testing.T) {
 	}
 
 	// Should show all projects indicator when localOnly is false
-	if !strings.Contains(statusBar, "[All Projects]") {
-		t.Errorf("Expected status bar to show [All Projects] indicator")
+	if !strings.Contains(statusBar, "[All]") {
+		t.Errorf("Expected status bar to show [All] indicator")
 	}
 }
 
@@ -3143,7 +3150,7 @@ func TestHelpViewContainsAllCategories(t *testing.T) {
 	model := Model{
 		mode:   splitHelpView,
 		width:  120,
-		height: 60,
+		height: 80, // Increased to show all categories
 	}
 
 	helpView := model.renderSplitHelpView()
@@ -3155,6 +3162,7 @@ func TestHelpViewContainsAllCategories(t *testing.T) {
 		"Balls Panel",
 		"Activity Log Panel",
 		"View Options",
+		"Bottom Pane Modes",
 		"Input Dialogs",
 		"Delete Confirmation",
 		"Quit",
@@ -3225,14 +3233,14 @@ func TestHelpViewContainsViewOptionsBindings(t *testing.T) {
 	model := Model{
 		mode:   splitHelpView,
 		width:  120,
-		height: 60,
+		height: 80, // Increased to show all content
 	}
 
 	helpView := model.renderSplitHelpView()
 
 	// Check view options keybinds
 	viewOptionsBindings := []string{
-		"Toggle bottom pane",
+		"Cycle bottom pane",
 		"Toggle project scope",
 		"Refresh",
 		"Toggle this help",
@@ -3993,5 +4001,405 @@ func TestCompleteSessionSwitchWorkflow(t *testing.T) {
 	// Verify we stayed in BallsPanel throughout
 	if model.activePanel != BallsPanel {
 		t.Errorf("Expected to remain in BallsPanel throughout, got %v", model.activePanel)
+	}
+}
+
+// Tests for Ball Detail Pane (juggler-67)
+
+// TestBallDetailPanelShowsAllAcceptanceCriteria verifies that all acceptance criteria are shown
+func TestBallDetailPanelShowsAllAcceptanceCriteria(t *testing.T) {
+	ball := &session.Ball{
+		ID:       "test-1",
+		Intent:   "Test ball",
+		State:    session.StateInProgress,
+		Priority: session.PriorityMedium,
+		AcceptanceCriteria: []string{
+			"First criterion",
+			"Second criterion",
+			"Third criterion",
+			"Fourth criterion",
+		},
+	}
+
+	model := Model{
+		mode:           splitView,
+		activePanel:    BallsPanel,
+		cursor:         0,
+		filteredBalls:  []*session.Ball{ball},
+		bottomPaneMode: BottomPaneDetail,
+		width:          120,
+		height:         40,
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+	}
+
+	// Build detail lines
+	lines := model.buildBallDetailLines(ball, 100)
+
+	// Should contain all 4 acceptance criteria
+	foundCriteria := 0
+	for _, line := range lines {
+		if strings.Contains(line, "First criterion") ||
+			strings.Contains(line, "Second criterion") ||
+			strings.Contains(line, "Third criterion") ||
+			strings.Contains(line, "Fourth criterion") {
+			foundCriteria++
+		}
+	}
+
+	if foundCriteria != 4 {
+		t.Errorf("Expected all 4 acceptance criteria in detail lines, found %d", foundCriteria)
+	}
+}
+
+// TestBallDetailPanelUpdatesWithNavigation verifies that the detail panel updates when navigating balls
+func TestBallDetailPanelUpdatesWithNavigation(t *testing.T) {
+	balls := []*session.Ball{
+		{ID: "test-1", Intent: "First ball", State: session.StatePending, Priority: session.PriorityMedium},
+		{ID: "test-2", Intent: "Second ball", State: session.StateInProgress, Priority: session.PriorityHigh},
+	}
+
+	model := Model{
+		mode:           splitView,
+		activePanel:    BallsPanel,
+		cursor:         0,
+		filteredBalls:  balls,
+		bottomPaneMode: BottomPaneDetail,
+		width:          120,
+		height:         40,
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+	}
+
+	// Build detail for first ball
+	lines1 := model.buildBallDetailLines(balls[0], 100)
+	hasFirstBall := false
+	for _, line := range lines1 {
+		if strings.Contains(line, "First ball") {
+			hasFirstBall = true
+			break
+		}
+	}
+	if !hasFirstBall {
+		t.Error("Expected first ball's intent in detail lines")
+	}
+
+	// Navigate to second ball
+	model.cursor = 1
+
+	// Build detail for second ball
+	lines2 := model.buildBallDetailLines(balls[1], 100)
+	hasSecondBall := false
+	for _, line := range lines2 {
+		if strings.Contains(line, "Second ball") {
+			hasSecondBall = true
+			break
+		}
+	}
+	if !hasSecondBall {
+		t.Error("Expected second ball's intent in detail lines")
+	}
+}
+
+// TestBallDetailPanelShowsAllProperties verifies that all required properties are shown
+func TestBallDetailPanelShowsAllProperties(t *testing.T) {
+	ball := &session.Ball{
+		ID:            "test-1",
+		Intent:        "Test ball intent",
+		State:         session.StateBlocked,
+		Priority:      session.PriorityHigh,
+		BlockedReason: "Waiting for API",
+		Tags:          []string{"feature", "backend"},
+		TestsState:    session.TestsStateNeeded,
+		AcceptanceCriteria: []string{
+			"First criterion",
+		},
+	}
+
+	model := Model{
+		mode:           splitView,
+		activePanel:    BallsPanel,
+		cursor:         0,
+		filteredBalls:  []*session.Ball{ball},
+		bottomPaneMode: BottomPaneDetail,
+		width:          120,
+		height:         40,
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+	}
+
+	lines := model.buildBallDetailLines(ball, 100)
+	content := strings.Join(lines, "\n")
+
+	// Check all required properties are present
+	checks := []struct {
+		name   string
+		needle string
+	}{
+		{"ID", "test-1"},
+		{"Intent", "Test ball intent"},
+		{"State", "blocked"},
+		{"Priority", "high"},
+		{"Blocked reason", "Waiting for API"},
+		{"Tags", "feature"},
+		{"Tags", "backend"},
+	}
+
+	for _, check := range checks {
+		if !strings.Contains(content, check.needle) {
+			t.Errorf("Expected ball detail to contain %s: '%s'", check.name, check.needle)
+		}
+	}
+}
+
+// TestBottomPaneSplitModeRendering verifies split mode renders both panels
+func TestBottomPaneSplitModeRendering(t *testing.T) {
+	ball := &session.Ball{
+		ID:       "test-1",
+		Intent:   "Test ball",
+		State:    session.StateInProgress,
+		Priority: session.PriorityMedium,
+		AcceptanceCriteria: []string{
+			"First criterion",
+		},
+	}
+
+	model := Model{
+		mode:           splitView,
+		activePanel:    BallsPanel,
+		cursor:         0,
+		filteredBalls:  []*session.Ball{ball},
+		selectedBall:   ball,
+		bottomPaneMode: BottomPaneSplit,
+		width:          120,
+		height:         40,
+		activityLog: []ActivityEntry{
+			{Message: "Test activity 1"},
+			{Message: "Test activity 2"},
+		},
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+	}
+
+	// Render split bottom pane
+	content := model.renderSplitBottomPane(100, 6)
+
+	// Should contain details panel title
+	if !strings.Contains(content, "Details") {
+		t.Error("Expected split view to contain 'Details' title")
+	}
+
+	// Should contain activity panel title
+	if !strings.Contains(content, "Activity") {
+		t.Error("Expected split view to contain 'Activity' title")
+	}
+}
+
+// TestDetailPaneScrolling verifies scrolling in detail mode
+func TestDetailPaneScrolling(t *testing.T) {
+	model := Model{
+		mode:               splitView,
+		activePanel:        ActivityPanel,
+		bottomPaneMode:     BottomPaneDetail,
+		detailScrollOffset: 0,
+		activityLog:        make([]ActivityEntry, 0),
+	}
+
+	// Scroll down
+	newModel, _ := model.handleSplitViewNavDown()
+	m := newModel.(Model)
+	if m.detailScrollOffset != 1 {
+		t.Errorf("Expected detailScrollOffset to be 1 after scrolling down, got %d", m.detailScrollOffset)
+	}
+
+	// Scroll up
+	newModel, _ = m.handleSplitViewNavUp()
+	m = newModel.(Model)
+	if m.detailScrollOffset != 0 {
+		t.Errorf("Expected detailScrollOffset to be 0 after scrolling up, got %d", m.detailScrollOffset)
+	}
+}
+
+// TestDetailPanePageDownUp verifies page scrolling in detail mode
+func TestDetailPanePageDownUp(t *testing.T) {
+	model := Model{
+		mode:               splitView,
+		activePanel:        ActivityPanel,
+		bottomPaneMode:     BottomPaneDetail,
+		detailScrollOffset: 0,
+		activityLog:        make([]ActivityEntry, 0),
+	}
+
+	// Page down
+	newModel, _ := model.handleActivityLogPageDown()
+	m := newModel.(Model)
+	if m.detailScrollOffset == 0 {
+		t.Error("Expected detailScrollOffset to increase after page down")
+	}
+
+	// Set to non-zero value and page up
+	m.detailScrollOffset = 5
+	newModel, _ = m.handleActivityLogPageUp()
+	m = newModel.(Model)
+	if m.detailScrollOffset >= 5 {
+		t.Errorf("Expected detailScrollOffset to decrease after page up, got %d", m.detailScrollOffset)
+	}
+}
+
+// TestDetailPaneGoToTopBottom verifies gg/G in detail mode
+func TestDetailPaneGoToTopBottom(t *testing.T) {
+	model := Model{
+		mode:               splitView,
+		activePanel:        ActivityPanel,
+		bottomPaneMode:     BottomPaneDetail,
+		detailScrollOffset: 5,
+		activityLog:        make([]ActivityEntry, 0),
+	}
+
+	// Go to top
+	newModel, _ := model.handleActivityLogGoToTop()
+	m := newModel.(Model)
+	if m.detailScrollOffset != 0 {
+		t.Errorf("Expected detailScrollOffset to be 0 after go to top, got %d", m.detailScrollOffset)
+	}
+
+	// Go to bottom
+	newModel, _ = m.handleActivityLogGoToBottom()
+	m = newModel.(Model)
+	if m.detailScrollOffset == 0 {
+		t.Error("Expected detailScrollOffset to be large after go to bottom")
+	}
+}
+
+// TestStatusBarShowsBottomPaneMode verifies status bar shows current mode
+func TestStatusBarShowsBottomPaneMode(t *testing.T) {
+	tests := []struct {
+		name           string
+		mode           BottomPaneMode
+		expectedIndicator string
+	}{
+		{"Activity mode", BottomPaneActivity, "[Act]"},
+		{"Detail mode", BottomPaneDetail, "[Detail]"},
+		{"Split mode", BottomPaneSplit, "[Split]"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			model := Model{
+				mode:           splitView,
+				activePanel:    BallsPanel,
+				bottomPaneMode: tt.mode,
+				localOnly:      true,
+				width:          120,
+				height:         40,
+			}
+
+			statusBar := model.renderStatusBar()
+			if !strings.Contains(statusBar, tt.expectedIndicator) {
+				t.Errorf("Expected status bar to show '%s', got: %s", tt.expectedIndicator, statusBar)
+			}
+		})
+	}
+}
+
+// TestDetailScrollOffsetResetOnToggle verifies scroll offset resets when toggling to detail mode
+func TestDetailScrollOffsetResetOnToggle(t *testing.T) {
+	model := Model{
+		bottomPaneMode:     BottomPaneActivity,
+		detailScrollOffset: 10, // Some non-zero value
+		activityLog:        make([]ActivityEntry, 0),
+	}
+
+	// Toggle to detail mode
+	newModel, _ := model.handleToggleBottomPane()
+	m := newModel.(Model)
+
+	if m.detailScrollOffset != 0 {
+		t.Errorf("Expected detailScrollOffset to reset to 0 when toggling to detail mode, got %d", m.detailScrollOffset)
+	}
+}
+
+// TestBallDetailPanelShowsOutput verifies that ball output is shown when present
+func TestBallDetailPanelShowsOutput(t *testing.T) {
+	ball := &session.Ball{
+		ID:       "test-1",
+		Intent:   "Research task",
+		State:    session.StateResearched,
+		Priority: session.PriorityMedium,
+		Output:   "Research findings:\nLine 1\nLine 2",
+	}
+
+	model := Model{
+		mode:           splitView,
+		activePanel:    BallsPanel,
+		cursor:         0,
+		filteredBalls:  []*session.Ball{ball},
+		bottomPaneMode: BottomPaneDetail,
+		width:          120,
+		height:         40,
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+			"researched":  true,
+		},
+	}
+
+	lines := model.buildBallDetailLines(ball, 100)
+	content := strings.Join(lines, "\n")
+
+	// Should contain output label
+	if !strings.Contains(content, "Output") {
+		t.Error("Expected ball detail to contain Output label")
+	}
+
+	// Should contain output content
+	if !strings.Contains(content, "Research findings") {
+		t.Error("Expected ball detail to contain output content")
+	}
+}
+
+// TestActivityLogScrollingInActivityMode verifies scrolling works in activity mode
+func TestActivityLogScrollingInActivityMode(t *testing.T) {
+	// Create enough log entries
+	entries := make([]ActivityEntry, 20)
+	for i := 0; i < 20; i++ {
+		entries[i] = ActivityEntry{Message: "Entry " + string(rune('A'+i))}
+	}
+
+	model := Model{
+		mode:              splitView,
+		activePanel:       ActivityPanel,
+		bottomPaneMode:    BottomPaneActivity, // Activity mode, not detail
+		activityLogOffset: 0,
+		activityLog:       entries,
+	}
+
+	// Scroll down - should update activityLogOffset, not detailScrollOffset
+	newModel, _ := model.handleSplitViewNavDown()
+	m := newModel.(Model)
+
+	if m.activityLogOffset != 1 {
+		t.Errorf("Expected activityLogOffset to be 1 in activity mode, got %d", m.activityLogOffset)
+	}
+	if m.detailScrollOffset != 0 {
+		t.Errorf("Expected detailScrollOffset to remain 0 in activity mode, got %d", m.detailScrollOffset)
 	}
 }
