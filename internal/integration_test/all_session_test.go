@@ -2,6 +2,7 @@ package integration_test
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -330,5 +331,91 @@ func TestAllMetaSession_BallFilterWithAll(t *testing.T) {
 	}
 	if strings.Contains(prompt, "Other ball") {
 		t.Error("Prompt should NOT include 'Other ball' when --ball filter is used")
+	}
+}
+
+// TestAllMetaSession_ProgressAppend tests that "juggle progress append all" works
+// properly and stores to _all directory
+func TestAllMetaSession_ProgressAppend(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Get session store
+	sessionStore := env.GetSessionStore(t)
+
+	// Append progress to "all" meta-session - note: cli maps "all" to "_all"
+	// Testing the store directly with "_all"
+	err := sessionStore.AppendProgress("_all", "[2024-01-01 10:00:00] First progress entry\n")
+	if err != nil {
+		t.Fatalf("Failed to append progress to _all: %v", err)
+	}
+
+	err = sessionStore.AppendProgress("_all", "[2024-01-01 10:30:00] Second progress entry\n")
+	if err != nil {
+		t.Fatalf("Failed to append second progress to _all: %v", err)
+	}
+
+	// Load progress
+	progress, err := sessionStore.LoadProgress("_all")
+	if err != nil {
+		t.Fatalf("Failed to load progress from _all: %v", err)
+	}
+
+	// Verify content
+	if !strings.Contains(progress, "First progress entry") {
+		t.Error("Expected progress to contain 'First progress entry'")
+	}
+	if !strings.Contains(progress, "Second progress entry") {
+		t.Error("Expected progress to contain 'Second progress entry'")
+	}
+}
+
+// TestAllMetaSession_ProgressFileLocation tests that progress for "all" is stored
+// in the correct location (.juggler/sessions/_all/progress.txt)
+func TestAllMetaSession_ProgressFileLocation(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	sessionStore := env.GetSessionStore(t)
+
+	// Append progress to _all
+	err := sessionStore.AppendProgress("_all", "Test progress\n")
+	if err != nil {
+		t.Fatalf("Failed to append progress: %v", err)
+	}
+
+	// Check file location
+	expectedPath := filepath.Join(env.ProjectDir, ".juggler", "sessions", "_all", "progress.txt")
+	if _, err := os.Stat(expectedPath); os.IsNotExist(err) {
+		t.Errorf("Expected progress file at %s", expectedPath)
+	}
+
+	// Read file directly
+	content, err := os.ReadFile(expectedPath)
+	if err != nil {
+		t.Fatalf("Failed to read progress file: %v", err)
+	}
+
+	if !strings.Contains(string(content), "Test progress") {
+		t.Error("Progress file should contain 'Test progress'")
+	}
+}
+
+// TestAllMetaSession_ProgressEmptyBeforeWrite tests that loading progress from
+// non-existent _all returns empty (not error)
+func TestAllMetaSession_ProgressEmptyBeforeWrite(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	sessionStore := env.GetSessionStore(t)
+
+	// Try to load progress before any writes
+	progress, err := sessionStore.LoadProgress("_all")
+	if err != nil {
+		t.Fatalf("Loading from non-existent _all should not error: %v", err)
+	}
+
+	if progress != "" {
+		t.Errorf("Expected empty progress, got '%s'", progress)
 	}
 }

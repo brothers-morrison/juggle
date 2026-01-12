@@ -539,3 +539,123 @@ func TestBallIDPrefixMatchesProjectDir(t *testing.T) {
 		t.Errorf("expected ID to start with '%s', got '%s'", expectedPrefix, ball.ID)
 	}
 }
+
+// TestSessionStore_AppendProgress_AllMetaSession tests that _all virtual session
+// creates directory and works for progress logging
+func TestSessionStore_AppendProgress_AllMetaSession(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, err := NewSessionStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+
+	// Append progress to "_all" virtual session - should work without creating session.json
+	err = store.AppendProgress("_all", "First progress entry\n")
+	if err != nil {
+		t.Fatalf("failed to append progress to _all: %v", err)
+	}
+
+	// Verify directory was created
+	allDir := filepath.Join(tmpDir, ".juggler", "sessions", "_all")
+	if _, err := os.Stat(allDir); os.IsNotExist(err) {
+		t.Error("expected _all session directory to be created")
+	}
+
+	// Verify progress.txt exists
+	progressPath := filepath.Join(allDir, "progress.txt")
+	if _, err := os.Stat(progressPath); os.IsNotExist(err) {
+		t.Error("expected progress.txt to be created in _all directory")
+	}
+
+	// Append more progress
+	err = store.AppendProgress("_all", "Second progress entry\n")
+	if err != nil {
+		t.Fatalf("failed to append second progress to _all: %v", err)
+	}
+
+	// Load progress
+	progress, err := store.LoadProgress("_all")
+	if err != nil {
+		t.Fatalf("failed to load progress from _all: %v", err)
+	}
+
+	expected := "First progress entry\nSecond progress entry\n"
+	if progress != expected {
+		t.Errorf("expected progress '%s', got '%s'", expected, progress)
+	}
+}
+
+// TestSessionStore_LoadProgress_AllMetaSession_Empty tests that loading from
+// non-existent _all returns empty string (not error)
+func TestSessionStore_LoadProgress_AllMetaSession_Empty(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, err := NewSessionStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+
+	// Load progress from _all that doesn't exist yet - should return empty, not error
+	progress, err := store.LoadProgress("_all")
+	if err != nil {
+		t.Fatalf("loading _all progress before it exists should not error: %v", err)
+	}
+
+	if progress != "" {
+		t.Errorf("expected empty progress for non-existent _all, got '%s'", progress)
+	}
+}
+
+// TestSessionStore_AllMetaSession_NoSessionFile tests that _all doesn't create
+// or require a session.json file (it's a virtual session for storage only)
+func TestSessionStore_AllMetaSession_NoSessionFile(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, err := NewSessionStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+
+	// Append progress to "_all"
+	err = store.AppendProgress("_all", "Progress entry\n")
+	if err != nil {
+		t.Fatalf("failed to append progress: %v", err)
+	}
+
+	// Verify session.json does NOT exist (only progress.txt should)
+	sessionPath := filepath.Join(tmpDir, ".juggler", "sessions", "_all", "session.json")
+	if _, err := os.Stat(sessionPath); !os.IsNotExist(err) {
+		t.Error("expected _all to NOT have session.json file")
+	}
+
+	// Verify progress.txt DOES exist
+	progressPath := filepath.Join(tmpDir, ".juggler", "sessions", "_all", "progress.txt")
+	if _, err := os.Stat(progressPath); os.IsNotExist(err) {
+		t.Error("expected _all to have progress.txt file")
+	}
+
+	// ListSessions should NOT include _all (since it has no session.json)
+	sessions, err := store.ListSessions()
+	if err != nil {
+		t.Fatalf("failed to list sessions: %v", err)
+	}
+
+	for _, s := range sessions {
+		if s.ID == "_all" {
+			t.Error("expected _all virtual session to NOT appear in ListSessions")
+		}
+	}
+}
