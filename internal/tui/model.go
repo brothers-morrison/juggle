@@ -64,6 +64,16 @@ const (
 	BottomPaneDetail                         // Show highlighted ball details
 )
 
+// SortOrder represents how balls are sorted
+type SortOrder int
+
+const (
+	SortByIDASC      SortOrder = iota // Sort by ID ascending (default)
+	SortByIDDESC                      // Sort by ID descending
+	SortByPriority                    // Sort by priority (urgent first)
+	SortByLastActivity                // Sort by last activity (most recent first)
+)
+
 // Special pseudo-session IDs
 const (
 	PseudoSessionAll      = "__all__"
@@ -105,6 +115,9 @@ type Model struct {
 
 	// Bottom pane mode (toggle between activity log and ball detail)
 	bottomPaneMode BottomPaneMode
+
+	// Sort order for balls
+	sortOrder SortOrder
 
 	// Filter state
 	filterStates      map[string]bool // State visibility toggles

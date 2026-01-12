@@ -2,6 +2,8 @@ package tui
 
 import (
 	"fmt"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbletea"
@@ -546,6 +548,10 @@ func (m Model) handleSplitViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.handleLaunchAgent()
 		}
 		return m, nil
+
+	case "o":
+		// Toggle sort order for balls
+		return m.handleToggleSortOrder()
 	}
 
 	return m, nil
@@ -663,6 +669,30 @@ func (m Model) handleToggleLocalOnly() (tea.Model, tea.Cmd) {
 	}
 	// Reload balls with new scope
 	return m, loadBalls(m.store, m.config, m.localOnly)
+}
+
+// handleToggleSortOrder cycles through sort orders for balls
+func (m Model) handleToggleSortOrder() (tea.Model, tea.Cmd) {
+	// Cycle through sort orders
+	switch m.sortOrder {
+	case SortByIDASC:
+		m.sortOrder = SortByIDDESC
+		m.addActivity("Sort: ID descending")
+		m.message = "Sort: ID descending"
+	case SortByIDDESC:
+		m.sortOrder = SortByPriority
+		m.addActivity("Sort: Priority")
+		m.message = "Sort: Priority (urgent first)"
+	case SortByPriority:
+		m.sortOrder = SortByLastActivity
+		m.addActivity("Sort: Last activity")
+		m.message = "Sort: Last activity (recent first)"
+	case SortByLastActivity:
+		m.sortOrder = SortByIDASC
+		m.addActivity("Sort: ID ascending")
+		m.message = "Sort: ID ascending"
+	}
+	return m, nil
 }
 
 // getActivityLogMaxOffset calculates the maximum scroll offset for activity log
@@ -1481,23 +1511,96 @@ func (m *Model) filterSessions() []*session.JuggleSession {
 	return filtered
 }
 
-// filterBallsForSession returns balls filtered by session and search query
+// filterBallsForSession returns balls filtered by session and search query, sorted by current sort order
 func (m *Model) filterBallsForSession() []*session.Ball {
 	balls := m.getBallsForSession()
 
+	var result []*session.Ball
 	if !m.panelSearchActive || m.panelSearchQuery == "" {
-		return balls
+		result = balls
+	} else {
+		query := strings.ToLower(m.panelSearchQuery)
+		filtered := make([]*session.Ball, 0)
+		for _, ball := range balls {
+			if strings.Contains(strings.ToLower(ball.Intent), query) ||
+				strings.Contains(strings.ToLower(ball.ID), query) {
+				filtered = append(filtered, ball)
+			}
+		}
+		result = filtered
 	}
 
-	query := strings.ToLower(m.panelSearchQuery)
-	filtered := make([]*session.Ball, 0)
-	for _, ball := range balls {
-		if strings.Contains(strings.ToLower(ball.Intent), query) ||
-			strings.Contains(strings.ToLower(ball.ID), query) {
-			filtered = append(filtered, ball)
+	// Apply sorting
+	m.sortBalls(result)
+	return result
+}
+
+// sortBalls sorts a slice of balls according to the current sort order
+func (m *Model) sortBalls(balls []*session.Ball) {
+	switch m.sortOrder {
+	case SortByIDASC:
+		sort.Slice(balls, func(i, j int) bool {
+			return compareBallIDs(balls[i].ID, balls[j].ID) < 0
+		})
+	case SortByIDDESC:
+		sort.Slice(balls, func(i, j int) bool {
+			return compareBallIDs(balls[i].ID, balls[j].ID) > 0
+		})
+	case SortByPriority:
+		sort.Slice(balls, func(i, j int) bool {
+			// Higher priority first
+			if balls[i].PriorityWeight() != balls[j].PriorityWeight() {
+				return balls[i].PriorityWeight() > balls[j].PriorityWeight()
+			}
+			// Then by ID ascending
+			return compareBallIDs(balls[i].ID, balls[j].ID) < 0
+		})
+	case SortByLastActivity:
+		sort.Slice(balls, func(i, j int) bool {
+			// More recent first
+			return balls[i].LastActivity.After(balls[j].LastActivity)
+		})
+	}
+}
+
+// compareBallIDs compares two ball IDs numerically
+// IDs are in format "project-N" where N is a number
+func compareBallIDs(id1, id2 string) int {
+	// Extract numeric parts for comparison
+	num1 := extractBallNumber(id1)
+	num2 := extractBallNumber(id2)
+
+	// If both have numeric parts, compare numerically first
+	if num1 != -1 && num2 != -1 {
+		if num1 < num2 {
+			return -1
+		} else if num1 > num2 {
+			return 1
+		}
+		// Numbers are equal, fall through to string comparison to compare prefixes
+	}
+
+	// Fall back to string comparison (also handles same numbers with different prefixes)
+	if id1 < id2 {
+		return -1
+	} else if id1 > id2 {
+		return 1
+	}
+	return 0
+}
+
+// extractBallNumber extracts the numeric suffix from a ball ID
+// Returns -1 if no numeric suffix is found
+func extractBallNumber(id string) int {
+	lastHyphen := strings.LastIndex(id, "-")
+	if lastHyphen >= 0 && lastHyphen < len(id)-1 {
+		numStr := id[lastHyphen+1:]
+		num, err := strconv.Atoi(numStr)
+		if err == nil {
+			return num
 		}
 	}
-	return filtered
+	return -1
 }
 
 // handleWatcherEvent handles file system change events

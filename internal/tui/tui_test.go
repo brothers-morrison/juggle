@@ -1816,3 +1816,324 @@ func TestCtrlUScrollsUpInActivityPanel(t *testing.T) {
 		t.Errorf("Expected panelSearchQuery to remain 'test-filter', got '%s'", m.panelSearchQuery)
 	}
 }
+
+// Test allBallsSameProject helper function
+func TestAllBallsSameProject(t *testing.T) {
+	tests := []struct {
+		name     string
+		balls    []*session.Ball
+		expected bool
+	}{
+		{
+			name:     "empty list",
+			balls:    []*session.Ball{},
+			expected: true,
+		},
+		{
+			name: "single ball",
+			balls: []*session.Ball{
+				{ID: "juggler-1", WorkingDir: "/home/user/juggler"},
+			},
+			expected: true,
+		},
+		{
+			name: "multiple balls same project",
+			balls: []*session.Ball{
+				{ID: "juggler-1", WorkingDir: "/home/user/juggler"},
+				{ID: "juggler-2", WorkingDir: "/home/user/juggler"},
+				{ID: "juggler-3", WorkingDir: "/home/user/juggler"},
+			},
+			expected: true,
+		},
+		{
+			name: "multiple balls different projects",
+			balls: []*session.Ball{
+				{ID: "juggler-1", WorkingDir: "/home/user/juggler"},
+				{ID: "myapp-1", WorkingDir: "/home/user/myapp"},
+			},
+			expected: false,
+		},
+		{
+			name: "three different projects",
+			balls: []*session.Ball{
+				{ID: "juggler-1", WorkingDir: "/home/user/juggler"},
+				{ID: "myapp-1", WorkingDir: "/home/user/myapp"},
+				{ID: "other-1", WorkingDir: "/home/user/other"},
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := allBallsSameProject(tt.balls)
+			if result != tt.expected {
+				t.Errorf("allBallsSameProject() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+// Test compareBallIDs function
+func TestCompareBallIDs(t *testing.T) {
+	tests := []struct {
+		id1      string
+		id2      string
+		expected int // -1 if id1 < id2, 0 if equal, 1 if id1 > id2
+	}{
+		{"juggler-1", "juggler-2", -1},
+		{"juggler-2", "juggler-1", 1},
+		{"juggler-5", "juggler-5", 0},
+		{"juggler-10", "juggler-2", 1},  // Numeric comparison, 10 > 2
+		{"juggler-1", "juggler-10", -1}, // Numeric comparison, 1 < 10
+		{"project-99", "project-100", -1},
+		{"aaa-1", "zzz-1", -1}, // Falls back to string comparison for same number
+		{"noid", "juggler-1", 1}, // No numeric part falls back to string comparison
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%s_vs_%s", tt.id1, tt.id2), func(t *testing.T) {
+			result := compareBallIDs(tt.id1, tt.id2)
+			if (result < 0 && tt.expected >= 0) || (result > 0 && tt.expected <= 0) || (result == 0 && tt.expected != 0) {
+				t.Errorf("compareBallIDs(%q, %q) = %d, want %d", tt.id1, tt.id2, result, tt.expected)
+			}
+		})
+	}
+}
+
+// Test extractBallNumber function
+func TestExtractBallNumber(t *testing.T) {
+	tests := []struct {
+		id       string
+		expected int
+	}{
+		{"juggler-1", 1},
+		{"juggler-99", 99},
+		{"myapp-1000", 1000},
+		{"project-name-123", 123},
+		{"nohyphen", -1},
+		{"ends-with-hyphen-", -1},
+		{"juggler-abc", -1}, // Non-numeric suffix
+		{"", -1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.id, func(t *testing.T) {
+			result := extractBallNumber(tt.id)
+			if result != tt.expected {
+				t.Errorf("extractBallNumber(%q) = %d, want %d", tt.id, result, tt.expected)
+			}
+		})
+	}
+}
+
+// Test sort order toggle
+func TestToggleSortOrder(t *testing.T) {
+	tests := []struct {
+		name            string
+		startSortOrder  SortOrder
+		expectedOrder   SortOrder
+		expectedMessage string
+	}{
+		{
+			name:            "ID ascending to descending",
+			startSortOrder:  SortByIDASC,
+			expectedOrder:   SortByIDDESC,
+			expectedMessage: "Sort: ID descending",
+		},
+		{
+			name:            "ID descending to priority",
+			startSortOrder:  SortByIDDESC,
+			expectedOrder:   SortByPriority,
+			expectedMessage: "Sort: Priority (urgent first)",
+		},
+		{
+			name:            "Priority to last activity",
+			startSortOrder:  SortByPriority,
+			expectedOrder:   SortByLastActivity,
+			expectedMessage: "Sort: Last activity (recent first)",
+		},
+		{
+			name:            "Last activity to ID ascending",
+			startSortOrder:  SortByLastActivity,
+			expectedOrder:   SortByIDASC,
+			expectedMessage: "Sort: ID ascending",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			model := Model{
+				sortOrder:   tt.startSortOrder,
+				activityLog: make([]ActivityEntry, 0),
+			}
+
+			newModel, _ := model.handleToggleSortOrder()
+			m := newModel.(Model)
+
+			if m.sortOrder != tt.expectedOrder {
+				t.Errorf("Expected sortOrder to be %v, got %v", tt.expectedOrder, m.sortOrder)
+			}
+
+			if m.message != tt.expectedMessage {
+				t.Errorf("Expected message to be %q, got %q", tt.expectedMessage, m.message)
+			}
+		})
+	}
+}
+
+// Test sorting balls by ID ascending
+func TestSortBallsByIDAscending(t *testing.T) {
+	balls := []*session.Ball{
+		{ID: "juggler-10"},
+		{ID: "juggler-2"},
+		{ID: "juggler-1"},
+		{ID: "juggler-100"},
+	}
+
+	model := Model{
+		sortOrder: SortByIDASC,
+	}
+
+	model.sortBalls(balls)
+
+	expected := []string{"juggler-1", "juggler-2", "juggler-10", "juggler-100"}
+	for i, ball := range balls {
+		if ball.ID != expected[i] {
+			t.Errorf("Expected ball at index %d to be %q, got %q", i, expected[i], ball.ID)
+		}
+	}
+}
+
+// Test sorting balls by ID descending
+func TestSortBallsByIDDescending(t *testing.T) {
+	balls := []*session.Ball{
+		{ID: "juggler-1"},
+		{ID: "juggler-10"},
+		{ID: "juggler-2"},
+	}
+
+	model := Model{
+		sortOrder: SortByIDDESC,
+	}
+
+	model.sortBalls(balls)
+
+	expected := []string{"juggler-10", "juggler-2", "juggler-1"}
+	for i, ball := range balls {
+		if ball.ID != expected[i] {
+			t.Errorf("Expected ball at index %d to be %q, got %q", i, expected[i], ball.ID)
+		}
+	}
+}
+
+// Test sorting balls by priority
+func TestSortBallsByPriority(t *testing.T) {
+	balls := []*session.Ball{
+		{ID: "juggler-1", Priority: session.PriorityLow},
+		{ID: "juggler-2", Priority: session.PriorityUrgent},
+		{ID: "juggler-3", Priority: session.PriorityMedium},
+		{ID: "juggler-4", Priority: session.PriorityHigh},
+	}
+
+	model := Model{
+		sortOrder: SortByPriority,
+	}
+
+	model.sortBalls(balls)
+
+	// Should be sorted by priority: urgent, high, medium, low
+	expectedOrder := []string{"juggler-2", "juggler-4", "juggler-3", "juggler-1"}
+	for i, ball := range balls {
+		if ball.ID != expectedOrder[i] {
+			t.Errorf("Expected ball at index %d to be %q, got %q", i, expectedOrder[i], ball.ID)
+		}
+	}
+}
+
+// Test that same priority balls are sorted by ID ascending
+func TestSortBallsByPriorityThenID(t *testing.T) {
+	balls := []*session.Ball{
+		{ID: "juggler-10", Priority: session.PriorityMedium},
+		{ID: "juggler-2", Priority: session.PriorityMedium},
+		{ID: "juggler-1", Priority: session.PriorityMedium},
+	}
+
+	model := Model{
+		sortOrder: SortByPriority,
+	}
+
+	model.sortBalls(balls)
+
+	// All same priority, should be sorted by ID ascending
+	expected := []string{"juggler-1", "juggler-2", "juggler-10"}
+	for i, ball := range balls {
+		if ball.ID != expected[i] {
+			t.Errorf("Expected ball at index %d to be %q, got %q", i, expected[i], ball.ID)
+		}
+	}
+}
+
+// Test filterBallsForSession applies sorting
+func TestFilterBallsForSessionAppliesSorting(t *testing.T) {
+	balls := []*session.Ball{
+		{ID: "juggler-10", State: session.StatePending, Tags: []string{"test"}},
+		{ID: "juggler-2", State: session.StatePending, Tags: []string{"test"}},
+		{ID: "juggler-1", State: session.StatePending, Tags: []string{"test"}},
+	}
+
+	model := Model{
+		filteredBalls:     balls,
+		panelSearchActive: false,
+		selectedSession:   &session.JuggleSession{ID: "test"},
+		sortOrder:         SortByIDASC,
+	}
+
+	result := model.filterBallsForSession()
+
+	// Should be sorted by ID ascending
+	expected := []string{"juggler-1", "juggler-2", "juggler-10"}
+	for i, ball := range result {
+		if ball.ID != expected[i] {
+			t.Errorf("Expected ball at index %d to be %q, got %q", i, expected[i], ball.ID)
+		}
+	}
+}
+
+// Test default sort order is ID ascending
+func TestDefaultSortOrderIsIDAscending(t *testing.T) {
+	var store *session.Store
+	var sessionStore *session.SessionStore
+	var config *session.Config
+
+	model := InitialSplitModel(store, sessionStore, config, true)
+
+	if model.sortOrder != SortByIDASC {
+		t.Errorf("Expected default sortOrder to be SortByIDASC, got %v", model.sortOrder)
+	}
+}
+
+// Test 'o' key toggles sort order
+func TestOKeyTogglesSortOrder(t *testing.T) {
+	model := Model{
+		mode:          splitView,
+		activePanel:   BallsPanel,
+		sortOrder:     SortByIDASC,
+		activityLog:   make([]ActivityEntry, 0),
+		sessions:      []*session.JuggleSession{},
+		filteredBalls: []*session.Ball{},
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+	}
+
+	newModel, _ := model.handleSplitViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'o'}})
+	m := newModel.(Model)
+
+	if m.sortOrder != SortByIDDESC {
+		t.Errorf("Expected sortOrder to be SortByIDDESC after pressing 'o', got %v", m.sortOrder)
+	}
+}

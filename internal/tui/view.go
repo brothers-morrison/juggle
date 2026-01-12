@@ -587,6 +587,7 @@ func (m Model) renderSplitHelpView() string {
 				{"s", "Start ball (→ in_progress)"},
 				{"c", "Complete ball (→ complete, archives)"},
 				{"b", "Block ball (prompts for reason)"},
+				{"o", "Toggle sort order (ID↑ → ID↓ → Priority → Activity)"},
 				{"/", "Filter balls"},
 				{"Ctrl+U", "Clear filter"},
 			},

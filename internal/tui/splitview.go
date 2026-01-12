@@ -199,7 +199,7 @@ func (m Model) renderBallsPanel(width, height int) string {
 	// Get filtered balls for current session
 	balls := m.filterBallsForSession()
 
-	// Title with filter indicator
+	// Title with filter and sort indicator
 	var title string
 	if m.selectedSession != nil {
 		// Use display names for pseudo-sessions
@@ -214,6 +214,19 @@ func (m Model) renderBallsPanel(width, height int) string {
 	} else {
 		title = "Balls: (none selected)"
 	}
+	// Add sort indicator
+	sortIndicator := ""
+	switch m.sortOrder {
+	case SortByIDASC:
+		sortIndicator = " [↑ID]"
+	case SortByIDDESC:
+		sortIndicator = " [↓ID]"
+	case SortByPriority:
+		sortIndicator = " [Pri]"
+	case SortByLastActivity:
+		sortIndicator = " [Act]"
+	}
+	title += sortIndicator
 	if m.panelSearchActive && m.activePanel == BallsPanel {
 		title = fmt.Sprintf("%s [%s]", title, m.panelSearchQuery)
 	}
@@ -242,6 +255,9 @@ func (m Model) renderBallsPanel(width, height int) string {
 	// Calculate available height for balls
 	ballsHeight := height - 4
 
+	// Determine if all balls are from the same project (to shorten IDs)
+	sameProject := allBallsSameProject(balls)
+
 	// Render balls list
 	for i, ball := range balls {
 		if i >= ballsHeight {
@@ -253,15 +269,10 @@ func (m Model) renderBallsPanel(width, height int) string {
 		stateIcon := getStateIcon(ball.State)
 		var line string
 
-		// Add project prefix when showing all projects
-		projectPrefix := ""
-		if !m.localOnly {
-			// Extract project name from working directory
-			projectName := ball.ID // ID already contains project prefix
-			if idx := strings.LastIndex(ball.WorkingDir, "/"); idx >= 0 {
-				projectName = ball.WorkingDir[idx+1:]
-			}
-			projectPrefix = projectName + ": "
+		// Build ID display - show short ID if all balls from same project
+		idDisplay := ball.ID
+		if sameProject {
+			idDisplay = ball.ShortID()
 		}
 
 		// Build tests state suffix if set
@@ -277,26 +288,37 @@ func (m Model) renderBallsPanel(width, height int) string {
 			}
 		}
 
+		// Add output marker if ball has output
+		outputMarker := ""
+		if ball.HasOutput() {
+			outputMarker = " [📋]"
+		}
+
+		// ID prefix (shown before intent)
+		idPrefix := fmt.Sprintf("[%s] ", idDisplay)
+
 		if ball.State == session.StateBlocked && ball.BlockedReason != "" {
 			// Show blocked reason inline for blocked balls
-			intent := truncate(ball.Intent, width-25-len(projectPrefix)-len(testsSuffix))
-			reason := truncate(ball.BlockedReason, width-len(intent)-15-len(projectPrefix)-len(testsSuffix))
-			line = fmt.Sprintf("%s %s%s [%s]%s",
+			intent := truncate(ball.Intent, width-25-len(idPrefix)-len(testsSuffix)-len(outputMarker))
+			reason := truncate(ball.BlockedReason, width-len(intent)-15-len(idPrefix)-len(testsSuffix)-len(outputMarker))
+			line = fmt.Sprintf("%s %s%s [%s]%s%s",
 				stateIcon,
-				projectPrefix,
+				idPrefix,
 				intent,
 				reason,
 				testsSuffix,
+				outputMarker,
 			)
 		} else {
-			availWidth := width - 15 - len(projectPrefix) - len(testsSuffix)
-			line = fmt.Sprintf("%s %s%-*s %s%s",
+			availWidth := width - 15 - len(idPrefix) - len(testsSuffix) - len(outputMarker)
+			line = fmt.Sprintf("%s %s%-*s %s%s%s",
 				stateIcon,
-				projectPrefix,
+				idPrefix,
 				availWidth,
 				truncate(ball.Intent, availWidth),
 				string(ball.State),
 				testsSuffix,
+				outputMarker,
 			)
 		}
 		line = styleBallByState(ball, truncate(line, width-2))
@@ -457,7 +479,7 @@ func (m Model) renderStatusBar() string {
 	case SessionsPanel:
 		hints = []string{"Tab:panels", "j/k:nav", "a:add", "A:agent", "e:edit", "d:del", "/:filter", "i:info", "?:help", "q:quit"}
 	case BallsPanel:
-		hints = []string{"Tab:panels", "j/k:nav", "[/]:session", "Space:back", "a:add", "e:edit", "t:tag", "i:info", "?:help"}
+		hints = []string{"Tab:panels", "j/k:nav", "[/]:session", "Space:back", "a:add", "e:edit", "t:tag", "o:sort", "i:info", "?:help"}
 	case ActivityPanel:
 		hints = []string{"Tab:panels", "j/k:scroll", "Ctrl+d/u:page", "gg:top", "G:bottom", "i:info", "?:help", "q:quit"}
 	}
@@ -534,6 +556,24 @@ func (m Model) countBallsForSession(sessionID string) int {
 		}
 		return count
 	}
+}
+
+// allBallsSameProject checks if all balls in the list are from the same project
+func allBallsSameProject(balls []*session.Ball) bool {
+	if len(balls) <= 1 {
+		return true
+	}
+	firstProject := ""
+	for i, ball := range balls {
+		// Extract project prefix from ID (e.g., "juggler" from "juggler-5")
+		project := ball.FolderName()
+		if i == 0 {
+			firstProject = project
+		} else if project != firstProject {
+			return false
+		}
+	}
+	return true
 }
 
 // getStateIcon returns an icon for the ball state
