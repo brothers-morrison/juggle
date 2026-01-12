@@ -12,8 +12,9 @@ const (
 
 	// Default values for global configuration fields
 	// These are documented here as the canonical source of defaults
-	DefaultIterationDelayMinutes = 0 // No delay between agent iterations by default
-	DefaultIterationDelayFuzz    = 0 // No variance in delay by default
+	DefaultIterationDelayMinutes = 0  // No delay between agent iterations by default
+	DefaultIterationDelayFuzz    = 0  // No variance in delay by default
+	DefaultOverloadRetryMinutes  = 10 // Wait 10 minutes before retrying after 529 overload exhaustion
 )
 
 // Config holds global juggler configuration
@@ -37,6 +38,8 @@ type Config struct {
 	// Agent iteration delay settings
 	IterationDelayMinutes int `json:"iteration_delay_minutes,omitempty"` // Base delay between iterations in minutes
 	IterationDelayFuzz    int `json:"iteration_delay_fuzz,omitempty"`    // Random +/- variance in minutes
+	// Overload retry settings (for 529 errors after Claude's built-in retries exhaust)
+	OverloadRetryMinutes int `json:"overload_retry_minutes,omitempty"` // Minutes to wait before retrying after 529 overload exhaustion
 
 	// UnknownFields stores any fields from the config file that aren't recognized.
 	// These are preserved when saving to avoid data loss.
@@ -45,9 +48,10 @@ type Config struct {
 
 // knownConfigFields lists the field names we recognize in config JSON
 var knownConfigFields = map[string]bool{
-	"search_paths":             true,
-	"iteration_delay_minutes":  true,
-	"iteration_delay_fuzz":     true,
+	"search_paths":            true,
+	"iteration_delay_minutes": true,
+	"iteration_delay_fuzz":    true,
+	"overload_retry_minutes":  true,
 }
 
 // UnmarshalJSON implements custom JSON unmarshaling to capture unknown fields
@@ -69,6 +73,7 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 	c.SearchPaths = alias.SearchPaths
 	c.IterationDelayMinutes = alias.IterationDelayMinutes
 	c.IterationDelayFuzz = alias.IterationDelayFuzz
+	c.OverloadRetryMinutes = alias.OverloadRetryMinutes
 
 	// Extract unknown fields
 	c.UnknownFields = make(map[string]interface{})
@@ -97,6 +102,9 @@ func (c *Config) MarshalJSON() ([]byte, error) {
 	if c.IterationDelayFuzz != 0 {
 		result["iteration_delay_fuzz"] = c.IterationDelayFuzz
 	}
+	if c.OverloadRetryMinutes != 0 {
+		result["overload_retry_minutes"] = c.OverloadRetryMinutes
+	}
 
 	return json.Marshal(result)
 }
@@ -118,6 +126,7 @@ func DefaultConfig() *Config {
 		SearchPaths:           []string{},
 		IterationDelayMinutes: DefaultIterationDelayMinutes,
 		IterationDelayFuzz:    DefaultIterationDelayFuzz,
+		OverloadRetryMinutes:  DefaultOverloadRetryMinutes,
 		UnknownFields:         make(map[string]interface{}),
 	}
 }
@@ -407,5 +416,49 @@ func ClearGlobalIterationDelayWithOptions(opts ConfigOptions) error {
 	}
 
 	config.ClearIterationDelay()
+	return config.SaveWithOptions(opts)
+}
+
+// SetOverloadRetryMinutes sets how long to wait before retrying after 529 overload exhaustion.
+func (c *Config) SetOverloadRetryMinutes(minutes int) {
+	c.OverloadRetryMinutes = minutes
+}
+
+// GetOverloadRetryMinutes returns the overload retry interval in minutes.
+// Returns the default (10) if not configured or set to 0.
+func (c *Config) GetOverloadRetryMinutes() int {
+	if c.OverloadRetryMinutes == 0 {
+		return DefaultOverloadRetryMinutes
+	}
+	return c.OverloadRetryMinutes
+}
+
+// GetGlobalOverloadRetryMinutes returns the overload retry setting from global config
+func GetGlobalOverloadRetryMinutes() (int, error) {
+	return GetGlobalOverloadRetryMinutesWithOptions(DefaultConfigOptions())
+}
+
+// GetGlobalOverloadRetryMinutesWithOptions returns the overload retry setting with custom options
+func GetGlobalOverloadRetryMinutesWithOptions(opts ConfigOptions) (int, error) {
+	config, err := LoadConfigWithOptions(opts)
+	if err != nil {
+		return DefaultOverloadRetryMinutes, err
+	}
+	return config.GetOverloadRetryMinutes(), nil
+}
+
+// UpdateGlobalOverloadRetryMinutes updates the overload retry setting in global config
+func UpdateGlobalOverloadRetryMinutes(minutes int) error {
+	return UpdateGlobalOverloadRetryMinutesWithOptions(DefaultConfigOptions(), minutes)
+}
+
+// UpdateGlobalOverloadRetryMinutesWithOptions updates the overload retry setting with custom options
+func UpdateGlobalOverloadRetryMinutesWithOptions(opts ConfigOptions, minutes int) error {
+	config, err := LoadConfigWithOptions(opts)
+	if err != nil {
+		return err
+	}
+
+	config.SetOverloadRetryMinutes(minutes)
 	return config.SaveWithOptions(opts)
 }

@@ -164,34 +164,37 @@ func init() {
 
 // AgentResult holds the result of an agent run
 type AgentResult struct {
-	Iterations       int           `json:"iterations"`
-	Complete         bool          `json:"complete"`
-	Blocked          bool          `json:"blocked"`
-	BlockedReason    string        `json:"blocked_reason,omitempty"`
-	TimedOut         bool          `json:"timed_out"`
-	TimeoutMessage   string        `json:"timeout_message,omitempty"`
-	RateLimitExceded bool          `json:"rate_limit_exceeded"`
-	TotalWaitTime    time.Duration `json:"total_wait_time,omitempty"`
-	BallsComplete    int           `json:"balls_complete"`
-	BallsBlocked     int           `json:"balls_blocked"`
-	BallsTotal       int           `json:"balls_total"`
-	StartedAt        time.Time     `json:"started_at"`
-	EndedAt          time.Time     `json:"ended_at"`
+	Iterations         int           `json:"iterations"`
+	Complete           bool          `json:"complete"`
+	Blocked            bool          `json:"blocked"`
+	BlockedReason      string        `json:"blocked_reason,omitempty"`
+	TimedOut           bool          `json:"timed_out"`
+	TimeoutMessage     string        `json:"timeout_message,omitempty"`
+	RateLimitExceded   bool          `json:"rate_limit_exceeded"`
+	TotalWaitTime      time.Duration `json:"total_wait_time,omitempty"`
+	OverloadRetries    int           `json:"overload_retries,omitempty"`    // Number of 529 overload retry waits
+	OverloadWaitTime   time.Duration `json:"overload_wait_time,omitempty"` // Total time spent waiting for overload recovery
+	BallsComplete      int           `json:"balls_complete"`
+	BallsBlocked       int           `json:"balls_blocked"`
+	BallsTotal         int           `json:"balls_total"`
+	StartedAt          time.Time     `json:"started_at"`
+	EndedAt            time.Time     `json:"ended_at"`
 }
 
 // AgentLoopConfig configures the agent loop behavior
 type AgentLoopConfig struct {
-	SessionID     string
-	ProjectDir    string
-	MaxIterations int
-	Trust         bool
-	Debug         bool          // Add debug reasoning instructions to prompt
-	IterDelay     time.Duration // Delay between iterations (set to 0 for tests)
-	Timeout       time.Duration // Timeout per iteration (0 = no timeout)
-	MaxWait       time.Duration // Maximum time to wait for rate limits (0 = wait indefinitely)
-	BallID        string        // Specific ball to work on (empty = all session balls)
-	Interactive   bool          // Run in interactive mode (full Claude TUI)
-	Model         string        // Model to use (opus, sonnet, haiku). Empty = auto-select based on ball model_size
+	SessionID            string
+	ProjectDir           string
+	MaxIterations        int
+	Trust                bool
+	Debug                bool          // Add debug reasoning instructions to prompt
+	IterDelay            time.Duration // Delay between iterations (set to 0 for tests)
+	Timeout              time.Duration // Timeout per iteration (0 = no timeout)
+	MaxWait              time.Duration // Maximum time to wait for rate limits (0 = wait indefinitely)
+	BallID               string        // Specific ball to work on (empty = all session balls)
+	Interactive          bool          // Run in interactive mode (full Claude TUI)
+	Model                string        // Model to use (opus, sonnet, haiku). Empty = auto-select based on ball model_size
+	OverloadRetryMinutes int           // Minutes to wait before retrying after 529 overload exhaustion (-1 = use config default, 0 = no wait)
 }
 
 // sessionStorageID returns the session ID used for storage (progress, output, lock)
@@ -254,11 +257,23 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 	rateLimitRetries := 0
 	rateLimitRetrying := false // Skip header when retrying after rate limit
 
+	// Track 529 overload exhaustion state
+	var overloadWaitTime time.Duration
+	overloadRetries := 0
+	overloadRetrying := false // Skip header when retrying after overload
+
+	// Load overload retry interval from config (or use provided override)
+	// -1 means "use config default", 0 means "no wait" (for testing), >0 is explicit minutes
+	overloadRetryMinutes := config.OverloadRetryMinutes
+	if overloadRetryMinutes < 0 {
+		overloadRetryMinutes, _ = session.GetGlobalOverloadRetryMinutesWithOptions(GetConfigOptions())
+	}
+
 	for iteration := 1; iteration <= config.MaxIterations; iteration++ {
 		result.Iterations = iteration
 
-		// Print iteration separator and header (skip when retrying after rate limit)
-		if !rateLimitRetrying {
+		// Print iteration separator and header (skip when retrying after rate limit or overload)
+		if !rateLimitRetrying && !overloadRetrying {
 			if iteration > 1 {
 				fmt.Println()
 				fmt.Println()
@@ -268,7 +283,8 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 			}
 			fmt.Printf("════════════════════════════════ Iteration %d/%d ════════════════════════════════\n\n", iteration, config.MaxIterations)
 		}
-		rateLimitRetrying = false // Reset for next iteration
+		rateLimitRetrying = false  // Reset for next iteration
+		overloadRetrying = false   // Reset for next iteration
 
 		// Record progress state before iteration (for validation)
 		// Use storageID (maps "all" to "_all") for progress tracking
@@ -358,6 +374,40 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 
 		// Reset retry counter on successful run
 		rateLimitRetries = 0
+
+		// Check for 529 overload exhaustion (Claude's built-in retries exhausted)
+		if runResult.OverloadExhausted {
+			waitTime := time.Duration(overloadRetryMinutes) * time.Minute
+
+			// Check if we've exceeded max wait
+			if config.MaxWait > 0 && totalWaitTime+overloadWaitTime+waitTime > config.MaxWait {
+				result.RateLimitExceded = true
+				result.TotalWaitTime = totalWaitTime + overloadWaitTime
+				result.OverloadRetries = overloadRetries
+				result.OverloadWaitTime = overloadWaitTime
+				logOverloadToProgress(config.ProjectDir, storageID,
+					fmt.Sprintf("Overload retry exceeded max-wait of %v (total waited: %v)", config.MaxWait, totalWaitTime+overloadWaitTime))
+				break
+			}
+
+			// Log waiting status
+			logOverloadToProgress(config.ProjectDir, storageID,
+				fmt.Sprintf("Claude API overloaded (529), waiting %v before retry (attempt %d)", waitTime, overloadRetries+1))
+
+			fmt.Printf("🔥 Claude API overloaded (529). Built-in retries exhausted.\n")
+			fmt.Printf("⏳ Waiting %v before restarting agent...\n", waitTime)
+
+			// Wait with countdown display
+			waitWithCountdown(waitTime)
+
+			overloadWaitTime += waitTime
+			overloadRetries++
+			overloadRetrying = true // Skip header on retry
+
+			// Retry this iteration (don't increment)
+			iteration--
+			continue
+		}
 
 		// Check for timeout
 		if runResult.TimedOut {
@@ -449,7 +499,9 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 		}
 	}
 
-	result.TotalWaitTime = totalWaitTime
+	result.TotalWaitTime = totalWaitTime + overloadWaitTime
+	result.OverloadRetries = overloadRetries
+	result.OverloadWaitTime = overloadWaitTime
 	result.EndedAt = time.Now()
 
 	// Save run history (best-effort, don't fail the run if this errors)
@@ -528,6 +580,17 @@ func logRateLimitToProgress(projectDir, sessionID, message string) {
 	}
 
 	entry := fmt.Sprintf("[RATE_LIMIT] %s", message)
+	_ = sessionStore.AppendProgress(sessionID, entry)
+}
+
+// logOverloadToProgress logs a 529 overload event to the session's progress file
+func logOverloadToProgress(projectDir, sessionID, message string) {
+	sessionStore, err := session.NewSessionStore(projectDir)
+	if err != nil {
+		return // Ignore errors - logging is best-effort
+	}
+
+	entry := fmt.Sprintf("[OVERLOAD_529] %s", message)
 	_ = sessionStore.AppendProgress(sessionID, entry)
 }
 
@@ -895,17 +958,18 @@ func runAgentRun(cmd *cobra.Command, args []string) error {
 
 	// Run the agent loop
 	loopConfig := AgentLoopConfig{
-		SessionID:     sessionID,
-		ProjectDir:    projectDir,
-		MaxIterations: iterations,
-		Trust:         agentTrust,
-		Debug:         false, // Debug mode now just shows prompt info, doesn't affect prompt content
-		IterDelay:     iterDelay,
-		Timeout:       agentTimeout,
-		MaxWait:       agentMaxWait,
-		BallID:        agentBallID,
-		Interactive:   interactive,
-		Model:         agentModel,
+		SessionID:            sessionID,
+		ProjectDir:           projectDir,
+		MaxIterations:        iterations,
+		Trust:                agentTrust,
+		Debug:                false, // Debug mode now just shows prompt info, doesn't affect prompt content
+		IterDelay:            iterDelay,
+		Timeout:              agentTimeout,
+		MaxWait:              agentMaxWait,
+		BallID:               agentBallID,
+		Interactive:          interactive,
+		Model:                agentModel,
+		OverloadRetryMinutes: -1, // Use config default
 	}
 
 	result, err := RunAgentLoop(loopConfig)
@@ -923,7 +987,10 @@ func runAgentRun(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Time elapsed: %s\n", elapsed.Round(time.Second))
 
 	if result.TotalWaitTime > 0 {
-		fmt.Printf("Rate limit wait time: %v\n", result.TotalWaitTime.Round(time.Second))
+		fmt.Printf("Total wait time: %v\n", result.TotalWaitTime.Round(time.Second))
+		if result.OverloadRetries > 0 {
+			fmt.Printf("  - Overload (529) retries: %d (waited %v)\n", result.OverloadRetries, result.OverloadWaitTime.Round(time.Second))
+		}
 	}
 
 	if result.Complete {

@@ -47,16 +47,17 @@ type RunOptions struct {
 
 // RunResult represents the outcome of a single agent run
 type RunResult struct {
-	Output        string
-	ExitCode      int
-	Complete      bool
-	Continue      bool // Agent completed one ball, more remain - signals loop to continue to next iteration
-	Blocked       bool
-	BlockedReason string
-	TimedOut      bool
-	RateLimited   bool          // Claude returned a rate limit error
-	RetryAfter    time.Duration // Suggested wait time from rate limit response (0 if not specified)
-	Error         error
+	Output            string
+	ExitCode          int
+	Complete          bool
+	Continue          bool // Agent completed one ball, more remain - signals loop to continue to next iteration
+	Blocked           bool
+	BlockedReason     string
+	TimedOut          bool
+	RateLimited       bool          // Claude returned a rate limit error
+	RetryAfter        time.Duration // Suggested wait time from rate limit response (0 if not specified)
+	OverloadExhausted bool          // Claude exited after exhausting 529 overload retries
+	Error             error
 }
 
 // Runner defines the interface for running AI agents.
@@ -323,6 +324,44 @@ func (r *ClaudeRunner) parseRateLimit(result *RunResult) {
 	// Extract retry-after time if specified
 	if result.RateLimited {
 		result.RetryAfter = parseRetryAfter(result.Output)
+	}
+
+	// Check for 529 overload exhaustion (Claude Code exited after its built-in retries)
+	// This is different from a transient rate limit - it means Claude gave up
+	r.parseOverloadExhausted(result)
+}
+
+// parseOverloadExhausted detects when Claude Code has exited after exhausting
+// its built-in 529 retry mechanism. This indicates the API is overloaded and
+// we should wait longer before attempting again.
+func (r *ClaudeRunner) parseOverloadExhausted(result *RunResult) {
+	output := strings.ToLower(result.Output)
+
+	// Patterns that indicate 529/overload exhaustion after Claude's retries
+	exhaustionPatterns := []string{
+		"529",                   // HTTP 529 status code
+		"overloaded_error",     // API error type
+		"api is overloaded",    // Common message
+		"exhausted.*retry",     // Retry exhaustion message
+		"maximum.*retries.*overload",
+	}
+
+	// Only flag as exhausted if the process exited with an error
+	if result.Error == nil && result.ExitCode == 0 {
+		return
+	}
+
+	for _, pattern := range exhaustionPatterns {
+		if strings.Contains(output, pattern) {
+			result.OverloadExhausted = true
+			return
+		}
+	}
+
+	// Also check for exit code 1 combined with overload indicators
+	// Claude Code typically exits with code 1 when rate limits are exhausted
+	if result.ExitCode != 0 && strings.Contains(output, "overloaded") {
+		result.OverloadExhausted = true
 	}
 }
 
