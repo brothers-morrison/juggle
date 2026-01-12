@@ -26,6 +26,7 @@ const (
 	inputBlockedView     // Prompt for blocked reason
 	inputTagView         // Add/remove tags (legacy, kept for backwards compatibility)
 	sessionSelectorView            // Session selector for tagging balls
+	dependencySelectorView         // Dependency selector for ball creation/editing
 	confirmSplitDelete             // Delete confirmation in split view
 	panelSearchView                // Search/filter within current panel
 	confirmAgentLaunch             // Agent launch confirmation
@@ -169,9 +170,15 @@ type Model struct {
 	pendingBallPriority        int      // Index in priority options (0=low, 1=medium, 2=high, 3=urgent)
 	pendingBallTags            string   // Comma-separated tags
 	pendingBallSession         int      // Index in session options (0=none, 1+ = session index)
-	pendingBallFormField       int      // Current field in form (0=intent, 1=priority, 2=tags, 3=session, 4+=ACs)
+	pendingBallDependsOn       []string // Selected dependency ball IDs
+	pendingBallFormField       int      // Current field in form (0=intent, 1=priority, 2=tags, 3=session, 4=depends_on, 5+=ACs)
 	pendingAcceptanceCriteria  []string // Acceptance criteria being collected
 	pendingACEditIndex         int      // Index of AC being edited (-1 = adding new, >= 0 = editing existing)
+
+	// Dependency selector state
+	dependencySelectBalls  []*session.Ball // Non-complete balls available for selection
+	dependencySelectIndex  int             // Current selection index in dependency selector
+	dependencySelectActive map[string]bool // Which dependencies are currently selected (by ID)
 
 	// File watcher
 	fileWatcher *watcher.Watcher

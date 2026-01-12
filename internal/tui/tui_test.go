@@ -7994,7 +7994,7 @@ func TestUnifiedBallFormAddAC(t *testing.T) {
 		pendingBallPriority:       1,
 		pendingBallTags:           "",
 		pendingBallSession:        0,
-		pendingBallFormField:      4, // On the "new AC" field (index 4 = first AC position)
+		pendingBallFormField:      5, // On the "new AC" field (index 5 = first AC position, after depends_on)
 		pendingAcceptanceCriteria: []string{},
 		textInput:                 ti,
 		sessions:                  []*session.JuggleSession{},
@@ -8014,8 +8014,8 @@ func TestUnifiedBallFormAddAC(t *testing.T) {
 	}
 
 	// Should stay on new AC field for adding more
-	if m.pendingBallFormField != 5 {
-		t.Errorf("Expected to stay on new AC field (5), got %d", m.pendingBallFormField)
+	if m.pendingBallFormField != 6 {
+		t.Errorf("Expected to stay on new AC field (6), got %d", m.pendingBallFormField)
 	}
 }
 
@@ -8032,7 +8032,7 @@ func TestUnifiedBallFormEditAC(t *testing.T) {
 		pendingBallPriority:       1,
 		pendingBallTags:           "",
 		pendingBallSession:        0,
-		pendingBallFormField:      4, // On first existing AC
+		pendingBallFormField:      5, // On first existing AC (index 5, after depends_on)
 		pendingAcceptanceCriteria: []string{"Original AC"},
 		textInput:                 ti,
 		sessions:                  []*session.JuggleSession{},
@@ -8061,39 +8061,39 @@ func TestUnifiedBallFormNavigateThroughACs(t *testing.T) {
 		pendingBallPriority:       1,
 		pendingBallTags:           "",
 		pendingBallSession:        0,
-		pendingBallFormField:      3, // On session field
+		pendingBallFormField:      4, // On depends_on field
 		pendingAcceptanceCriteria: []string{"AC 1", "AC 2", "AC 3"},
 		textInput:                 ti,
 		sessions:                  []*session.JuggleSession{},
 		activityLog:               make([]ActivityEntry, 0),
 	}
 
-	// Navigate down to first AC (field 4)
+	// Navigate down to first AC (field 5)
 	newModel, _ := model.handleUnifiedBallFormKey(tea.KeyMsg{Type: tea.KeyDown})
 	m := newModel.(Model)
-	if m.pendingBallFormField != 4 {
-		t.Errorf("Expected field 4 (AC 1), got %d", m.pendingBallFormField)
+	if m.pendingBallFormField != 5 {
+		t.Errorf("Expected field 5 (AC 1), got %d", m.pendingBallFormField)
 	}
 
 	// Navigate to second AC
 	newModel, _ = m.handleUnifiedBallFormKey(tea.KeyMsg{Type: tea.KeyDown})
 	m = newModel.(Model)
-	if m.pendingBallFormField != 5 {
-		t.Errorf("Expected field 5 (AC 2), got %d", m.pendingBallFormField)
+	if m.pendingBallFormField != 6 {
+		t.Errorf("Expected field 6 (AC 2), got %d", m.pendingBallFormField)
 	}
 
 	// Navigate to third AC
 	newModel, _ = m.handleUnifiedBallFormKey(tea.KeyMsg{Type: tea.KeyDown})
 	m = newModel.(Model)
-	if m.pendingBallFormField != 6 {
-		t.Errorf("Expected field 6 (AC 3), got %d", m.pendingBallFormField)
+	if m.pendingBallFormField != 7 {
+		t.Errorf("Expected field 7 (AC 3), got %d", m.pendingBallFormField)
 	}
 
 	// Navigate to "new AC" field
 	newModel, _ = m.handleUnifiedBallFormKey(tea.KeyMsg{Type: tea.KeyDown})
 	m = newModel.(Model)
-	if m.pendingBallFormField != 7 {
-		t.Errorf("Expected field 7 (new AC), got %d", m.pendingBallFormField)
+	if m.pendingBallFormField != 8 {
+		t.Errorf("Expected field 8 (new AC), got %d", m.pendingBallFormField)
 	}
 
 	// Navigate wrap to intent
@@ -8151,7 +8151,7 @@ func TestUnifiedBallFormCreateOnEmptyAC(t *testing.T) {
 		pendingBallPriority:       1,
 		pendingBallTags:           "",
 		pendingBallSession:        0,
-		pendingBallFormField:      4, // On the "new AC" field
+		pendingBallFormField:      5, // On the "new AC" field (index 5, after depends_on)
 		pendingAcceptanceCriteria: []string{},
 		textInput:                 ti,
 		sessions:                  []*session.JuggleSession{},
@@ -8227,7 +8227,7 @@ func TestUnifiedBallFormRequiresIntent(t *testing.T) {
 		pendingBallIntent:         "", // Empty intent
 		pendingBallPriority:       1,
 		pendingBallTags:           "",
-		pendingBallFormField:      4, // On new AC field
+		pendingBallFormField:      5, // On new AC field (index 5, after depends_on)
 		pendingAcceptanceCriteria: []string{},
 		textInput:                 ti,
 		sessions:                  []*session.JuggleSession{},
@@ -8313,5 +8313,410 @@ func TestAddBallGoesToUnifiedForm(t *testing.T) {
 	}
 	if m.pendingBallFormField != 0 {
 		t.Errorf("Expected to start at field 0 (intent), got %d", m.pendingBallFormField)
+	}
+}
+
+// =============================================================================
+// Dependency Selector Tests
+// =============================================================================
+
+// Test opening dependency selector from ball form
+func TestOpenDependencySelector(t *testing.T) {
+	ti := textinput.New()
+	ti.CharLimit = 256
+	ti.Width = 40
+
+	model := Model{
+		mode:                      unifiedBallFormView,
+		pendingBallIntent:         "Test ball",
+		pendingBallFormField:      4, // On depends_on field
+		pendingAcceptanceCriteria: []string{},
+		pendingBallDependsOn:      []string{},
+		textInput:                 ti,
+		sessions:                  []*session.JuggleSession{},
+		activityLog:               make([]ActivityEntry, 0),
+		balls: []*session.Ball{
+			{ID: "test-1", Intent: "Ball 1", State: session.StatePending},
+			{ID: "test-2", Intent: "Ball 2", State: session.StateInProgress},
+			{ID: "test-3", Intent: "Ball 3", State: session.StateComplete}, // Should not appear
+		},
+	}
+
+	// Press Enter to open selector
+	newModel, _ := model.handleUnifiedBallFormKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m := newModel.(Model)
+
+	if m.mode != dependencySelectorView {
+		t.Errorf("Expected mode to be dependencySelectorView, got %v", m.mode)
+	}
+
+	// Should only have 2 balls (excluding complete)
+	if len(m.dependencySelectBalls) != 2 {
+		t.Errorf("Expected 2 selectable balls (non-complete), got %d", len(m.dependencySelectBalls))
+	}
+
+	// Selection should start at index 0
+	if m.dependencySelectIndex != 0 {
+		t.Errorf("Expected selection index 0, got %d", m.dependencySelectIndex)
+	}
+}
+
+// Test dependency selector navigation
+func TestDependencySelectorNavigation(t *testing.T) {
+	model := Model{
+		mode:                   dependencySelectorView,
+		dependencySelectIndex:  0,
+		dependencySelectActive: make(map[string]bool),
+		dependencySelectBalls: []*session.Ball{
+			{ID: "test-1", Intent: "Ball 1", State: session.StatePending},
+			{ID: "test-2", Intent: "Ball 2", State: session.StateInProgress},
+			{ID: "test-3", Intent: "Ball 3", State: session.StateBlocked},
+		},
+		activityLog: make([]ActivityEntry, 0),
+	}
+
+	// Navigate down
+	newModel, _ := model.handleDependencySelectorKey(tea.KeyMsg{Type: tea.KeyDown})
+	m := newModel.(Model)
+	if m.dependencySelectIndex != 1 {
+		t.Errorf("Expected index 1 after down, got %d", m.dependencySelectIndex)
+	}
+
+	// Navigate down again
+	newModel, _ = m.handleDependencySelectorKey(tea.KeyMsg{Type: tea.KeyDown})
+	m = newModel.(Model)
+	if m.dependencySelectIndex != 2 {
+		t.Errorf("Expected index 2 after down, got %d", m.dependencySelectIndex)
+	}
+
+	// Navigate down at end should stay at end
+	newModel, _ = m.handleDependencySelectorKey(tea.KeyMsg{Type: tea.KeyDown})
+	m = newModel.(Model)
+	if m.dependencySelectIndex != 2 {
+		t.Errorf("Expected index 2 at boundary, got %d", m.dependencySelectIndex)
+	}
+
+	// Navigate up
+	newModel, _ = m.handleDependencySelectorKey(tea.KeyMsg{Type: tea.KeyUp})
+	m = newModel.(Model)
+	if m.dependencySelectIndex != 1 {
+		t.Errorf("Expected index 1 after up, got %d", m.dependencySelectIndex)
+	}
+}
+
+// Test toggling selection in dependency selector
+func TestDependencySelectorToggle(t *testing.T) {
+	model := Model{
+		mode:                   dependencySelectorView,
+		dependencySelectIndex:  0,
+		dependencySelectActive: make(map[string]bool),
+		dependencySelectBalls: []*session.Ball{
+			{ID: "test-1", Intent: "Ball 1", State: session.StatePending},
+			{ID: "test-2", Intent: "Ball 2", State: session.StateInProgress},
+		},
+		activityLog: make([]ActivityEntry, 0),
+	}
+
+	// Toggle selection on (space key)
+	newModel, _ := model.handleDependencySelectorKey(tea.KeyMsg{Type: tea.KeySpace})
+	m := newModel.(Model)
+
+	if !m.dependencySelectActive["test-1"] {
+		t.Error("Expected test-1 to be selected after toggle")
+	}
+
+	// Toggle selection off
+	newModel, _ = m.handleDependencySelectorKey(tea.KeyMsg{Type: tea.KeySpace})
+	m = newModel.(Model)
+
+	if m.dependencySelectActive["test-1"] {
+		t.Error("Expected test-1 to be deselected after second toggle")
+	}
+
+	// Select multiple balls
+	m.dependencySelectActive["test-1"] = true
+	m.dependencySelectIndex = 1
+	newModel, _ = m.handleDependencySelectorKey(tea.KeyMsg{Type: tea.KeySpace})
+	m = newModel.(Model)
+
+	if !m.dependencySelectActive["test-1"] || !m.dependencySelectActive["test-2"] {
+		t.Error("Expected both balls to be selected")
+	}
+}
+
+// Test confirming selection in dependency selector
+func TestDependencySelectorConfirm(t *testing.T) {
+	model := Model{
+		mode:                   dependencySelectorView,
+		dependencySelectIndex:  0,
+		dependencySelectActive: map[string]bool{
+			"test-1": true,
+			"test-2": true,
+		},
+		dependencySelectBalls: []*session.Ball{
+			{ID: "test-1", Intent: "Ball 1", State: session.StatePending},
+			{ID: "test-2", Intent: "Ball 2", State: session.StateInProgress},
+		},
+		pendingBallDependsOn: []string{},
+		activityLog:          make([]ActivityEntry, 0),
+	}
+
+	// Press Enter to confirm
+	newModel, _ := model.handleDependencySelectorKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m := newModel.(Model)
+
+	if m.mode != unifiedBallFormView {
+		t.Errorf("Expected mode to return to unifiedBallFormView, got %v", m.mode)
+	}
+
+	if len(m.pendingBallDependsOn) != 2 {
+		t.Errorf("Expected 2 dependencies, got %d", len(m.pendingBallDependsOn))
+	}
+
+	// Check that selector state was cleaned up
+	if m.dependencySelectBalls != nil {
+		t.Error("Expected dependencySelectBalls to be nil after confirm")
+	}
+	if m.dependencySelectActive != nil {
+		t.Error("Expected dependencySelectActive to be nil after confirm")
+	}
+}
+
+// Test cancelling dependency selector
+func TestDependencySelectorCancel(t *testing.T) {
+	model := Model{
+		mode:                   dependencySelectorView,
+		dependencySelectIndex:  0,
+		dependencySelectActive: map[string]bool{
+			"test-1": true,
+		},
+		dependencySelectBalls: []*session.Ball{
+			{ID: "test-1", Intent: "Ball 1", State: session.StatePending},
+		},
+		pendingBallDependsOn: []string{}, // Should remain empty
+		activityLog:          make([]ActivityEntry, 0),
+	}
+
+	// Press Escape to cancel
+	newModel, _ := model.handleDependencySelectorKey(tea.KeyMsg{Type: tea.KeyEsc})
+	m := newModel.(Model)
+
+	if m.mode != unifiedBallFormView {
+		t.Errorf("Expected mode to return to unifiedBallFormView, got %v", m.mode)
+	}
+
+	// Dependencies should NOT be set (cancel discards selection)
+	if len(m.pendingBallDependsOn) != 0 {
+		t.Errorf("Expected 0 dependencies after cancel, got %d", len(m.pendingBallDependsOn))
+	}
+}
+
+// Test dependency selector preserves existing selection
+func TestDependencySelectorPreservesExisting(t *testing.T) {
+	ti := textinput.New()
+	ti.CharLimit = 256
+	ti.Width = 40
+
+	model := Model{
+		mode:                      unifiedBallFormView,
+		pendingBallIntent:         "Test ball",
+		pendingBallFormField:      4, // On depends_on field
+		pendingBallDependsOn:      []string{"test-1"}, // Pre-existing dependency
+		pendingAcceptanceCriteria: []string{},
+		textInput:                 ti,
+		sessions:                  []*session.JuggleSession{},
+		activityLog:               make([]ActivityEntry, 0),
+		balls: []*session.Ball{
+			{ID: "test-1", Intent: "Ball 1", State: session.StatePending},
+			{ID: "test-2", Intent: "Ball 2", State: session.StateInProgress},
+		},
+	}
+
+	// Press Enter to open selector
+	newModel, _ := model.handleUnifiedBallFormKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m := newModel.(Model)
+
+	// Existing dependency should be pre-selected
+	if !m.dependencySelectActive["test-1"] {
+		t.Error("Expected existing dependency test-1 to be pre-selected")
+	}
+	if m.dependencySelectActive["test-2"] {
+		t.Error("Expected test-2 to NOT be pre-selected")
+	}
+}
+
+// Test ball creation includes dependencies
+func TestBallCreationWithDependencies(t *testing.T) {
+	ti := textinput.New()
+	ti.CharLimit = 256
+	ti.Width = 40
+	ti.Focus()
+
+	tmpDir := t.TempDir()
+	store, _ := session.NewStore(tmpDir)
+
+	model := Model{
+		mode:                      unifiedBallFormView,
+		pendingBallIntent:         "Ball with dependencies",
+		pendingBallPriority:       1,
+		pendingBallTags:           "",
+		pendingBallSession:        0,
+		pendingBallDependsOn:      []string{"dep-1", "dep-2"},
+		pendingBallFormField:      6, // On "new AC" field (field 5=first AC, 6=new AC input)
+		pendingAcceptanceCriteria: []string{"Test AC"},
+		textInput:                 ti,
+		sessions:                  []*session.JuggleSession{},
+		activityLog:               make([]ActivityEntry, 0),
+		store:                     store,
+	}
+	model.textInput.SetValue("") // Empty value to trigger ball creation
+
+	// Press enter on empty new AC field to finalize ball creation
+	newModel, _ := model.handleUnifiedBallFormKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m := newModel.(Model)
+
+	if m.mode != splitView {
+		t.Errorf("Expected mode to be splitView after creating ball, got %v", m.mode)
+	}
+
+	// Load balls and verify dependencies were set
+	balls, err := store.LoadBalls()
+	if err != nil {
+		t.Fatalf("Failed to load balls: %v", err)
+	}
+
+	if len(balls) != 1 {
+		t.Fatalf("Expected 1 ball, got %d", len(balls))
+	}
+
+	if len(balls[0].DependsOn) != 2 {
+		t.Errorf("Expected 2 dependencies on ball, got %d", len(balls[0].DependsOn))
+	}
+
+	// Check dependencies are present
+	depMap := make(map[string]bool)
+	for _, dep := range balls[0].DependsOn {
+		depMap[dep] = true
+	}
+	if !depMap["dep-1"] || !depMap["dep-2"] {
+		t.Errorf("Expected dependencies dep-1 and dep-2, got %v", balls[0].DependsOn)
+	}
+}
+
+// Test dependency selector with no non-complete balls shows message
+func TestDependencySelectorNoBalls(t *testing.T) {
+	ti := textinput.New()
+	ti.CharLimit = 256
+	ti.Width = 40
+
+	model := Model{
+		mode:                      unifiedBallFormView,
+		pendingBallIntent:         "Test ball",
+		pendingBallFormField:      4, // On depends_on field
+		pendingBallDependsOn:      []string{},
+		pendingAcceptanceCriteria: []string{},
+		textInput:                 ti,
+		sessions:                  []*session.JuggleSession{},
+		activityLog:               make([]ActivityEntry, 0),
+		balls: []*session.Ball{
+			{ID: "test-1", Intent: "Ball 1", State: session.StateComplete},
+			{ID: "test-2", Intent: "Ball 2", State: session.StateResearched},
+		},
+	}
+
+	// Press Enter to try opening selector
+	newModel, _ := model.handleUnifiedBallFormKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m := newModel.(Model)
+
+	// Should stay in form with a message
+	if m.mode != unifiedBallFormView {
+		t.Errorf("Expected to stay in unifiedBallFormView when no balls available, got %v", m.mode)
+	}
+	if m.message != "No non-complete balls available as dependencies" {
+		t.Errorf("Expected message about no balls, got '%s'", m.message)
+	}
+}
+
+// Test rendering unified ball form includes Depends On field
+func TestRenderUnifiedBallFormDependsOnField(t *testing.T) {
+	ti := textinput.New()
+	ti.CharLimit = 256
+	ti.Width = 40
+
+	model := Model{
+		mode:                      unifiedBallFormView,
+		pendingBallIntent:         "Test ball",
+		pendingBallPriority:       1,
+		pendingBallDependsOn:      []string{"dep-1", "dep-2"},
+		pendingBallFormField:      0,
+		pendingAcceptanceCriteria: []string{},
+		textInput:                 ti,
+		sessions:                  []*session.JuggleSession{},
+	}
+
+	view := model.renderUnifiedBallFormView()
+
+	if !strings.Contains(view, "Depends On:") {
+		t.Error("View should contain 'Depends On:' field")
+	}
+	if !strings.Contains(view, "dep-1") || !strings.Contains(view, "dep-2") {
+		t.Error("View should show selected dependencies")
+	}
+}
+
+// Test rendering dependency selector view
+func TestRenderDependencySelectorView(t *testing.T) {
+	model := Model{
+		mode:                   dependencySelectorView,
+		dependencySelectIndex:  1,
+		dependencySelectActive: map[string]bool{
+			"test-1": true,
+		},
+		dependencySelectBalls: []*session.Ball{
+			{ID: "test-1", Intent: "Ball 1", State: session.StatePending},
+			{ID: "test-2", Intent: "Ball 2", State: session.StateInProgress},
+		},
+	}
+
+	view := model.renderDependencySelectorView()
+
+	if !strings.Contains(view, "Select Dependencies") {
+		t.Error("View should contain title 'Select Dependencies'")
+	}
+	if !strings.Contains(view, "Ball 1") || !strings.Contains(view, "Ball 2") {
+		t.Error("View should show ball intents")
+	}
+	if !strings.Contains(view, "[✓]") {
+		t.Error("View should show checked checkbox for selected ball")
+	}
+	if !strings.Contains(view, "Selected: 1") {
+		t.Error("View should show selection count")
+	}
+}
+
+// Test clearPendingBallState clears dependency state
+func TestClearPendingBallStateClearsDependencies(t *testing.T) {
+	model := Model{
+		pendingBallIntent:          "Test",
+		pendingBallPriority:        2,
+		pendingBallDependsOn:       []string{"dep-1"},
+		dependencySelectBalls:     []*session.Ball{{ID: "test-1"}},
+		dependencySelectIndex:      1,
+		dependencySelectActive:     map[string]bool{"test-1": true},
+	}
+
+	model.clearPendingBallState()
+
+	if model.pendingBallDependsOn != nil {
+		t.Error("Expected pendingBallDependsOn to be nil")
+	}
+	if model.dependencySelectBalls != nil {
+		t.Error("Expected dependencySelectBalls to be nil")
+	}
+	if model.dependencySelectIndex != 0 {
+		t.Error("Expected dependencySelectIndex to be 0")
+	}
+	if model.dependencySelectActive != nil {
+		t.Error("Expected dependencySelectActive to be nil")
 	}
 }

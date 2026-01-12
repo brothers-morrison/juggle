@@ -36,6 +36,8 @@ func (m Model) View() string {
 		return m.renderTagView()
 	case sessionSelectorView:
 		return m.renderSessionSelectorView()
+	case dependencySelectorView:
+		return m.renderDependencySelectorView()
 	case confirmSplitDelete:
 		return m.renderSplitConfirmDelete()
 	case confirmAgentLaunch:
@@ -521,6 +523,94 @@ func (m Model) renderSessionSelectorView() string {
 	help := lipgloss.NewStyle().
 		Faint(true).
 		Render("j/k or ↑/↓ = navigate | Enter/Space = select | Esc = cancel")
+	b.WriteString(help)
+
+	return b.String()
+}
+
+// renderDependencySelectorView renders the dependency selection dialog
+func (m Model) renderDependencySelectorView() string {
+	var b strings.Builder
+
+	title := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("6")).
+		Render("Select Dependencies")
+	b.WriteString(title + "\n\n")
+
+	instructions := lipgloss.NewStyle().
+		Faint(true).
+		Render("Use Space to toggle selection, Enter to confirm")
+	b.WriteString(instructions + "\n\n")
+
+	// Show ball list
+	if len(m.dependencySelectBalls) == 0 {
+		noBalls := lipgloss.NewStyle().
+			Faint(true).
+			Render("  No non-complete balls available")
+		b.WriteString(noBalls + "\n")
+	} else {
+		selectedStyle := lipgloss.NewStyle().
+			Bold(true).
+			Background(lipgloss.Color("240")).
+			Foreground(lipgloss.Color("15"))
+		checkedStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("2"))
+		uncheckedStyle := lipgloss.NewStyle().
+			Faint(true)
+		stateStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("8"))
+
+		for i, ball := range m.dependencySelectBalls {
+			cursor := "  "
+			if i == m.dependencySelectIndex {
+				cursor = "> "
+			}
+
+			// Checkbox
+			checkbox := "[ ]"
+			if m.dependencySelectActive[ball.ID] {
+				checkbox = "[✓]"
+			}
+
+			// Ball info
+			shortID := ball.ShortID()
+			intent := truncate(ball.Intent, 40)
+			state := string(ball.State)
+
+			fullLine := fmt.Sprintf("%s%s %s %s - %s", cursor, checkbox, shortID, "("+state+")", intent)
+
+			if i == m.dependencySelectIndex {
+				// Highlight the whole line when cursor is on it
+				b.WriteString(selectedStyle.Render(fullLine) + "\n")
+			} else if m.dependencySelectActive[ball.ID] {
+				// Show checked items in green
+				b.WriteString(fmt.Sprintf("%s%s %s %s - %s\n", cursor, checkedStyle.Render(checkbox), shortID, stateStyle.Render("("+state+")"), intent))
+			} else {
+				b.WriteString(fmt.Sprintf("%s%s %s %s - %s\n", cursor, uncheckedStyle.Render(checkbox), shortID, stateStyle.Render("("+state+")"), intent))
+			}
+		}
+	}
+
+	b.WriteString("\n")
+
+	// Show current selection count
+	selectedCount := len(m.dependencySelectActive)
+	if selectedCount > 0 {
+		countStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("2"))
+		b.WriteString(countStyle.Render(fmt.Sprintf("Selected: %d", selectedCount)) + "\n\n")
+	}
+
+	// Show message if any
+	if m.message != "" {
+		b.WriteString(messageStyle.Render(m.message) + "\n\n")
+	}
+
+	// Help
+	help := lipgloss.NewStyle().
+		Faint(true).
+		Render("j/k or ↑/↓ = navigate | Space = toggle | Enter = confirm | Esc = cancel")
 	b.WriteString(help)
 
 	return b.String()
@@ -1119,11 +1209,12 @@ func (m Model) renderUnifiedBallFormView() string {
 
 	// Field constants
 	const (
-		fieldIntent   = 0
-		fieldPriority = 1
-		fieldTags     = 2
-		fieldSession  = 3
-		fieldACStart  = 4 // ACs start at index 4
+		fieldIntent    = 0
+		fieldPriority  = 1
+		fieldTags      = 2
+		fieldSession   = 3
+		fieldDependsOn = 4
+		fieldACStart   = 5 // ACs start at index 5
 	)
 
 	// Priority options
@@ -1220,6 +1311,29 @@ func (m Model) renderUnifiedBallFormView() string {
 			}
 		} else {
 			b.WriteString(optionNormalStyle.Render(opt))
+		}
+	}
+	b.WriteString("\n")
+
+	// --- Depends On field ---
+	labelStyle = normalStyle
+	if m.pendingBallFormField == fieldDependsOn {
+		labelStyle = activeFieldStyle
+	}
+	b.WriteString(labelStyle.Render("Depends On: "))
+	if len(m.pendingBallDependsOn) == 0 {
+		if m.pendingBallFormField == fieldDependsOn {
+			b.WriteString(optionSelectedStyle.Render("(none) - press Enter to select"))
+		} else {
+			b.WriteString(optionNormalStyle.Render("(none)"))
+		}
+	} else {
+		// Show selected dependencies
+		depDisplay := strings.Join(m.pendingBallDependsOn, ", ")
+		if m.pendingBallFormField == fieldDependsOn {
+			b.WriteString(selectedStyle.Render(depDisplay) + optionNormalStyle.Render(" - press Enter to edit"))
+		} else {
+			b.WriteString(depDisplay)
 		}
 	}
 	b.WriteString("\n\n")

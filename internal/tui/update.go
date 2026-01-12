@@ -44,6 +44,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleSessionSelectorKey(msg)
 		}
 
+		// Handle dependency selector mode
+		if m.mode == dependencySelectorView {
+			return m.handleDependencySelectorKey(msg)
+		}
+
 		// Handle panel search input
 		if m.mode == panelSearchView {
 			return m.handlePanelSearchKey(msg)
@@ -2071,6 +2076,11 @@ func (m Model) finalizeBallCreation() (tea.Model, tea.Cmd) {
 		ball.SetAcceptanceCriteria(m.pendingAcceptanceCriteria)
 	}
 
+	// Set dependencies if any were selected
+	if len(m.pendingBallDependsOn) > 0 {
+		ball.SetDependencies(m.pendingBallDependsOn)
+	}
+
 	// Use the store's working directory
 	err = m.store.AppendBall(ball)
 	if err != nil {
@@ -2098,8 +2108,12 @@ func (m *Model) clearPendingBallState() {
 	m.pendingBallPriority = 1 // Reset to default (medium)
 	m.pendingBallTags = ""
 	m.pendingBallSession = 0
+	m.pendingBallDependsOn = nil
 	m.pendingBallFormField = 0
 	m.pendingACEditIndex = -1
+	m.dependencySelectBalls = nil
+	m.dependencySelectIndex = 0
+	m.dependencySelectActive = nil
 }
 
 // handleSplitConfirmDelete handles yes/no for delete confirmation
@@ -2898,11 +2912,12 @@ func (m Model) handleHistoryOutputViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Field indices
 	const (
-		fieldIntent   = 0
-		fieldPriority = 1
-		fieldTags     = 2
-		fieldSession  = 3
-		fieldACStart  = 4 // ACs start at index 4
+		fieldIntent    = 0
+		fieldPriority  = 1
+		fieldTags      = 2
+		fieldSession   = 3
+		fieldDependsOn = 4 // Depends On field - opens selector on Enter
+		fieldACStart   = 5 // ACs start at index 5
 	)
 
 	// Number of options for selection fields
@@ -2916,7 +2931,7 @@ func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Calculate the maximum field index (4 base fields + existing ACs + 1 for new AC input)
+	// Calculate the maximum field index (5 base fields + existing ACs + 1 for new AC input)
 	maxFieldIndex := fieldACStart + len(m.pendingAcceptanceCriteria) // The "add new AC" field
 
 	// Helper to check if we're on a text input field
@@ -3006,7 +3021,10 @@ func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "enter":
 		// Behavior depends on current field
-		if m.pendingBallFormField >= fieldACStart {
+		if m.pendingBallFormField == fieldDependsOn {
+			// Open dependency selector
+			return m.openDependencySelector()
+		} else if m.pendingBallFormField >= fieldACStart {
 			acIndex := m.pendingBallFormField - fieldACStart
 			value := strings.TrimSpace(m.textInput.Value())
 
@@ -3145,4 +3163,89 @@ func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
+}
+
+// openDependencySelector opens the dependency selector for the ball form
+func (m Model) openDependencySelector() (tea.Model, tea.Cmd) {
+	// Build list of non-complete balls that can be dependencies
+	m.dependencySelectBalls = make([]*session.Ball, 0)
+	for _, ball := range m.balls {
+		// Exclude complete/researched balls
+		if ball.State != session.StateComplete && ball.State != session.StateResearched {
+			m.dependencySelectBalls = append(m.dependencySelectBalls, ball)
+		}
+	}
+
+	if len(m.dependencySelectBalls) == 0 {
+		m.message = "No non-complete balls available as dependencies"
+		return m, nil
+	}
+
+	// Initialize selection state from current pendingBallDependsOn
+	m.dependencySelectActive = make(map[string]bool)
+	for _, depID := range m.pendingBallDependsOn {
+		m.dependencySelectActive[depID] = true
+	}
+	m.dependencySelectIndex = 0
+	m.mode = dependencySelectorView
+	return m, nil
+}
+
+// handleDependencySelectorKey handles keyboard input in the dependency selector view
+func (m Model) handleDependencySelectorKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "q":
+		// Cancel selection - return to form without saving
+		m.mode = unifiedBallFormView
+		m.dependencySelectBalls = nil
+		m.dependencySelectActive = nil
+		m.message = "Cancelled"
+		return m, nil
+
+	case "up", "k":
+		// Move selection up
+		if m.dependencySelectIndex > 0 {
+			m.dependencySelectIndex--
+		}
+		return m, nil
+
+	case "down", "j":
+		// Move selection down
+		if m.dependencySelectIndex < len(m.dependencySelectBalls)-1 {
+			m.dependencySelectIndex++
+		}
+		return m, nil
+
+	case " ":
+		// Toggle selection on current item
+		if len(m.dependencySelectBalls) > 0 && m.dependencySelectIndex < len(m.dependencySelectBalls) {
+			ball := m.dependencySelectBalls[m.dependencySelectIndex]
+			if m.dependencySelectActive[ball.ID] {
+				delete(m.dependencySelectActive, ball.ID)
+			} else {
+				m.dependencySelectActive[ball.ID] = true
+			}
+		}
+		return m, nil
+
+	case "enter":
+		// Confirm selection - save to pendingBallDependsOn and return to form
+		m.pendingBallDependsOn = make([]string, 0)
+		for ballID := range m.dependencySelectActive {
+			m.pendingBallDependsOn = append(m.pendingBallDependsOn, ballID)
+		}
+		// Sort for consistent display
+		sort.Strings(m.pendingBallDependsOn)
+
+		m.mode = unifiedBallFormView
+		m.dependencySelectBalls = nil
+		m.dependencySelectActive = nil
+		if len(m.pendingBallDependsOn) > 0 {
+			m.message = fmt.Sprintf("Selected %d dependencies", len(m.pendingBallDependsOn))
+		} else {
+			m.message = "Cleared dependencies"
+		}
+		return m, nil
+	}
+	return m, nil
 }
