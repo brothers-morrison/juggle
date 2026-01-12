@@ -88,6 +88,13 @@ type ActivityEntry struct {
 	Message string
 }
 
+// AgentOutputEntry represents a line of agent output
+type AgentOutputEntry struct {
+	Time    time.Time
+	Line    string
+	IsError bool // true if this is stderr output
+}
+
 type Model struct {
 	store         *session.Store
 	sessionStore  *session.SessionStore
@@ -161,6 +168,12 @@ type Model struct {
 
 	// Agent state
 	agentStatus AgentStatus // Status of running agent
+
+	// Agent output panel state
+	agentOutputVisible bool               // Whether agent output panel is shown
+	agentOutput        []AgentOutputEntry // Buffer of agent output lines
+	agentOutputOffset  int                // Scroll offset for agent output panel
+	agentOutputCh      chan agentOutputMsg // Channel for receiving agent output
 }
 
 // InitialModel creates a model for the legacy list view
@@ -263,6 +276,53 @@ func (m Model) SelectedSessionID() string {
 		return m.selectedSession.ID
 	}
 	return ""
+}
+
+// addAgentOutput adds a line to the agent output buffer
+func (m *Model) addAgentOutput(line string, isError bool) {
+	entry := AgentOutputEntry{
+		Time:    time.Now(),
+		Line:    line,
+		IsError: isError,
+	}
+	// Keep last 500 lines
+	if len(m.agentOutput) >= 500 {
+		m.agentOutput = m.agentOutput[1:]
+		// Adjust offset when we remove an entry
+		if m.agentOutputOffset > 0 {
+			m.agentOutputOffset--
+		}
+	}
+	m.agentOutput = append(m.agentOutput, entry)
+
+	// Auto-scroll to bottom when new output arrives
+	m.agentOutputOffset = m.getAgentOutputMaxOffset()
+}
+
+// clearAgentOutput clears the agent output buffer
+func (m *Model) clearAgentOutput() {
+	m.agentOutput = make([]AgentOutputEntry, 0)
+	m.agentOutputOffset = 0
+}
+
+// getAgentOutputMaxOffset returns the maximum scroll offset for the agent output panel
+func (m Model) getAgentOutputMaxOffset() int {
+	visibleLines := m.getAgentOutputVisibleLines()
+	maxOffset := len(m.agentOutput) - visibleLines
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	return maxOffset
+}
+
+// getAgentOutputVisibleLines returns the number of visible lines in the agent output panel
+func (m Model) getAgentOutputVisibleLines() int {
+	// Agent output panel takes up the right portion of the screen
+	height := m.height - 6 // Account for borders, title, status
+	if height < 3 {
+		height = 3
+	}
+	return height
 }
 
 // getBallsForSession returns balls that belong to the selected session (by tag)

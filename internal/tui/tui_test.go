@@ -5204,3 +5204,315 @@ func TestStatsPanelPosition(t *testing.T) {
 		t.Error("Expected first line to contain stats 'P:1'")
 	}
 }
+
+// ==================== Agent Output Panel Tests ====================
+
+// Test agent output panel toggle visibility
+func TestAgentOutputPanelToggle(t *testing.T) {
+	model := Model{
+		mode:               splitView,
+		activePanel:        SessionsPanel,
+		agentOutputVisible: false,
+		activityLog:        make([]ActivityEntry, 0),
+	}
+
+	// Toggle ON
+	newModel, _ := model.handleToggleAgentOutput()
+	model = newModel.(Model)
+	if !model.agentOutputVisible {
+		t.Error("Expected agentOutputVisible to be true after first toggle")
+	}
+
+	// Toggle OFF
+	newModel, _ = model.handleToggleAgentOutput()
+	model = newModel.(Model)
+	if model.agentOutputVisible {
+		t.Error("Expected agentOutputVisible to be false after second toggle")
+	}
+}
+
+// Test adding agent output lines
+func TestAddAgentOutput(t *testing.T) {
+	model := Model{
+		agentOutput: make([]AgentOutputEntry, 0),
+		height:      30, // For calculating visible lines
+	}
+
+	// Add some output lines
+	model.addAgentOutput("Line 1", false)
+	model.addAgentOutput("Error line", true)
+	model.addAgentOutput("Line 3", false)
+
+	if len(model.agentOutput) != 3 {
+		t.Errorf("Expected 3 output lines, got %d", len(model.agentOutput))
+	}
+
+	// Check first line
+	if model.agentOutput[0].Line != "Line 1" {
+		t.Errorf("Expected first line to be 'Line 1', got %s", model.agentOutput[0].Line)
+	}
+	if model.agentOutput[0].IsError {
+		t.Error("Expected first line to not be an error")
+	}
+
+	// Check error line
+	if model.agentOutput[1].Line != "Error line" {
+		t.Errorf("Expected second line to be 'Error line', got %s", model.agentOutput[1].Line)
+	}
+	if !model.agentOutput[1].IsError {
+		t.Error("Expected second line to be an error")
+	}
+}
+
+// Test agent output buffer limit (500 lines)
+func TestAgentOutputBufferLimit(t *testing.T) {
+	model := Model{
+		agentOutput: make([]AgentOutputEntry, 0),
+		height:      30,
+	}
+
+	// Add more than 500 lines
+	for i := 0; i < 510; i++ {
+		model.addAgentOutput(fmt.Sprintf("Line %d", i), false)
+	}
+
+	// Buffer should be limited to 500
+	if len(model.agentOutput) != 500 {
+		t.Errorf("Expected buffer to be limited to 500 lines, got %d", len(model.agentOutput))
+	}
+
+	// First line should be Line 10 (lines 0-9 were removed)
+	if model.agentOutput[0].Line != "Line 10" {
+		t.Errorf("Expected first line to be 'Line 10', got %s", model.agentOutput[0].Line)
+	}
+}
+
+// Test clearing agent output
+func TestClearAgentOutput(t *testing.T) {
+	model := Model{
+		agentOutput:       make([]AgentOutputEntry, 0),
+		agentOutputOffset: 5,
+		height:            30,
+	}
+
+	// Add some lines
+	model.addAgentOutput("Line 1", false)
+	model.addAgentOutput("Line 2", false)
+
+	// Clear
+	model.clearAgentOutput()
+
+	if len(model.agentOutput) != 0 {
+		t.Errorf("Expected empty output buffer after clear, got %d lines", len(model.agentOutput))
+	}
+	if model.agentOutputOffset != 0 {
+		t.Errorf("Expected offset to be reset to 0, got %d", model.agentOutputOffset)
+	}
+}
+
+// Test agent output scrolling - scroll down
+func TestAgentOutputScrollDown(t *testing.T) {
+	model := Model{
+		agentOutput:       make([]AgentOutputEntry, 0),
+		agentOutputOffset: 0,
+		height:            30, // This affects getAgentOutputVisibleLines
+	}
+
+	// Add 50 lines to have scrollable content
+	for i := 0; i < 50; i++ {
+		model.addAgentOutput(fmt.Sprintf("Line %d", i), false)
+	}
+	model.agentOutputOffset = 0 // Reset offset (addAgentOutput auto-scrolls)
+
+	// Scroll down
+	newModel, _ := model.handleAgentOutputScrollDown()
+	model = newModel.(Model)
+
+	if model.agentOutputOffset != 1 {
+		t.Errorf("Expected offset to be 1 after scroll down, got %d", model.agentOutputOffset)
+	}
+}
+
+// Test agent output scrolling - scroll up
+func TestAgentOutputScrollUp(t *testing.T) {
+	model := Model{
+		agentOutput:       make([]AgentOutputEntry, 0),
+		agentOutputOffset: 5,
+		height:            30,
+	}
+
+	// Add some lines
+	for i := 0; i < 50; i++ {
+		model.agentOutput = append(model.agentOutput, AgentOutputEntry{Line: fmt.Sprintf("Line %d", i)})
+	}
+
+	// Scroll up
+	newModel, _ := model.handleAgentOutputScrollUp()
+	model = newModel.(Model)
+
+	if model.agentOutputOffset != 4 {
+		t.Errorf("Expected offset to be 4 after scroll up, got %d", model.agentOutputOffset)
+	}
+}
+
+// Test agent output scroll up at top
+func TestAgentOutputScrollUpAtTop(t *testing.T) {
+	model := Model{
+		agentOutput:       make([]AgentOutputEntry, 50),
+		agentOutputOffset: 0, // Already at top
+		height:            30,
+	}
+
+	// Scroll up - should stay at 0
+	newModel, _ := model.handleAgentOutputScrollUp()
+	model = newModel.(Model)
+
+	if model.agentOutputOffset != 0 {
+		t.Errorf("Expected offset to stay at 0, got %d", model.agentOutputOffset)
+	}
+}
+
+// Test agent output page down
+func TestAgentOutputPageDown(t *testing.T) {
+	model := Model{
+		agentOutput:       make([]AgentOutputEntry, 100),
+		agentOutputOffset: 0,
+		height:            30,
+	}
+
+	newModel, _ := model.handleAgentOutputPageDown()
+	model = newModel.(Model)
+
+	// Page size should be half of visible lines
+	expectedPageSize := model.getAgentOutputVisibleLines() / 2
+	if model.agentOutputOffset != expectedPageSize {
+		t.Errorf("Expected offset to be %d after page down, got %d", expectedPageSize, model.agentOutputOffset)
+	}
+}
+
+// Test agent output page up
+func TestAgentOutputPageUp(t *testing.T) {
+	model := Model{
+		agentOutput:       make([]AgentOutputEntry, 100),
+		agentOutputOffset: 20,
+		height:            30,
+	}
+
+	newModel, _ := model.handleAgentOutputPageUp()
+	model = newModel.(Model)
+
+	expectedPageSize := model.getAgentOutputVisibleLines() / 2
+	expectedOffset := 20 - expectedPageSize
+	if model.agentOutputOffset != expectedOffset {
+		t.Errorf("Expected offset to be %d after page up, got %d", expectedOffset, model.agentOutputOffset)
+	}
+}
+
+// Test agent output go to top (gg)
+func TestAgentOutputGoToTop(t *testing.T) {
+	model := Model{
+		agentOutput:       make([]AgentOutputEntry, 100),
+		agentOutputOffset: 50, // Scrolled down
+		height:            30,
+	}
+
+	newModel, _ := model.handleAgentOutputGoToTop()
+	model = newModel.(Model)
+
+	if model.agentOutputOffset != 0 {
+		t.Errorf("Expected offset to be 0 after go to top, got %d", model.agentOutputOffset)
+	}
+}
+
+// Test agent output go to bottom (G)
+func TestAgentOutputGoToBottom(t *testing.T) {
+	model := Model{
+		agentOutput:       make([]AgentOutputEntry, 100),
+		agentOutputOffset: 0, // At top
+		height:            30,
+	}
+
+	newModel, _ := model.handleAgentOutputGoToBottom()
+	model = newModel.(Model)
+
+	maxOffset := model.getAgentOutputMaxOffset()
+	if model.agentOutputOffset != maxOffset {
+		t.Errorf("Expected offset to be %d after go to bottom, got %d", maxOffset, model.agentOutputOffset)
+	}
+}
+
+// Test agent output panel rendering when empty
+func TestAgentOutputPanelRenderEmpty(t *testing.T) {
+	model := Model{
+		agentOutput:       make([]AgentOutputEntry, 0),
+		agentOutputOffset: 0,
+		agentStatus:       AgentStatus{Running: false},
+		height:            30,
+	}
+
+	content := model.renderAgentOutputPanel(80, 15)
+
+	if !strings.Contains(content, "Agent Output") {
+		t.Error("Expected panel to contain title 'Agent Output'")
+	}
+	if !strings.Contains(content, "No agent output") {
+		t.Error("Expected panel to show 'No agent output' when empty")
+	}
+}
+
+// Test agent output panel rendering with content
+func TestAgentOutputPanelRenderWithContent(t *testing.T) {
+	model := Model{
+		agentOutput:       make([]AgentOutputEntry, 0),
+		agentOutputOffset: 0,
+		agentStatus:       AgentStatus{Running: false},
+		height:            30,
+	}
+
+	// Add some output
+	model.addAgentOutput("Test output line 1", false)
+	model.addAgentOutput("Error: something failed", true)
+	model.agentOutputOffset = 0 // Reset offset
+
+	content := model.renderAgentOutputPanel(80, 15)
+
+	if !strings.Contains(content, "Test output line 1") {
+		t.Error("Expected panel to contain normal output line")
+	}
+	if !strings.Contains(content, "Error: something failed") {
+		t.Error("Expected panel to contain error output line")
+	}
+}
+
+// Test status bar shows agent output indicator when visible
+func TestStatusBarShowsAgentOutputIndicator(t *testing.T) {
+	model := Model{
+		mode:               splitView,
+		activePanel:        SessionsPanel,
+		agentOutputVisible: true,
+		localOnly:          true,
+		height:             30,
+		width:              120,
+	}
+
+	statusBar := model.renderStatusBar()
+	if !strings.Contains(statusBar, "[Output]") {
+		t.Error("Expected status bar to show [Output] indicator when agent output is visible")
+	}
+}
+
+// Test status bar shows O:output keybind
+func TestStatusBarShowsOutputKeybind(t *testing.T) {
+	model := Model{
+		mode:        splitView,
+		activePanel: SessionsPanel,
+		localOnly:   true,
+		height:      30,
+		width:       120,
+	}
+
+	statusBar := model.renderStatusBar()
+	if !strings.Contains(statusBar, "O:output") {
+		t.Error("Expected status bar to show 'O:output' keybind")
+	}
+}

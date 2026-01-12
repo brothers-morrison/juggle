@@ -310,18 +310,31 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.message = "Agent error: " + msg.err.Error()
 			m.addActivity("Agent error: " + msg.err.Error())
+			m.addAgentOutput("=== Agent Error: "+msg.err.Error()+" ===", true)
 		} else if msg.complete {
 			m.message = "Agent complete!"
 			m.addActivity("Agent completed: " + msg.sessionID)
+			m.addAgentOutput("=== Agent completed ===", false)
 		} else if msg.blocked {
 			m.message = "Agent blocked: " + msg.blockedReason
 			m.addActivity("Agent blocked: " + msg.blockedReason)
+			m.addAgentOutput("=== Agent blocked: "+msg.blockedReason+" ===", true)
 		} else {
 			m.message = "Agent finished (max iterations)"
 			m.addActivity("Agent finished: max iterations reached")
+			m.addAgentOutput("=== Agent finished (max iterations) ===", false)
 		}
 		// Reload balls to reflect any changes
 		return m, loadBalls(m.store, m.config, m.localOnly)
+
+	case agentOutputMsg:
+		// Add the output line to our buffer
+		m.addAgentOutput(msg.line, msg.isError)
+		// Continue listening for more output if agent is still running
+		if m.agentStatus.Running && m.agentOutputCh != nil {
+			return m, listenForAgentOutput(m.agentOutputCh)
+		}
+		return m, nil
 	}
 
 	return m, nil
@@ -557,6 +570,10 @@ func (m Model) handleSplitViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "o":
 		// Toggle sort order for balls
 		return m.handleToggleSortOrder()
+
+	case "O":
+		// Toggle agent output panel visibility
+		return m.handleToggleAgentOutput()
 	}
 
 	return m, nil
@@ -727,6 +744,70 @@ func (m Model) handleToggleSortOrder() (tea.Model, tea.Cmd) {
 		m.addActivity("Sort: ID ascending")
 		m.message = "Sort: ID ascending"
 	}
+	return m, nil
+}
+
+// handleToggleAgentOutput toggles the agent output panel visibility
+func (m Model) handleToggleAgentOutput() (tea.Model, tea.Cmd) {
+	m.agentOutputVisible = !m.agentOutputVisible
+	if m.agentOutputVisible {
+		m.addActivity("Agent output panel shown")
+		m.message = "Agent output visible (O to hide)"
+	} else {
+		m.addActivity("Agent output panel hidden")
+		m.message = "Agent output hidden (O to show)"
+	}
+	return m, nil
+}
+
+// handleAgentOutputScroll handles vim-style scrolling for the agent output panel
+func (m Model) handleAgentOutputScrollUp() (tea.Model, tea.Cmd) {
+	if m.agentOutputOffset > 0 {
+		m.agentOutputOffset--
+	}
+	return m, nil
+}
+
+func (m Model) handleAgentOutputScrollDown() (tea.Model, tea.Cmd) {
+	maxOffset := m.getAgentOutputMaxOffset()
+	if m.agentOutputOffset < maxOffset {
+		m.agentOutputOffset++
+	}
+	return m, nil
+}
+
+func (m Model) handleAgentOutputPageUp() (tea.Model, tea.Cmd) {
+	pageSize := m.getAgentOutputVisibleLines() / 2
+	if pageSize < 1 {
+		pageSize = 1
+	}
+	m.agentOutputOffset -= pageSize
+	if m.agentOutputOffset < 0 {
+		m.agentOutputOffset = 0
+	}
+	return m, nil
+}
+
+func (m Model) handleAgentOutputPageDown() (tea.Model, tea.Cmd) {
+	pageSize := m.getAgentOutputVisibleLines() / 2
+	if pageSize < 1 {
+		pageSize = 1
+	}
+	maxOffset := m.getAgentOutputMaxOffset()
+	m.agentOutputOffset += pageSize
+	if m.agentOutputOffset > maxOffset {
+		m.agentOutputOffset = maxOffset
+	}
+	return m, nil
+}
+
+func (m Model) handleAgentOutputGoToTop() (tea.Model, tea.Cmd) {
+	m.agentOutputOffset = 0
+	return m, nil
+}
+
+func (m Model) handleAgentOutputGoToBottom() (tea.Model, tea.Cmd) {
+	m.agentOutputOffset = m.getAgentOutputMaxOffset()
 	return m, nil
 }
 
@@ -2180,6 +2261,12 @@ func (m Model) handleAgentLaunchConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.addActivity("Launching agent for: " + sessionID)
 		m.message = "Starting agent for: " + sessionID
 
+		// Clear previous output and create new output channel
+		m.clearAgentOutput()
+		m.agentOutputCh = make(chan agentOutputMsg, 100)
+		m.agentOutputVisible = true // Auto-show agent output when launching
+		m.addAgentOutput("=== Starting agent for session: "+sessionID+" ===", false)
+
 		// Set initial agent status
 		m.agentStatus = AgentStatus{
 			Running:       true,
@@ -2188,8 +2275,11 @@ func (m Model) handleAgentLaunchConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			MaxIterations: 10, // Default iterations
 		}
 
-		// Launch agent in background
-		return m, launchAgentCmd(sessionID)
+		// Launch agent in background with output streaming
+		return m, tea.Batch(
+			launchAgentWithOutputCmd(sessionID, m.agentOutputCh),
+			listenForAgentOutput(m.agentOutputCh),
+		)
 
 	case "n", "N", "esc", "q":
 		// Cancel

@@ -606,6 +606,7 @@ func (m Model) renderSplitHelpView() string {
 			title: "View Options",
 			items: []helpItem{
 				{"i", "Cycle bottom pane (activity → detail → split → activity)"},
+				{"O", "Toggle agent output panel (shows live agent stdout)"},
 				{"P", "Toggle project scope (local ↔ all projects)"},
 				{"R", "Refresh / Reload data"},
 				{"?", "Toggle this help"},

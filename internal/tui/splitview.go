@@ -77,13 +77,18 @@ func (m Model) renderSplitView() string {
 
 	// Render bottom panel based on mode
 	var bottomPanel string
-	switch m.bottomPaneMode {
-	case BottomPaneDetail:
-		bottomPanel = m.renderBallDetailPanel(m.width-2, bottomPanelRows-2)
-	case BottomPaneSplit:
-		bottomPanel = m.renderSplitBottomPane(m.width-2, bottomPanelRows-2)
-	default:
-		bottomPanel = m.renderActivityPanel(m.width-2, bottomPanelRows-2)
+	if m.agentOutputVisible {
+		// Agent output panel takes over the bottom pane when visible
+		bottomPanel = m.renderAgentOutputPanel(m.width-2, bottomPanelRows-2)
+	} else {
+		switch m.bottomPaneMode {
+		case BottomPaneDetail:
+			bottomPanel = m.renderBallDetailPanel(m.width-2, bottomPanelRows-2)
+		case BottomPaneSplit:
+			bottomPanel = m.renderSplitBottomPane(m.width-2, bottomPanelRows-2)
+		default:
+			bottomPanel = m.renderActivityPanel(m.width-2, bottomPanelRows-2)
+		}
 	}
 
 	// Apply panel styling based on active panel
@@ -724,18 +729,18 @@ func (m Model) renderStatusBar() string {
 		hints = []string{
 			"j/k:nav", "Enter:select", "a:add", "A:agent",
 			"e:edit", "d:del", "/:filter", "P:scope",
-			"i:view", "?:help", "q:quit",
+			"O:output", "i:view", "?:help", "q:quit",
 		}
 	case BallsPanel:
 		hints = []string{
 			"j/k:nav", "s:start", "c:done", "b:block",
 			"a:add", "e:edit", "t:tag", "d:del",
-			"[/]:session", "o:sort", "i:view", "?:help",
+			"[/]:session", "o:sort", "O:output", "?:help",
 		}
 	case ActivityPanel:
 		hints = []string{
 			"j/k:scroll", "Ctrl+d/u:page", "gg:top", "G:bottom",
-			"Tab:panels", "i:view", "?:help", "q:quit",
+			"Tab:panels", "O:output", "i:view", "?:help", "q:quit",
 		}
 	}
 
@@ -743,13 +748,17 @@ func (m Model) renderStatusBar() string {
 
 	// Add bottom pane mode indicator
 	var modeIndicator string
-	switch m.bottomPaneMode {
-	case BottomPaneActivity:
-		modeIndicator = "[Act]"
-	case BottomPaneDetail:
-		modeIndicator = "[Detail]"
-	case BottomPaneSplit:
-		modeIndicator = "[Split]"
+	if m.agentOutputVisible {
+		modeIndicator = "[Output]"
+	} else {
+		switch m.bottomPaneMode {
+		case BottomPaneActivity:
+			modeIndicator = "[Act]"
+		case BottomPaneDetail:
+			modeIndicator = "[Detail]"
+		case BottomPaneSplit:
+			modeIndicator = "[Split]"
+		}
 	}
 
 	// Add project scope indicator
@@ -882,4 +891,89 @@ func (m Model) buildBallsStats(balls []*session.Ball) string {
 
 	// Build compact stats: P:2 I:1 B:0 C:3
 	return fmt.Sprintf("P:%d I:%d B:%d C:%d", pending, inProgress, blocked, complete)
+}
+
+// renderAgentOutputPanel renders the dedicated agent output panel
+func (m Model) renderAgentOutputPanel(width, height int) string {
+	var b strings.Builder
+
+	// Title with status indicator
+	title := "Agent Output"
+	if m.agentStatus.Running {
+		title = fmt.Sprintf("Agent Output [%s %d/%d]",
+			m.agentStatus.SessionID,
+			m.agentStatus.Iteration,
+			m.agentStatus.MaxIterations)
+	}
+
+	// Show scroll position if there's content
+	if len(m.agentOutput) > 0 {
+		visibleLines := height - 2 // Account for title and border
+		if visibleLines < 1 {
+			visibleLines = 1
+		}
+		title = fmt.Sprintf("%s [%d/%d]", title, m.agentOutputOffset+1, len(m.agentOutput))
+	}
+
+	titleStyled := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("3")). // Yellow for agent output
+		Render(title)
+	b.WriteString(titleStyled + "\n")
+	b.WriteString(strings.Repeat("─", width) + "\n")
+
+	if len(m.agentOutput) == 0 {
+		emptyMsg := "No agent output"
+		if !m.agentStatus.Running {
+			emptyMsg += " - Press 'A' on a session to launch an agent"
+		}
+		b.WriteString(helpStyle.Render("  " + emptyMsg))
+		return b.String()
+	}
+
+	// Calculate visible range
+	visibleLines := height - 3 // Account for title, separator, and possible scroll indicator
+	if visibleLines < 1 {
+		visibleLines = 1
+	}
+
+	startIdx := m.agentOutputOffset
+	endIdx := startIdx + visibleLines
+	if endIdx > len(m.agentOutput) {
+		endIdx = len(m.agentOutput)
+	}
+
+	// Show scroll indicator at top if not at beginning
+	if startIdx > 0 {
+		b.WriteString(helpStyle.Render(fmt.Sprintf("  ↑ %d more lines above", startIdx)) + "\n")
+		visibleLines--
+		endIdx = startIdx + visibleLines
+		if endIdx > len(m.agentOutput) {
+			endIdx = len(m.agentOutput)
+		}
+	}
+
+	// Render visible lines
+	normalStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
+	errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9")) // Red for errors
+
+	for i := startIdx; i < endIdx; i++ {
+		entry := m.agentOutput[i]
+		timeStr := entry.Time.Format("15:04:05")
+		line := fmt.Sprintf("  %s %s", timeStr, truncate(entry.Line, width-12))
+
+		if entry.IsError {
+			b.WriteString(errorStyle.Render(line) + "\n")
+		} else {
+			b.WriteString(normalStyle.Render(line) + "\n")
+		}
+	}
+
+	// Show scroll indicator at bottom if more content
+	remaining := len(m.agentOutput) - endIdx
+	if remaining > 0 {
+		b.WriteString(helpStyle.Render(fmt.Sprintf("  ↓ %d more lines below (j/k to scroll)", remaining)))
+	}
+
+	return b.String()
 }

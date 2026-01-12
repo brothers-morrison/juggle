@@ -1,7 +1,10 @@
 package tui
 
 import (
+	"bufio"
+	"io"
 	"os/exec"
+	"time"
 
 	"github.com/charmbracelet/bubbletea"
 	"github.com/ohare93/juggle/internal/session"
@@ -139,12 +142,27 @@ type agentFinishedMsg struct {
 	err           error
 }
 
+// agentOutputMsg is sent when agent produces output
+type agentOutputMsg struct {
+	line    string
+	isError bool // true if this is stderr output
+}
+
 // AgentStatus tracks the state of a running agent
 type AgentStatus struct {
 	Running       bool
 	SessionID     string
 	Iteration     int
 	MaxIterations int
+}
+
+// AgentProcess holds state for a running agent with output streaming
+type AgentProcess struct {
+	cmd       *exec.Cmd
+	stdout    io.ReadCloser
+	stderr    io.ReadCloser
+	outputCh  chan agentOutputMsg
+	sessionID string
 }
 
 // launchAgentCmd creates a command that runs the agent for a session
@@ -179,6 +197,66 @@ func launchAgentCmd(sessionID string) tea.Cmd {
 		return agentFinishedMsg{
 			sessionID: sessionID,
 			complete:  true,
+		}
+	}
+}
+
+// launchAgentWithOutputCmd creates a command that runs the agent and streams output
+func launchAgentWithOutputCmd(sessionID string, outputCh chan<- agentOutputMsg) tea.Cmd {
+	return func() tea.Msg {
+		cmd := exec.Command("juggle", "agent", "run", sessionID)
+
+		// Create pipes for stdout and stderr
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			return agentFinishedMsg{sessionID: sessionID, err: err}
+		}
+		stderr, err := cmd.StderrPipe()
+		if err != nil {
+			return agentFinishedMsg{sessionID: sessionID, err: err}
+		}
+
+		// Start the command
+		if err := cmd.Start(); err != nil {
+			return agentFinishedMsg{sessionID: sessionID, err: err}
+		}
+
+		// Stream stdout in a goroutine
+		go func() {
+			scanner := bufio.NewScanner(stdout)
+			for scanner.Scan() {
+				outputCh <- agentOutputMsg{line: scanner.Text(), isError: false}
+			}
+		}()
+
+		// Stream stderr in a goroutine
+		go func() {
+			scanner := bufio.NewScanner(stderr)
+			for scanner.Scan() {
+				outputCh <- agentOutputMsg{line: scanner.Text(), isError: true}
+			}
+		}()
+
+		// Wait for completion
+		if err := cmd.Wait(); err != nil {
+			if _, ok := err.(*exec.ExitError); !ok {
+				return agentFinishedMsg{sessionID: sessionID, err: err}
+			}
+		}
+
+		return agentFinishedMsg{sessionID: sessionID, complete: true}
+	}
+}
+
+// listenForAgentOutput returns a command that waits for an output message on the channel
+func listenForAgentOutput(outputCh <-chan agentOutputMsg) tea.Cmd {
+	return func() tea.Msg {
+		select {
+		case msg := <-outputCh:
+			return msg
+		case <-time.After(100 * time.Millisecond):
+			// Return nil to keep the listener alive without blocking
+			return nil
 		}
 	}
 }
