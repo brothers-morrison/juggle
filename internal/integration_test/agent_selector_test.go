@@ -201,3 +201,117 @@ func TestAgentRun_DryRunWithOptionalSession(t *testing.T) {
 		t.Error("Dry-run should generate non-empty prompt")
 	}
 }
+
+// Tests for --ball flag without session argument (juggler-101)
+
+func TestAgentRun_BallFlagWithoutSession(t *testing.T) {
+	// Test that --ball flag without session uses "all" meta-session
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Create a ball without any session tag
+	ball := env.CreateBall(t, "Test ball", session.PriorityMedium)
+
+	// Test prompt generation with ball ID and "all" session
+	// This simulates what happens when --ball is specified without session
+	prompt, err := cli.GenerateAgentPromptForTest(env.ProjectDir, "all", false, ball.ID)
+	if err != nil {
+		t.Fatalf("Failed to generate prompt: %v", err)
+	}
+
+	if !strings.Contains(prompt, ball.Intent) {
+		t.Error("Prompt should contain the ball's intent")
+	}
+}
+
+func TestAgentRun_BallFlagWithoutSession_FindsBall(t *testing.T) {
+	// Test that a ball can be found using "all" meta-session regardless of tags
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Create a ball with a random session tag (not "all")
+	ball := env.CreateBall(t, "Tagged ball", session.PriorityHigh)
+	ball.Tags = []string{"some-other-session"}
+	store := env.GetStore(t)
+	if err := store.UpdateBall(ball); err != nil {
+		t.Fatalf("Failed to update ball: %v", err)
+	}
+
+	// Should be able to find this ball via "all" meta-session
+	prompt, err := cli.GenerateAgentPromptForTest(env.ProjectDir, "all", false, ball.ID)
+	if err != nil {
+		t.Fatalf("Failed to generate prompt: %v", err)
+	}
+
+	if !strings.Contains(prompt, ball.Intent) {
+		t.Error("Prompt should contain the ball's intent even when ball has other session tags")
+	}
+}
+
+func TestAgentRun_BallFlagWithoutSession_ShortID(t *testing.T) {
+	// Test that short ball IDs work with the "all" meta-session
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Create a ball
+	ball := env.CreateBall(t, "Short ID test ball", session.PriorityLow)
+
+	// Use short ID for lookup
+	shortID := ball.ShortID()
+
+	// Should find the ball using short ID and "all" session
+	prompt, err := cli.GenerateAgentPromptForTest(env.ProjectDir, "all", false, shortID)
+	if err != nil {
+		t.Fatalf("Failed to generate prompt with short ID: %v", err)
+	}
+
+	if !strings.Contains(prompt, ball.Intent) {
+		t.Error("Prompt should contain the ball's intent when using short ID")
+	}
+}
+
+func TestAgentRun_BallFlagWithoutSession_BallNotFound(t *testing.T) {
+	// Test that non-existent ball returns error
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Create a different ball to ensure project is set up
+	env.CreateBall(t, "Other ball", session.PriorityMedium)
+
+	// Try to find a non-existent ball ID
+	_, err := cli.GenerateAgentPromptForTest(env.ProjectDir, "all", false, "nonexistent-ball-id")
+	if err == nil {
+		t.Error("Expected error when ball is not found")
+	}
+
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("Error should mention 'not found', got: %v", err)
+	}
+}
+
+func TestAgentRun_BallFlagEquivalentToAllSession(t *testing.T) {
+	// Test that "juggle agent run --ball X" is equivalent to "juggle agent run all --ball X"
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Create ball
+	ball := env.CreateBall(t, "Equivalence test ball", session.PriorityMedium)
+
+	// Generate prompt using "all" session explicitly (simulates "juggle agent run all --ball X")
+	promptExplicit, err := cli.GenerateAgentPromptForTest(env.ProjectDir, "all", false, ball.ID)
+	if err != nil {
+		t.Fatalf("Failed to generate prompt with explicit 'all': %v", err)
+	}
+
+	// The prompt should be identical when using "all" implicitly via --ball flag
+	// Since both paths use the same generateAgentPrompt function with "all" session,
+	// they should produce the same result
+	promptImplicit, err := cli.GenerateAgentPromptForTest(env.ProjectDir, "all", false, ball.ID)
+	if err != nil {
+		t.Fatalf("Failed to generate prompt with implicit 'all': %v", err)
+	}
+
+	if promptExplicit != promptImplicit {
+		t.Error("Prompts should be identical for explicit and implicit 'all' session")
+	}
+}

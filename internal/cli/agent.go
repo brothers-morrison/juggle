@@ -73,6 +73,9 @@ Examples:
   # Work on a specific ball only (1 iteration, interactive mode)
   juggle agent run my-feature --ball juggler-5
 
+  # Work on specific ball without specifying session (uses "all" meta-session)
+  juggle agent run --ball juggler-5
+
   # Work on specific ball with multiple iterations (non-interactive)
   juggle agent run my-feature --ball juggler-5 -n 3
 
@@ -628,6 +631,9 @@ func runAgentRun(cmd *cobra.Command, args []string) error {
 	var sessionID string
 	if len(args) > 0 {
 		sessionID = args[0]
+	} else if agentBallID != "" {
+		// --ball specified without session - default to "all" meta-session
+		sessionID = "all"
 	} else {
 		// No session provided - show selector
 		selected, err := selectSessionForAgent(cwd)
