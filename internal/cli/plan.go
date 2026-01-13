@@ -4,10 +4,15 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/ohare93/juggle/internal/session"
+	"github.com/ohare93/juggle/internal/tui"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
+	"gopkg.in/yaml.v3"
 )
 
 var planCmd = &cobra.Command{
@@ -15,13 +20,17 @@ var planCmd = &cobra.Command{
 	Short: "Add a planned ball for future work",
 	Long: `Add a planned ball to track future work you intend to do.
 
-The intent can be provided as a positional argument (with or without quotes),
-via the --intent flag, or interactively if neither is specified.
+By default, opens an interactive TUI form for ball creation with all fields.
+Use --edit to open $EDITOR with a YAML template instead.
 
-Examples:
-  juggle plan "Fix the help text"        # With quotes
-  juggle plan Fix the help text          # Without quotes (words joined)
-  juggle plan --intent "Add new feature" # Using flag
+TUI mode (default):
+  juggle plan                         # Opens TUI form
+  juggle plan --intent "Fix bug"      # Pre-populates title in TUI
+  juggle plan -c "AC1" -c "AC2"       # Pre-populates acceptance criteria
+
+Editor mode:
+  juggle plan --edit                  # Opens $EDITOR with YAML template
+  juggle plan --edit --intent "Task"  # Pre-populates fields in template
 
 Non-interactive mode (for headless agents):
   juggle plan "Task intent" --non-interactive              # Uses defaults
@@ -40,6 +49,7 @@ Planned balls can be started later with: juggle <ball-id>`,
 var acceptanceCriteriaFlag []string
 var dependsOnFlag []string
 var nonInteractiveFlag bool
+var editFlag bool
 
 func init() {
 	planCmd.Flags().StringVarP(&intentFlag, "intent", "i", "", "What are you planning to work on?")
@@ -51,6 +61,7 @@ func init() {
 	planCmd.Flags().StringVarP(&modelSizeFlag, "model-size", "m", "", "Preferred LLM model size: small, medium, large (blank for default)")
 	planCmd.Flags().StringSliceVar(&dependsOnFlag, "depends-on", []string{}, "Ball IDs this ball depends on (can be specified multiple times)")
 	planCmd.Flags().BoolVar(&nonInteractiveFlag, "non-interactive", false, "Skip interactive prompts, use defaults for unspecified fields (headless mode)")
+	planCmd.Flags().BoolVar(&editFlag, "edit", false, "Open $EDITOR with YAML template instead of TUI form")
 }
 
 func runPlan(cmd *cobra.Command, args []string) error {
@@ -64,115 +75,183 @@ func runPlan(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to initialize store: %w", err)
 	}
 
-	reader := bufio.NewReader(os.Stdin)
-
-	// Get intent from: 1) positional args (joined), 2) --intent flag, 3) prompt
+	// Get intent from positional args or --intent flag
 	intent := ""
 	if len(args) > 0 {
-		// Join all arguments to support multi-word intents without quotes
 		intent = strings.Join(args, " ")
 	} else if intentFlag != "" {
 		intent = intentFlag
-	} else if nonInteractiveFlag {
-		return fmt.Errorf("intent is required in non-interactive mode (use positional args or --intent)")
-	} else {
-		fmt.Print("What do you plan to work on? ")
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			return fmt.Errorf("failed to read input: %w", err)
+	}
+
+	// Build acceptance criteria list from flags
+	acceptanceCriteria := acceptanceCriteriaFlag
+	if descriptionFlag != "" && len(acceptanceCriteria) == 0 {
+		acceptanceCriteria = []string{descriptionFlag}
+	}
+
+	// Determine which mode to use
+	isTTY := term.IsTerminal(int(os.Stdin.Fd()))
+
+	if nonInteractiveFlag {
+		// Non-interactive mode: require intent, use defaults
+		return runPlanNonInteractive(store, cwd, intent, acceptanceCriteria)
+	}
+
+	if editFlag {
+		// Editor mode: open $EDITOR with YAML template
+		return runPlanEditor(store, cwd, intent, acceptanceCriteria)
+	}
+
+	if !isTTY {
+		// Not a TTY and not non-interactive: fall back to non-interactive
+		if intent == "" {
+			return fmt.Errorf("intent is required when not running in a terminal (use --intent or positional args)")
 		}
-		intent = strings.TrimSpace(input)
+		return runPlanNonInteractive(store, cwd, intent, acceptanceCriteria)
 	}
 
-	if intent == "" {
-		return fmt.Errorf("intent is required")
+	// Default: TUI mode
+	return runPlanTUI(store, cwd, intent, acceptanceCriteria)
+}
+
+// runPlanTUI launches the TUI ball creation form
+func runPlanTUI(store *session.Store, cwd, intent string, acceptanceCriteria []string) error {
+	// Create session store for the TUI
+	sessionStore, err := session.NewSessionStore(cwd)
+	if err != nil {
+		// Session store is optional, continue without it
+		sessionStore = nil
 	}
 
-	// Get priority from: 1) --priority flag, 2) interactive selection, 3) default in non-interactive mode
+	// Create standalone ball model
+	model := tui.NewStandaloneBallModel(store, sessionStore)
+
+	// Pre-populate from flags
+	model.PrePopulate(intent, "", tagsFlag, sessionFlag, priorityFlag, modelSizeFlag, acceptanceCriteria, dependsOnFlag)
+
+	// Run the TUI
+	p := tea.NewProgram(model, tea.WithAltScreen())
+	finalModel, err := p.Run()
+	if err != nil {
+		return fmt.Errorf("TUI error: %w", err)
+	}
+
+	// Get result from final model
+	result := finalModel.(tui.StandaloneBallModel).Result()
+
+	if result.Err != nil {
+		return fmt.Errorf("failed to create ball: %w", result.Err)
+	}
+
+	if result.Cancelled {
+		fmt.Println("Cancelled")
+		return nil
+	}
+
+	// Ensure project is in search paths for discovery
+	_ = session.EnsureProjectInSearchPaths(cwd)
+
+	fmt.Printf("✓ Planned ball added: %s\n", result.Ball.ID)
+	fmt.Printf("  Title: %s\n", result.Ball.Title)
+	fmt.Printf("  Priority: %s\n", result.Ball.Priority)
+	fmt.Printf("  State: %s\n", result.Ball.State)
+	if len(result.Ball.Tags) > 0 {
+		fmt.Printf("  Tags: %s\n", strings.Join(result.Ball.Tags, ", "))
+	}
+	if len(result.Ball.AcceptanceCriteria) > 0 {
+		fmt.Printf("  Acceptance Criteria: %d\n", len(result.Ball.AcceptanceCriteria))
+	}
+	fmt.Printf("\nStart working on this ball with: juggle %s in-progress\n", result.Ball.ID)
+
+	return nil
+}
+
+// runPlanEditor opens $EDITOR with a YAML template for ball creation
+func runPlanEditor(store *session.Store, cwd, intent string, acceptanceCriteria []string) error {
+	// Create a template ball with defaults or flag values
 	priority := priorityFlag
 	if priority == "" {
-		if nonInteractiveFlag {
-			priority = "medium" // Default priority in non-interactive mode
-		} else {
-			priority = promptSelection(reader, "Priority", []string{"low", "medium", "high", "urgent"}, 1)
-		}
+		priority = "medium"
 	}
 	if !session.ValidatePriority(priority) {
 		return fmt.Errorf("invalid priority %q, must be one of: low, medium, high, urgent", priority)
 	}
 
-	// Get tags from: 1) --tags flag, 2) interactive prompt, 3) empty in non-interactive mode
-	var tags []string
-	if len(tagsFlag) > 0 {
-		tags = tagsFlag
-	} else if !nonInteractiveFlag {
-		fmt.Print("Tags (comma-separated, empty for none): ")
-		input, err := reader.ReadString('\n')
-		if err == nil {
-			input = strings.TrimSpace(input)
-			if input != "" {
-				for _, tag := range strings.Split(input, ",") {
-					tag = strings.TrimSpace(tag)
-					if tag != "" {
-						tags = append(tags, tag)
-					}
-				}
-			}
-		}
-	}
-	// In non-interactive mode with no --tags flag, tags will be empty (no prompt)
+	// Create YAML template
+	yamlContent := createNewBallYAMLTemplate(intent, priority, tagsFlag, sessionFlag, modelSizeFlag, acceptanceCriteria)
 
-	// Get session from: 1) --session flag, 2) interactive prompt, 3) empty in non-interactive mode
-	sessionID := sessionFlag
-	if sessionID == "" && !nonInteractiveFlag {
-		fmt.Print("Session ID (empty for none): ")
-		input, err := reader.ReadString('\n')
-		if err == nil {
-			sessionID = strings.TrimSpace(input)
-		}
+	// Run the editor-based creation
+	result, err := runEditorForNewBall(yamlContent)
+	if err != nil {
+		return err
 	}
-	// In non-interactive mode with no --session flag, sessionID will be empty (no prompt)
 
-	// Get acceptance criteria from: 1) --ac flags, 2) legacy --description flag, 3) prompt, 4) empty in non-interactive mode
-	var acceptanceCriteria []string
-	if len(acceptanceCriteriaFlag) > 0 {
-		acceptanceCriteria = acceptanceCriteriaFlag
-	} else if descriptionFlag != "" {
-		// Legacy: treat description as first acceptance criterion
-		acceptanceCriteria = []string{descriptionFlag}
-	} else if !nonInteractiveFlag {
-		// Prompt for acceptance criteria line by line
-		fmt.Println("Enter acceptance criteria (one per line, empty line to finish):")
-		for {
-			fmt.Print("  > ")
-			input, err := reader.ReadString('\n')
-			if err != nil {
-				break
-			}
-			criterion := strings.TrimSpace(input)
-			if criterion == "" {
-				break
-			}
-			acceptanceCriteria = append(acceptanceCriteria, criterion)
-		}
+	if result.cancelled {
+		fmt.Println("Cancelled - no changes made")
+		return nil
 	}
-	// In non-interactive mode with no --ac flag, acceptanceCriteria will be empty (no prompt)
 
-	// Get model size from: 1) --model-size flag, 2) interactive selection, 3) empty in non-interactive mode
-	modelSize := modelSizeFlag
-	if modelSize == "" && !nonInteractiveFlag {
-		modelSize = promptSelection(reader, "Model Size (for cost optimization)", []string{"(default)", "small", "medium", "large"}, 0)
-		// Convert "(default)" back to empty string
-		if modelSize == "(default)" {
-			modelSize = ""
+	// Parse the edited YAML and create the ball
+	ball, err := parseNewBallYAML(result.content, cwd, store)
+	if err != nil {
+		return fmt.Errorf("failed to parse YAML: %w", err)
+	}
+
+	// Resolve and set dependencies
+	if len(ball.DependsOn) > 0 {
+		resolvedDeps, err := resolveDependencyIDs(store, ball.DependsOn)
+		if err != nil {
+			return fmt.Errorf("failed to resolve dependencies: %w", err)
+		}
+		ball.SetDependencies(resolvedDeps)
+
+		// Detect circular dependencies
+		balls, err := store.LoadBalls()
+		if err != nil {
+			return fmt.Errorf("failed to load balls for dependency check: %w", err)
+		}
+		allBalls := append(balls, ball)
+		if err := session.DetectCircularDependencies(allBalls); err != nil {
+			return fmt.Errorf("dependency error: %w", err)
 		}
 	}
-	// Validate model size if provided
-	if modelSize != "" {
-		ms := session.ModelSize(modelSize)
-		if ms != session.ModelSizeSmall && ms != session.ModelSizeMedium && ms != session.ModelSizeLarge {
-			return fmt.Errorf("invalid model size %q, must be one of: small, medium, large", modelSize)
-		}
+
+	// Save the ball
+	if err := store.AppendBall(ball); err != nil {
+		return fmt.Errorf("failed to save planned ball: %w", err)
+	}
+
+	// Ensure project is in search paths for discovery
+	_ = session.EnsureProjectInSearchPaths(cwd)
+
+	fmt.Printf("✓ Planned ball added: %s\n", ball.ID)
+	fmt.Printf("  Title: %s\n", ball.Title)
+	fmt.Printf("  Priority: %s\n", ball.Priority)
+	fmt.Printf("  State: %s\n", ball.State)
+	if len(ball.Tags) > 0 {
+		fmt.Printf("  Tags: %s\n", strings.Join(ball.Tags, ", "))
+	}
+	if len(ball.AcceptanceCriteria) > 0 {
+		fmt.Printf("  Acceptance Criteria: %d\n", len(ball.AcceptanceCriteria))
+	}
+	fmt.Printf("\nStart working on this ball with: juggle %s in-progress\n", ball.ID)
+
+	return nil
+}
+
+// runPlanNonInteractive creates a ball without any interactive prompts
+func runPlanNonInteractive(store *session.Store, cwd, intent string, acceptanceCriteria []string) error {
+	if intent == "" {
+		return fmt.Errorf("intent is required in non-interactive mode (use positional args or --intent)")
+	}
+
+	// Get priority from flag or default
+	priority := priorityFlag
+	if priority == "" {
+		priority = "medium"
+	}
+	if !session.ValidatePriority(priority) {
+		return fmt.Errorf("invalid priority %q, must be one of: low, medium, high, urgent", priority)
 	}
 
 	// Create the planned ball
@@ -181,7 +260,6 @@ func runPlan(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create planned ball: %w", err)
 	}
 
-	// New balls always start in pending state
 	ball.State = session.StatePending
 
 	// Set acceptance criteria if provided
@@ -190,30 +268,32 @@ func runPlan(cmd *cobra.Command, args []string) error {
 	}
 
 	// Add tags if provided
-	for _, tag := range tags {
+	for _, tag := range tagsFlag {
 		ball.AddTag(tag)
 	}
 
 	// Add session ID as tag if provided
-	if sessionID != "" {
-		ball.AddTag(sessionID)
+	if sessionFlag != "" {
+		ball.AddTag(sessionFlag)
 	}
 
-	// Set model size if provided (validation already done above)
-	if modelSize != "" {
-		ball.ModelSize = session.ModelSize(modelSize)
+	// Set model size if provided
+	if modelSizeFlag != "" {
+		ms := session.ModelSize(modelSizeFlag)
+		if ms != session.ModelSizeSmall && ms != session.ModelSizeMedium && ms != session.ModelSizeLarge {
+			return fmt.Errorf("invalid model size %q, must be one of: small, medium, large", modelSizeFlag)
+		}
+		ball.ModelSize = ms
 	}
 
 	// Set dependencies if provided
 	if len(dependsOnFlag) > 0 {
-		// Resolve dependency IDs (support both full and short IDs)
 		resolvedDeps, err := resolveDependencyIDs(store, dependsOnFlag)
 		if err != nil {
 			return fmt.Errorf("failed to resolve dependencies: %w", err)
 		}
 		ball.SetDependencies(resolvedDeps)
 
-		// Detect circular dependencies with this new ball
 		balls, err := store.LoadBalls()
 		if err != nil {
 			return fmt.Errorf("failed to load balls for dependency check: %w", err)
@@ -244,6 +324,207 @@ func runPlan(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+// createNewBallYAMLTemplate creates a YAML template for new ball creation
+func createNewBallYAMLTemplate(intent, priority string, tags []string, sessionID, modelSize string, acceptanceCriteria []string) string {
+	// Add session ID to tags if provided
+	allTags := tags
+	if sessionID != "" {
+		allTags = append(allTags, sessionID)
+	}
+
+	// Format tags for YAML
+	tagsYAML := "[]"
+	if len(allTags) > 0 {
+		var tagLines []string
+		for _, tag := range allTags {
+			tagLines = append(tagLines, fmt.Sprintf("  - %s", tag))
+		}
+		tagsYAML = "\n" + strings.Join(tagLines, "\n")
+	}
+
+	// Format acceptance criteria for YAML
+	acYAML := "[]"
+	if len(acceptanceCriteria) > 0 {
+		var acLines []string
+		for _, ac := range acceptanceCriteria {
+			acLines = append(acLines, fmt.Sprintf("  - %s", ac))
+		}
+		acYAML = "\n" + strings.Join(acLines, "\n")
+	}
+
+	return fmt.Sprintf(`# Create New Ball
+# Edit the fields below and save to create the ball
+# Close without saving to cancel
+#
+# Required: title
+# Optional: context, priority, tags, acceptance_criteria, model_size, depends_on
+
+# Brief title describing what this ball is about (50 chars recommended)
+title: %s
+
+# Background context for this task (optional)
+context: ""
+
+# Priority: low, medium, high, urgent
+priority: %s
+
+# Tags for categorization (include session ID to link to a session)
+tags: %s
+
+# Acceptance criteria for completion
+acceptance_criteria: %s
+
+# Preferred LLM model size: small, medium, large (or empty for default)
+model_size: %s
+
+# Ball IDs this ball depends on (must complete before this one)
+depends_on: []
+`, intent, priority, tagsYAML, acYAML, modelSize)
+}
+
+// editorResult holds the result of running the editor
+type editorResult struct {
+	content   string
+	cancelled bool
+}
+
+// runEditorForNewBall opens $EDITOR for creating a new ball
+func runEditorForNewBall(yamlContent string) (editorResult, error) {
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = "vi"
+	}
+
+	// Create temp file
+	tmpFile, err := os.CreateTemp("", "juggle-new-ball-*.yaml")
+	if err != nil {
+		return editorResult{}, fmt.Errorf("failed to create temp file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	defer os.Remove(tmpPath)
+
+	// Write YAML to temp file
+	if _, err := tmpFile.WriteString(yamlContent); err != nil {
+		tmpFile.Close()
+		return editorResult{}, fmt.Errorf("failed to write temp file: %w", err)
+	}
+	tmpFile.Close()
+
+	// Store original content
+	originalContent := yamlContent
+
+	// Run editor
+	editorParts := strings.Fields(editor)
+	var cmd *exec.Cmd
+	if len(editorParts) > 1 {
+		cmd = exec.Command(editorParts[0], append(editorParts[1:], tmpPath)...)
+	} else {
+		cmd = exec.Command(editor, tmpPath)
+	}
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return editorResult{}, fmt.Errorf("editor failed: %w", err)
+	}
+
+	// Read edited content
+	editedContent, err := os.ReadFile(tmpPath)
+	if err != nil {
+		return editorResult{}, fmt.Errorf("failed to read edited file: %w", err)
+	}
+
+	// Check if content was modified
+	if string(editedContent) == originalContent {
+		return editorResult{cancelled: true}, nil
+	}
+
+	return editorResult{content: string(editedContent)}, nil
+}
+
+// NewBallYAML is the YAML representation for new ball creation
+type NewBallYAML struct {
+	Title              string   `yaml:"title"`
+	Context            string   `yaml:"context"`
+	Priority           string   `yaml:"priority"`
+	Tags               []string `yaml:"tags"`
+	AcceptanceCriteria []string `yaml:"acceptance_criteria"`
+	ModelSize          string   `yaml:"model_size"`
+	DependsOn          []string `yaml:"depends_on"`
+}
+
+// parseNewBallYAML parses edited YAML and creates a new ball
+func parseNewBallYAML(yamlContent, cwd string, store *session.Store) (*session.Ball, error) {
+	var yamlBall NewBallYAML
+	if err := yaml.Unmarshal([]byte(yamlContent), &yamlBall); err != nil {
+		return nil, fmt.Errorf("invalid YAML: %w", err)
+	}
+
+	// Validate required fields
+	title := strings.TrimSpace(yamlBall.Title)
+	if title == "" {
+		return nil, fmt.Errorf("title is required")
+	}
+
+	// Validate priority
+	priority := strings.TrimSpace(yamlBall.Priority)
+	if priority == "" {
+		priority = "medium"
+	}
+	if !session.ValidatePriority(priority) {
+		return nil, fmt.Errorf("invalid priority: %s (must be low, medium, high, or urgent)", priority)
+	}
+
+	// Create the ball
+	ball, err := session.NewBall(cwd, title, session.Priority(priority))
+	if err != nil {
+		return nil, err
+	}
+
+	ball.State = session.StatePending
+	ball.Context = strings.TrimSpace(yamlBall.Context)
+
+	// Set tags
+	var cleanTags []string
+	for _, tag := range yamlBall.Tags {
+		tag = strings.TrimSpace(tag)
+		if tag != "" {
+			cleanTags = append(cleanTags, tag)
+		}
+	}
+	ball.Tags = cleanTags
+
+	// Set acceptance criteria
+	var cleanAC []string
+	for _, ac := range yamlBall.AcceptanceCriteria {
+		ac = strings.TrimSpace(ac)
+		if ac != "" {
+			cleanAC = append(cleanAC, ac)
+		}
+	}
+	if len(cleanAC) > 0 {
+		ball.SetAcceptanceCriteria(cleanAC)
+	}
+
+	// Set model size
+	modelSize := strings.TrimSpace(yamlBall.ModelSize)
+	if modelSize != "" {
+		ms := session.ModelSize(modelSize)
+		switch ms {
+		case session.ModelSizeSmall, session.ModelSizeMedium, session.ModelSizeLarge:
+			ball.ModelSize = ms
+		default:
+			return nil, fmt.Errorf("invalid model_size: %s (must be small, medium, large, or empty)", modelSize)
+		}
+	}
+
+	// Store depends_on for later resolution (not resolved here to avoid circular import)
+	ball.DependsOn = yamlBall.DependsOn
+
+	return ball, nil
 }
 
 // promptSelection prompts user to select from options using numbers

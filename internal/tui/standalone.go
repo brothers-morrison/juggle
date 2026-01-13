@@ -1,0 +1,949 @@
+package tui
+
+import (
+	"fmt"
+	"sort"
+	"strings"
+
+	"github.com/charmbracelet/bubbles/textarea"
+	"github.com/charmbracelet/bubbles/textinput"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/ohare93/juggle/internal/session"
+)
+
+// StandaloneBallModel is a TUI model for standalone ball creation (from CLI plan command)
+// It exits after creating or cancelling
+type StandaloneBallModel struct {
+	store        *session.Store
+	sessionStore *session.SessionStore
+	sessions     []*session.JuggleSession
+
+	// Form state
+	textInput                 textinput.Model
+	contextInput              textarea.Model
+	pendingBallContext        string
+	pendingBallIntent         string
+	pendingBallPriority       int      // Index in priority options (0=low, 1=medium, 2=high, 3=urgent)
+	pendingBallTags           string   // Comma-separated tags
+	pendingBallSession        int      // Index in session options (0=none, 1+ = session index)
+	pendingBallModelSize      int      // Index in model size options (0=default, 1=small, 2=medium, 3=large)
+	pendingBallDependsOn      []string // Selected dependency ball IDs
+	pendingBallFormField      int      // Current field in form
+	pendingAcceptanceCriteria []string // Acceptance criteria being collected
+
+	// File autocomplete state
+	fileAutocomplete *AutocompleteState
+
+	// Dependency selector state
+	dependencySelectBalls  []*session.Ball // Non-complete balls available for selection
+	dependencySelectIndex  int             // Current selection index in dependency selector
+	dependencySelectActive map[string]bool // Which dependencies are currently selected (by ID)
+	inDependencySelector   bool            // Whether we're in dependency selector mode
+
+	// UI state
+	width   int
+	height  int
+	message string
+	done    bool     // True when form is completed (either save or cancel)
+	result  *session.Ball // The created ball (nil if cancelled)
+	err     error
+}
+
+// StandaloneBallResult contains the result of the standalone ball creation
+type StandaloneBallResult struct {
+	Ball      *session.Ball // Created ball, nil if cancelled
+	Cancelled bool          // True if user cancelled
+	Err       error         // Error if any
+}
+
+// NewStandaloneBallModel creates a new standalone ball creation model
+func NewStandaloneBallModel(store *session.Store, sessionStore *session.SessionStore) StandaloneBallModel {
+	ti := textinput.New()
+	ti.CharLimit = 256
+	ti.Width = 60
+	ti.Placeholder = "Background context for this task"
+	ti.Focus()
+
+	ta := textarea.New()
+	ta.Placeholder = "Background context for this task"
+	ta.CharLimit = 2000
+	ta.SetWidth(60)
+	ta.SetHeight(1)
+	ta.ShowLineNumbers = false
+
+	return StandaloneBallModel{
+		store:               store,
+		sessionStore:        sessionStore,
+		textInput:           ti,
+		contextInput:        ta,
+		pendingBallPriority: 1, // Default to medium
+		fileAutocomplete:    NewAutocompleteState(store.ProjectDir()),
+	}
+}
+
+// PrePopulate sets initial values for the form fields from flags
+func (m *StandaloneBallModel) PrePopulate(intent, context string, tags []string, sessionID string, priority string, modelSize string, acceptanceCriteria []string, dependsOn []string) {
+	m.pendingBallIntent = intent
+	m.pendingBallContext = context
+	m.contextInput.SetValue(context)
+
+	if len(tags) > 0 {
+		m.pendingBallTags = strings.Join(tags, ", ")
+	}
+
+	// Map priority to index
+	switch priority {
+	case "low":
+		m.pendingBallPriority = 0
+	case "medium", "":
+		m.pendingBallPriority = 1
+	case "high":
+		m.pendingBallPriority = 2
+	case "urgent":
+		m.pendingBallPriority = 3
+	}
+
+	// Map model size to index
+	switch modelSize {
+	case "", "default":
+		m.pendingBallModelSize = 0
+	case "small":
+		m.pendingBallModelSize = 1
+	case "medium":
+		m.pendingBallModelSize = 2
+	case "large":
+		m.pendingBallModelSize = 3
+	}
+
+	// Set acceptance criteria
+	m.pendingAcceptanceCriteria = acceptanceCriteria
+
+	// Store session ID to match later when sessions are loaded
+	if sessionID != "" {
+		// We'll match this when sessions are loaded
+		m.pendingBallTags = sessionID // Temporarily store - will fix when sessions load
+	}
+
+	m.pendingBallDependsOn = dependsOn
+}
+
+func (m StandaloneBallModel) Init() tea.Cmd {
+	return tea.Batch(
+		textinput.Blink,
+		loadSessionsForStandalone(m.sessionStore),
+	)
+}
+
+type loadedSessionsForStandaloneMsg struct {
+	sessions []*session.JuggleSession
+	err      error
+}
+
+func loadSessionsForStandalone(sessionStore *session.SessionStore) tea.Cmd {
+	return func() tea.Msg {
+		if sessionStore == nil {
+			return loadedSessionsForStandaloneMsg{sessions: nil}
+		}
+		sessions, err := sessionStore.ListSessions()
+		if err != nil {
+			return loadedSessionsForStandaloneMsg{err: err}
+		}
+		return loadedSessionsForStandaloneMsg{sessions: sessions}
+	}
+}
+
+func (m StandaloneBallModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case loadedSessionsForStandaloneMsg:
+		if msg.err != nil {
+			m.message = "Warning: couldn't load sessions: " + msg.err.Error()
+		} else {
+			m.sessions = msg.sessions
+		}
+		return m, nil
+
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		return m, nil
+
+	case tea.KeyMsg:
+		if m.inDependencySelector {
+			return m.handleDependencySelectorKey(msg)
+		}
+		return m.handleFormKey(msg)
+	}
+
+	return m, nil
+}
+
+func (m StandaloneBallModel) handleFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Field indices are dynamic due to variable AC count
+	const (
+		fieldContext = 0
+		fieldIntent  = 1
+		fieldACStart = 2
+	)
+	fieldACEnd := fieldACStart + len(m.pendingAcceptanceCriteria)
+	fieldTags := fieldACEnd + 1
+	fieldSession := fieldTags + 1
+	fieldModelSize := fieldSession + 1
+	fieldDependsOn := fieldModelSize + 1
+
+	numModelSizeOptions := 4
+	numSessionOptions := 1
+	for _, sess := range m.sessions {
+		if sess.ID != PseudoSessionAll && sess.ID != PseudoSessionUntagged {
+			numSessionOptions++
+		}
+	}
+	maxFieldIndex := fieldDependsOn
+
+	isTextInputField := func(field int) bool {
+		return field == fieldContext || field == fieldIntent || field == fieldTags ||
+			(field >= fieldACStart && field <= fieldACEnd)
+	}
+
+	isACField := func(field int) bool {
+		return field >= fieldACStart && field <= fieldACEnd
+	}
+
+	isAutocompleteField := func(field int) bool {
+		return field == fieldContext || field == fieldIntent ||
+			(field >= fieldACStart && field <= fieldACEnd)
+	}
+
+	updateAutocomplete := func() {
+		if m.fileAutocomplete != nil && isAutocompleteField(m.pendingBallFormField) {
+			text := m.textInput.Value()
+			cursorPos := m.textInput.Position()
+			m.fileAutocomplete.UpdateFromText(text, cursorPos)
+		} else if m.fileAutocomplete != nil {
+			m.fileAutocomplete.Reset()
+		}
+	}
+
+	saveCurrentFieldValue := func() {
+		switch m.pendingBallFormField {
+		case fieldContext:
+			m.pendingBallContext = strings.TrimSpace(m.contextInput.Value())
+		case fieldIntent:
+			m.pendingBallIntent = strings.TrimSpace(m.textInput.Value())
+		default:
+			value := strings.TrimSpace(m.textInput.Value())
+			if m.pendingBallFormField == fieldTags {
+				m.pendingBallTags = value
+			} else if isACField(m.pendingBallFormField) {
+				acIndex := m.pendingBallFormField - fieldACStart
+				if acIndex < len(m.pendingAcceptanceCriteria) {
+					if value == "" {
+						m.pendingAcceptanceCriteria = append(
+							m.pendingAcceptanceCriteria[:acIndex],
+							m.pendingAcceptanceCriteria[acIndex+1:]...,
+						)
+					} else {
+						m.pendingAcceptanceCriteria[acIndex] = value
+					}
+				}
+			}
+		}
+	}
+
+	recalcFieldIndices := func() (int, int, int, int, int) {
+		newFieldACEnd := fieldACStart + len(m.pendingAcceptanceCriteria)
+		newFieldTags := newFieldACEnd + 1
+		newFieldSession := newFieldTags + 1
+		newFieldModelSize := newFieldSession + 1
+		newFieldDependsOn := newFieldModelSize + 1
+		return newFieldACEnd, newFieldTags, newFieldSession, newFieldModelSize, newFieldDependsOn
+	}
+
+	loadFieldValue := func(field int) {
+		acEnd, tagsField, _, _, _ := recalcFieldIndices()
+
+		m.textInput.Reset()
+		switch field {
+		case fieldContext:
+			m.contextInput.SetValue(m.pendingBallContext)
+			m.contextInput.Focus()
+			m.textInput.Blur()
+			adjustStandaloneContextHeight(&m)
+		case fieldIntent:
+			m.contextInput.Blur()
+			m.textInput.SetValue(m.pendingBallIntent)
+			m.textInput.Placeholder = "What is this ball about? (50 char recommended)"
+			m.textInput.Focus()
+		default:
+			m.contextInput.Blur()
+			if field == tagsField {
+				m.textInput.SetValue(m.pendingBallTags)
+				m.textInput.Placeholder = "tag1, tag2, ..."
+				m.textInput.Focus()
+			} else if field >= fieldACStart && field <= acEnd {
+				acIndex := field - fieldACStart
+				if acIndex < len(m.pendingAcceptanceCriteria) {
+					m.textInput.SetValue(m.pendingAcceptanceCriteria[acIndex])
+					m.textInput.Placeholder = "Edit acceptance criterion"
+				} else {
+					m.textInput.SetValue("")
+					m.textInput.Placeholder = "New acceptance criterion (Enter on empty = save)"
+				}
+				m.textInput.Focus()
+			} else {
+				m.textInput.Blur()
+			}
+		}
+	}
+
+	switch msg.String() {
+	case "esc":
+		m.done = true
+		m.result = nil
+		return m, tea.Quit
+
+	case "ctrl+enter":
+		saveCurrentFieldValue()
+		if m.pendingBallIntent == "" {
+			m.message = "Title is required"
+			return m, nil
+		}
+		return m.finalizeBallCreation()
+
+	case "enter":
+		if m.pendingBallFormField == fieldContext {
+			var cmd tea.Cmd
+			m.contextInput, cmd = m.contextInput.Update(msg)
+			adjustStandaloneContextHeight(&m)
+			return m, cmd
+		} else if m.pendingBallFormField == fieldDependsOn {
+			return m.openDependencySelector()
+		} else if isACField(m.pendingBallFormField) {
+			acIndex := m.pendingBallFormField - fieldACStart
+			value := strings.TrimSpace(m.textInput.Value())
+
+			if acIndex == len(m.pendingAcceptanceCriteria) {
+				if value == "" {
+					saveCurrentFieldValue()
+					if m.pendingBallIntent == "" {
+						m.message = "Title is required"
+						return m, nil
+					}
+					return m.finalizeBallCreation()
+				} else {
+					m.pendingAcceptanceCriteria = append(m.pendingAcceptanceCriteria, value)
+					m.textInput.Reset()
+					m.textInput.Placeholder = "New acceptance criterion (Enter on empty = save)"
+					m.pendingBallFormField = fieldACStart + len(m.pendingAcceptanceCriteria)
+				}
+			} else {
+				saveCurrentFieldValue()
+				m.pendingBallFormField++
+				newACEnd, _, _, _, newDependsOn := recalcFieldIndices()
+				maxFieldIndex = newDependsOn
+				if m.pendingBallFormField > newACEnd {
+					_, newFieldTags, _, _, _ := recalcFieldIndices()
+					m.pendingBallFormField = newFieldTags
+				}
+				loadFieldValue(m.pendingBallFormField)
+			}
+		} else {
+			saveCurrentFieldValue()
+			m.pendingBallFormField++
+			_, _, _, _, newDependsOn := recalcFieldIndices()
+			maxFieldIndex = newDependsOn
+			if m.pendingBallFormField > maxFieldIndex {
+				m.pendingBallFormField = maxFieldIndex
+			}
+			loadFieldValue(m.pendingBallFormField)
+		}
+		return m, nil
+
+	case "up":
+		if m.fileAutocomplete != nil && m.fileAutocomplete.Active && len(m.fileAutocomplete.Suggestions) > 0 {
+			m.fileAutocomplete.SelectPrev()
+			return m, nil
+		}
+		saveCurrentFieldValue()
+		m.pendingBallFormField--
+		_, _, _, _, newDependsOn := recalcFieldIndices()
+		maxFieldIndex = newDependsOn
+		if m.pendingBallFormField < 0 {
+			m.pendingBallFormField = maxFieldIndex
+		}
+		loadFieldValue(m.pendingBallFormField)
+		return m, nil
+
+	case "down":
+		if m.fileAutocomplete != nil && m.fileAutocomplete.Active && len(m.fileAutocomplete.Suggestions) > 0 {
+			m.fileAutocomplete.SelectNext()
+			return m, nil
+		}
+		saveCurrentFieldValue()
+		m.pendingBallFormField++
+		_, _, _, _, newDependsOn := recalcFieldIndices()
+		maxFieldIndex = newDependsOn
+		if m.pendingBallFormField > maxFieldIndex {
+			m.pendingBallFormField = 0
+		}
+		loadFieldValue(m.pendingBallFormField)
+		return m, nil
+
+	case "tab":
+		if m.fileAutocomplete != nil && m.fileAutocomplete.Active && len(m.fileAutocomplete.Suggestions) > 0 {
+			text := m.textInput.Value()
+			newText := m.fileAutocomplete.ApplyCompletion(text)
+			m.textInput.SetValue(newText)
+			m.textInput.SetCursor(len(newText))
+			m.fileAutocomplete.Reset()
+			return m, nil
+		}
+		return m, nil
+
+	case " ":
+		if m.fileAutocomplete != nil && m.fileAutocomplete.Active && len(m.fileAutocomplete.Suggestions) > 0 {
+			m.fileAutocomplete.Reset()
+		}
+		// Fall through to handle space in text input
+
+	case "left", "right":
+		if m.pendingBallFormField == fieldSession {
+			if msg.String() == "left" && m.pendingBallSession > 0 {
+				m.pendingBallSession--
+			} else if msg.String() == "right" && m.pendingBallSession < numSessionOptions-1 {
+				m.pendingBallSession++
+			}
+			return m, nil
+		} else if m.pendingBallFormField == fieldModelSize {
+			if msg.String() == "left" && m.pendingBallModelSize > 0 {
+				m.pendingBallModelSize--
+			} else if msg.String() == "right" && m.pendingBallModelSize < numModelSizeOptions-1 {
+				m.pendingBallModelSize++
+			}
+			return m, nil
+		}
+	}
+
+	// Handle text input for text fields
+	if isTextInputField(m.pendingBallFormField) {
+		var cmd tea.Cmd
+		if m.pendingBallFormField == fieldContext {
+			m.contextInput, cmd = m.contextInput.Update(msg)
+			adjustStandaloneContextHeight(&m)
+		} else {
+			m.textInput, cmd = m.textInput.Update(msg)
+			updateAutocomplete()
+		}
+		return m, cmd
+	}
+
+	return m, nil
+}
+
+func (m StandaloneBallModel) openDependencySelector() (tea.Model, tea.Cmd) {
+	balls, err := m.store.LoadBalls()
+	if err != nil {
+		m.message = "Error loading balls: " + err.Error()
+		return m, nil
+	}
+
+	var selectableBalls []*session.Ball
+	for _, ball := range balls {
+		if ball.State != session.StateComplete && ball.State != session.StateResearched {
+			selectableBalls = append(selectableBalls, ball)
+		}
+	}
+
+	if len(selectableBalls) == 0 {
+		m.message = "No non-complete balls to select as dependencies"
+		return m, nil
+	}
+
+	m.dependencySelectBalls = selectableBalls
+	m.dependencySelectIndex = 0
+	m.dependencySelectActive = make(map[string]bool)
+	for _, depID := range m.pendingBallDependsOn {
+		m.dependencySelectActive[depID] = true
+	}
+	m.inDependencySelector = true
+
+	return m, nil
+}
+
+func (m StandaloneBallModel) handleDependencySelectorKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "q":
+		m.inDependencySelector = false
+		m.dependencySelectBalls = nil
+		m.dependencySelectActive = nil
+		m.message = "Cancelled"
+		return m, nil
+
+	case "up", "k":
+		if m.dependencySelectIndex > 0 {
+			m.dependencySelectIndex--
+		}
+		return m, nil
+
+	case "down", "j":
+		if m.dependencySelectIndex < len(m.dependencySelectBalls)-1 {
+			m.dependencySelectIndex++
+		}
+		return m, nil
+
+	case " ":
+		if m.dependencySelectIndex < len(m.dependencySelectBalls) {
+			ball := m.dependencySelectBalls[m.dependencySelectIndex]
+			m.dependencySelectActive[ball.ID] = !m.dependencySelectActive[ball.ID]
+		}
+		return m, nil
+
+	case "enter":
+		var selected []string
+		for id, isSelected := range m.dependencySelectActive {
+			if isSelected {
+				selected = append(selected, id)
+			}
+		}
+		sort.Strings(selected)
+		m.pendingBallDependsOn = selected
+
+		m.inDependencySelector = false
+		m.dependencySelectBalls = nil
+		m.dependencySelectActive = nil
+		if len(m.pendingBallDependsOn) > 0 {
+			m.message = fmt.Sprintf("Selected %d dependencies", len(m.pendingBallDependsOn))
+		} else {
+			m.message = "Cleared dependencies"
+		}
+		return m, nil
+	}
+	return m, nil
+}
+
+func (m StandaloneBallModel) finalizeBallCreation() (tea.Model, tea.Cmd) {
+	priorities := []session.Priority{session.PriorityLow, session.PriorityMedium, session.PriorityHigh, session.PriorityUrgent}
+	priority := priorities[m.pendingBallPriority]
+
+	modelSizes := []session.ModelSize{session.ModelSizeBlank, session.ModelSizeSmall, session.ModelSizeMedium, session.ModelSizeLarge}
+	modelSize := modelSizes[m.pendingBallModelSize]
+
+	var tags []string
+	if m.pendingBallTags != "" {
+		tagList := strings.Split(m.pendingBallTags, ",")
+		for _, tag := range tagList {
+			tag = strings.TrimSpace(tag)
+			if tag != "" {
+				tags = append(tags, tag)
+			}
+		}
+	}
+
+	if m.pendingBallSession > 0 {
+		realSessions := []*session.JuggleSession{}
+		for _, sess := range m.sessions {
+			if sess.ID != PseudoSessionAll && sess.ID != PseudoSessionUntagged {
+				realSessions = append(realSessions, sess)
+			}
+		}
+		if m.pendingBallSession-1 < len(realSessions) {
+			tags = append(tags, realSessions[m.pendingBallSession-1].ID)
+		}
+	}
+
+	ball, err := session.NewBall(m.store.ProjectDir(), m.pendingBallIntent, priority)
+	if err != nil {
+		m.err = err
+		m.done = true
+		return m, tea.Quit
+	}
+
+	ball.State = session.StatePending
+	ball.Context = m.pendingBallContext
+	ball.Tags = tags
+	ball.ModelSize = modelSize
+
+	if len(m.pendingAcceptanceCriteria) > 0 {
+		ball.SetAcceptanceCriteria(m.pendingAcceptanceCriteria)
+	}
+
+	if len(m.pendingBallDependsOn) > 0 {
+		ball.SetDependencies(m.pendingBallDependsOn)
+	}
+
+	err = m.store.AppendBall(ball)
+	if err != nil {
+		m.err = err
+		m.done = true
+		return m, tea.Quit
+	}
+
+	m.result = ball
+	m.done = true
+	return m, tea.Quit
+}
+
+func (m StandaloneBallModel) View() string {
+	if m.inDependencySelector {
+		return m.renderDependencySelector()
+	}
+	return m.renderForm()
+}
+
+func (m StandaloneBallModel) renderForm() string {
+	var b strings.Builder
+
+	titleStyled := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("6")).
+		Render("Create New Ball")
+	b.WriteString(titleStyled + "\n\n")
+
+	const (
+		fieldContext = 0
+		fieldIntent  = 1
+		fieldACStart = 2
+	)
+	fieldACEnd := fieldACStart + len(m.pendingAcceptanceCriteria)
+	fieldTags := fieldACEnd + 1
+	fieldSession := fieldTags + 1
+	fieldModelSize := fieldSession + 1
+	fieldDependsOn := fieldModelSize + 1
+
+	sessionOptions := []string{"(none)"}
+	for _, sess := range m.sessions {
+		if sess.ID != PseudoSessionAll && sess.ID != PseudoSessionUntagged {
+			sessionOptions = append(sessionOptions, sess.ID)
+		}
+	}
+
+	activeFieldStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("2"))
+	normalStyle := lipgloss.NewStyle()
+	optionSelectedStyle := lipgloss.NewStyle().Bold(true).Background(lipgloss.Color("6")).Foreground(lipgloss.Color("0"))
+	optionNormalStyle := lipgloss.NewStyle().Faint(true)
+	acNumberStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	editingACStyle := lipgloss.NewStyle().Bold(true).Background(lipgloss.Color("240"))
+	warningStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("226"))
+
+	// Context field
+	labelStyle := normalStyle
+	if m.pendingBallFormField == fieldContext {
+		labelStyle = activeFieldStyle
+	}
+	b.WriteString(labelStyle.Render("Context:"))
+	if m.pendingBallFormField == fieldContext {
+		b.WriteString("\n")
+		b.WriteString(m.contextInput.View())
+		if popup := m.renderAutocompletePopup(); popup != "" {
+			b.WriteString(popup)
+		}
+	} else {
+		b.WriteString(" ")
+		if m.pendingBallContext == "" {
+			b.WriteString(optionNormalStyle.Render("(empty)"))
+		} else {
+			wrapped := wrapText(m.pendingBallContext, 60)
+			lines := strings.Split(wrapped, "\n")
+			if len(lines) == 1 {
+				b.WriteString(m.pendingBallContext)
+			} else {
+				b.WriteString(lines[0])
+				indent := "         "
+				for i := 1; i < len(lines); i++ {
+					b.WriteString("\n" + indent + lines[i])
+				}
+			}
+		}
+	}
+	b.WriteString("\n")
+
+	// Title field
+	labelStyle = normalStyle
+	if m.pendingBallFormField == fieldIntent {
+		labelStyle = activeFieldStyle
+	}
+	b.WriteString(labelStyle.Render("Title: "))
+	if m.pendingBallFormField == fieldIntent {
+		b.WriteString(m.textInput.View())
+		titleLen := len(m.textInput.Value())
+		countStyle := lipgloss.NewStyle().Faint(true)
+		if titleLen >= 50 {
+			countStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+		} else if titleLen >= 40 {
+			countStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("226"))
+		}
+		b.WriteString(countStyle.Render(fmt.Sprintf(" (%d/50)", titleLen)))
+		if popup := m.renderAutocompletePopup(); popup != "" {
+			b.WriteString(popup)
+		}
+	} else {
+		if m.pendingBallIntent == "" {
+			b.WriteString(optionNormalStyle.Render("(empty)"))
+		} else {
+			titleLen := len(m.pendingBallIntent)
+			b.WriteString(m.pendingBallIntent)
+			if titleLen >= 50 {
+				countStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+				b.WriteString(countStyle.Render(fmt.Sprintf(" (%d/50)", titleLen)))
+			} else if titleLen >= 40 {
+				countStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("226"))
+				b.WriteString(countStyle.Render(fmt.Sprintf(" (%d/50)", titleLen)))
+			}
+		}
+	}
+	b.WriteString("\n\n")
+
+	// Acceptance Criteria
+	acLabel := normalStyle
+	isOnACField := m.pendingBallFormField >= fieldACStart && m.pendingBallFormField <= fieldACEnd
+	if isOnACField {
+		acLabel = activeFieldStyle
+	}
+	acHeaderText := "Acceptance Criteria:"
+	if len(m.pendingAcceptanceCriteria) == 0 && !isOnACField {
+		acHeaderText += warningStyle.Render(" (none - consider adding criteria)")
+	}
+	b.WriteString(acLabel.Render(acHeaderText) + "\n")
+
+	for i, ac := range m.pendingAcceptanceCriteria {
+		acFieldIndex := fieldACStart + i
+		if m.pendingBallFormField == acFieldIndex {
+			b.WriteString(acNumberStyle.Render(fmt.Sprintf("  %d. ", i+1)))
+			b.WriteString(m.textInput.View())
+			if popup := m.renderAutocompletePopup(); popup != "" {
+				b.WriteString(popup)
+			}
+		} else {
+			b.WriteString(acNumberStyle.Render(fmt.Sprintf("  %d. ", i+1)))
+			b.WriteString(ac)
+		}
+		b.WriteString("\n")
+	}
+
+	if m.pendingBallFormField == fieldACEnd {
+		b.WriteString(editingACStyle.Render("  + "))
+		b.WriteString(m.textInput.View())
+		if popup := m.renderAutocompletePopup(); popup != "" {
+			b.WriteString(popup)
+		}
+		b.WriteString("\n")
+	} else {
+		b.WriteString(optionNormalStyle.Render("  + (add criterion)") + "\n")
+	}
+	b.WriteString("\n")
+
+	// Tags field
+	labelStyle = normalStyle
+	if m.pendingBallFormField == fieldTags {
+		labelStyle = activeFieldStyle
+	}
+	b.WriteString(labelStyle.Render("Tags: "))
+	if m.pendingBallFormField == fieldTags {
+		b.WriteString(m.textInput.View())
+	} else {
+		if m.pendingBallTags == "" {
+			b.WriteString(optionNormalStyle.Render("(none)"))
+		} else {
+			b.WriteString(m.pendingBallTags)
+		}
+	}
+	b.WriteString("\n")
+
+	// Session field
+	labelStyle = normalStyle
+	if m.pendingBallFormField == fieldSession {
+		labelStyle = activeFieldStyle
+	}
+	b.WriteString(labelStyle.Render("Session: "))
+	for i, opt := range sessionOptions {
+		if i > 0 {
+			b.WriteString(" ")
+		}
+		if i == m.pendingBallSession {
+			if m.pendingBallFormField == fieldSession {
+				b.WriteString(optionSelectedStyle.Render(" " + opt + " "))
+			} else {
+				b.WriteString(lipgloss.NewStyle().Bold(true).Render(opt))
+			}
+		} else {
+			b.WriteString(optionNormalStyle.Render(opt))
+		}
+	}
+	b.WriteString("\n")
+
+	// Model Size field
+	modelSizeOptions := []string{"(default)", "small", "medium", "large"}
+	labelStyle = normalStyle
+	if m.pendingBallFormField == fieldModelSize {
+		labelStyle = activeFieldStyle
+	}
+	b.WriteString(labelStyle.Render("Model Size: "))
+	for i, opt := range modelSizeOptions {
+		if i > 0 {
+			b.WriteString(" ")
+		}
+		if i == m.pendingBallModelSize {
+			if m.pendingBallFormField == fieldModelSize {
+				b.WriteString(optionSelectedStyle.Render(" " + opt + " "))
+			} else {
+				b.WriteString(lipgloss.NewStyle().Bold(true).Render(opt))
+			}
+		} else {
+			b.WriteString(optionNormalStyle.Render(opt))
+		}
+	}
+	b.WriteString("\n")
+
+	// Depends On field
+	labelStyle = normalStyle
+	if m.pendingBallFormField == fieldDependsOn {
+		labelStyle = activeFieldStyle
+	}
+	b.WriteString(labelStyle.Render("Depends On: "))
+	if len(m.pendingBallDependsOn) == 0 {
+		if m.pendingBallFormField == fieldDependsOn {
+			b.WriteString(optionSelectedStyle.Render(" (select) "))
+		} else {
+			b.WriteString(optionNormalStyle.Render("(none)"))
+		}
+	} else {
+		depDisplay := strings.Join(m.pendingBallDependsOn, ", ")
+		if m.pendingBallFormField == fieldDependsOn {
+			b.WriteString(optionSelectedStyle.Render(" " + depDisplay + " "))
+		} else {
+			b.WriteString(depDisplay)
+		}
+	}
+	b.WriteString("\n\n")
+
+	// Help text
+	helpStyle := lipgloss.NewStyle().Faint(true)
+	b.WriteString(helpStyle.Render("Navigation: ↑/↓ fields • ←/→ options • Enter next/add AC • Ctrl+Enter save • Esc cancel"))
+	b.WriteString("\n")
+
+	// Message
+	if m.message != "" {
+		msgStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
+		b.WriteString("\n" + msgStyle.Render(m.message))
+	}
+
+	return b.String()
+}
+
+func (m StandaloneBallModel) renderDependencySelector() string {
+	var b strings.Builder
+
+	titleStyled := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("6")).
+		Render("Select Dependencies")
+	b.WriteString(titleStyled + "\n\n")
+
+	helpStyle := lipgloss.NewStyle().Faint(true)
+	b.WriteString(helpStyle.Render("Space: toggle • Enter: confirm • Esc: cancel") + "\n\n")
+
+	selectedStyle := lipgloss.NewStyle().Bold(true).Background(lipgloss.Color("6")).Foreground(lipgloss.Color("0"))
+	normalStyle := lipgloss.NewStyle()
+	checkStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
+
+	for i, ball := range m.dependencySelectBalls {
+		isSelected := m.dependencySelectActive[ball.ID]
+		isCursor := i == m.dependencySelectIndex
+
+		check := "[ ]"
+		if isSelected {
+			check = checkStyle.Render("[✓]")
+		}
+
+		line := fmt.Sprintf("%s %s: %s", check, ball.ID, ball.Title)
+		if len(line) > 70 {
+			line = line[:67] + "..."
+		}
+
+		if isCursor {
+			b.WriteString(selectedStyle.Render(" " + line + " "))
+		} else {
+			b.WriteString(normalStyle.Render("  " + line))
+		}
+		b.WriteString("\n")
+	}
+
+	return b.String()
+}
+
+func (m StandaloneBallModel) renderAutocompletePopup() string {
+	if m.fileAutocomplete == nil || !m.fileAutocomplete.Active || len(m.fileAutocomplete.Suggestions) == 0 {
+		return ""
+	}
+
+	var b strings.Builder
+	b.WriteString("\n")
+
+	selectedStyle := lipgloss.NewStyle().Bold(true).Background(lipgloss.Color("6")).Foreground(lipgloss.Color("0"))
+	normalStyle := lipgloss.NewStyle().Faint(true)
+
+	maxShow := 5
+	if len(m.fileAutocomplete.Suggestions) < maxShow {
+		maxShow = len(m.fileAutocomplete.Suggestions)
+	}
+
+	for i := 0; i < maxShow; i++ {
+		suggestion := m.fileAutocomplete.Suggestions[i]
+		if i == m.fileAutocomplete.Selected {
+			b.WriteString(selectedStyle.Render("  " + suggestion))
+		} else {
+			b.WriteString(normalStyle.Render("  " + suggestion))
+		}
+		b.WriteString("\n")
+	}
+
+	if len(m.fileAutocomplete.Suggestions) > maxShow {
+		b.WriteString(normalStyle.Render(fmt.Sprintf("  ... and %d more", len(m.fileAutocomplete.Suggestions)-maxShow)))
+		b.WriteString("\n")
+	}
+
+	return b.String()
+}
+
+// Result returns the result of the ball creation
+func (m StandaloneBallModel) Result() StandaloneBallResult {
+	return StandaloneBallResult{
+		Ball:      m.result,
+		Cancelled: m.result == nil && m.err == nil,
+		Err:       m.err,
+	}
+}
+
+// Done returns whether the model is done
+func (m StandaloneBallModel) Done() bool {
+	return m.done
+}
+
+// adjustStandaloneContextHeight adjusts the context textarea height based on content
+func adjustStandaloneContextHeight(m *StandaloneBallModel) {
+	content := m.contextInput.Value()
+	if content == "" {
+		m.contextInput.SetHeight(1)
+		return
+	}
+
+	lines := strings.Count(content, "\n") + 1
+	wrappedLines := 0
+	for _, line := range strings.Split(content, "\n") {
+		if len(line) > 58 {
+			wrappedLines += (len(line) / 58) + 1
+		} else {
+			wrappedLines++
+		}
+	}
+
+	height := wrappedLines
+	if height < 1 {
+		height = 1
+	}
+	if height > 10 {
+		height = 10
+	}
+	_ = lines // Unused but keeping for potential future use
+	m.contextInput.SetHeight(height)
+}
