@@ -1,0 +1,19 @@
+# Test: Acceptance criteria input dialog while typing
+
+run
+----
+-- view:
+Add Acceptance Criteria␤
+␤
+Title: Implement user authentication␤
+␤
+Criteria entered:␤
+  1. User can login with email and password␤
+␤
+(Enter empty line to finish)␤
+␤
+╭──────────────────────────────────────────────────╮␤
+│ > OAuth integration supports Google              │␤
+╰──────────────────────────────────────────────────╯␤
+␤
+Enter = submit | Esc = cancel🛇

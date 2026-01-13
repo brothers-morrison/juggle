@@ -1,0 +1,12 @@
+# Test: Panel search dialog for sessions
+
+run
+----
+-- view:
+Filter Sessions␤
+␤
+╭──────────────────────────────────────────────────╮␤
+│ >                                                │␤
+╰──────────────────────────────────────────────────╯␤
+␤
+Enter = apply filter | Esc = cancel␤

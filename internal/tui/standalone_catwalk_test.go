@@ -1130,6 +1130,221 @@ func TestCatwalkStatusBarWithSearchQuery(t *testing.T) {
 	catwalk.RunModel(t, "testdata/status_bar_with_search_query", model)
 }
 
+// TestInputSessionViewAdd tests the session name input dialog for adding a new session.
+func TestInputSessionViewAdd(t *testing.T) {
+	model := createTestSplitViewModel(t)
+	model.mode = inputSessionView
+	model.inputAction = actionAdd
+	model.textInput.SetValue("")
+	model.textInput.Focus()
+	catwalk.RunModel(t, "testdata/input_session_add", model)
+}
+
+// TestInputSessionViewEdit tests the session name input dialog for editing a session.
+func TestInputSessionViewEdit(t *testing.T) {
+	model := createTestSplitViewModel(t)
+	model.mode = inputSessionView
+	model.inputAction = actionEdit
+	model.sessions = []*session.JuggleSession{
+		{ID: "backend-work", Description: "Backend development tasks"},
+		{ID: "frontend", Description: "Frontend improvements"},
+	}
+	model.sessionCursor = 0
+	model.textInput.SetValue("Updated description for backend")
+	model.textInput.Focus()
+	catwalk.RunModel(t, "testdata/input_session_edit", model)
+}
+
+// TestInputBallViewAdd tests the ball title input dialog for adding a new ball.
+func TestInputBallViewAdd(t *testing.T) {
+	model := createTestSplitViewModel(t)
+	model.mode = inputBallView
+	model.inputAction = actionAdd
+	model.selectedSession = &session.JuggleSession{
+		ID:          "backend-work",
+		Description: "Backend development tasks",
+	}
+	model.textInput.SetValue("")
+	model.textInput.Focus()
+	catwalk.RunModel(t, "testdata/input_ball_add", model)
+}
+
+// TestInputBallViewEdit tests the ball title input dialog for editing a ball.
+func TestInputBallViewEdit(t *testing.T) {
+	model := createTestSplitViewModel(t)
+	model.mode = inputBallView
+	model.inputAction = actionEdit
+	model.editingBall = &session.Ball{
+		ID:       "juggler-5",
+		Title:    "Original title for the ball",
+		State:    session.StatePending,
+		Priority: session.PriorityHigh,
+	}
+	model.textInput.SetValue("Updated title for the ball")
+	model.textInput.Focus()
+	catwalk.RunModel(t, "testdata/input_ball_edit", model)
+}
+
+// TestInputBlockedView tests the blocked reason input dialog.
+func TestInputBlockedView(t *testing.T) {
+	model := createTestSplitViewModel(t)
+	model.mode = inputBlockedView
+	model.editingBall = &session.Ball{
+		ID:       "juggler-7",
+		Title:    "Task that needs to be blocked",
+		State:    session.StateInProgress,
+		Priority: session.PriorityMedium,
+	}
+	model.textInput.SetValue("")
+	model.textInput.Focus()
+	catwalk.RunModel(t, "testdata/input_blocked_reason", model)
+}
+
+// TestInputBlockedViewWithReason tests the blocked reason input with partial input.
+func TestInputBlockedViewWithReason(t *testing.T) {
+	model := createTestSplitViewModel(t)
+	model.mode = inputBlockedView
+	model.editingBall = &session.Ball{
+		ID:       "juggler-7",
+		Title:    "Task that needs to be blocked",
+		State:    session.StateInProgress,
+		Priority: session.PriorityMedium,
+	}
+	model.textInput.SetValue("Waiting for API credentials")
+	model.textInput.Focus()
+	catwalk.RunModel(t, "testdata/input_blocked_reason_with_text", model)
+}
+
+// TestPanelSearchViewSessions tests the panel search dialog for sessions.
+func TestPanelSearchViewSessions(t *testing.T) {
+	model := createTestSplitViewModel(t)
+	model.mode = panelSearchView
+	model.activePanel = SessionsPanel
+	model.textInput.SetValue("")
+	model.textInput.Focus()
+	catwalk.RunModel(t, "testdata/panel_search_sessions", model)
+}
+
+// TestPanelSearchViewBalls tests the panel search dialog for balls.
+func TestPanelSearchViewBalls(t *testing.T) {
+	model := createTestSplitViewModel(t)
+	model.mode = panelSearchView
+	model.activePanel = BallsPanel
+	model.textInput.SetValue("")
+	model.textInput.Focus()
+	catwalk.RunModel(t, "testdata/panel_search_balls", model)
+}
+
+// TestPanelSearchViewWithQuery tests the panel search dialog with existing query.
+func TestPanelSearchViewWithQuery(t *testing.T) {
+	model := createTestSplitViewModel(t)
+	model.mode = panelSearchView
+	model.activePanel = BallsPanel
+	model.panelSearchQuery = "backend"
+	model.textInput.SetValue("api")
+	model.textInput.Focus()
+	catwalk.RunModel(t, "testdata/panel_search_with_query", model)
+}
+
+// TestInputAcceptanceCriteriaViewEmpty tests the acceptance criteria input dialog when empty.
+func TestInputAcceptanceCriteriaViewEmpty(t *testing.T) {
+	model := createTestSplitViewModel(t)
+	model.mode = inputAcceptanceCriteriaView
+	model.pendingBallIntent = "Implement user authentication"
+	model.pendingAcceptanceCriteria = []string{}
+	model.textInput.SetValue("")
+	model.textInput.Focus()
+	catwalk.RunModel(t, "testdata/input_ac_empty", model)
+}
+
+// TestInputAcceptanceCriteriaViewWithEntries tests the AC input with existing entries.
+func TestInputAcceptanceCriteriaViewWithEntries(t *testing.T) {
+	model := createTestSplitViewModel(t)
+	model.mode = inputAcceptanceCriteriaView
+	model.pendingBallIntent = "Implement user authentication"
+	model.pendingAcceptanceCriteria = []string{
+		"User can login with email and password",
+		"Password reset flow works correctly",
+		"Session tokens expire after 24 hours",
+	}
+	model.textInput.SetValue("")
+	model.textInput.Focus()
+	catwalk.RunModel(t, "testdata/input_ac_with_entries", model)
+}
+
+// TestInputAcceptanceCriteriaViewTyping tests the AC input while typing a new criterion.
+func TestInputAcceptanceCriteriaViewTyping(t *testing.T) {
+	model := createTestSplitViewModel(t)
+	model.mode = inputAcceptanceCriteriaView
+	model.pendingBallIntent = "Implement user authentication"
+	model.pendingAcceptanceCriteria = []string{
+		"User can login with email and password",
+	}
+	model.textInput.SetValue("OAuth integration supports Google")
+	model.textInput.Focus()
+	catwalk.RunModel(t, "testdata/input_ac_typing", model)
+}
+
+// TestInputTagViewEmpty tests the tag input dialog with no existing tags.
+func TestInputTagViewEmpty(t *testing.T) {
+	model := createTestSplitViewModel(t)
+	model.mode = inputTagView
+	model.editingBall = &session.Ball{
+		ID:       "juggler-3",
+		Title:    "Task without tags",
+		State:    session.StatePending,
+		Tags:     []string{},
+	}
+	model.textInput.SetValue("")
+	model.textInput.Focus()
+	catwalk.RunModel(t, "testdata/input_tag_empty", model)
+}
+
+// TestInputTagViewWithTags tests the tag input dialog with existing tags.
+func TestInputTagViewWithTags(t *testing.T) {
+	model := createTestSplitViewModel(t)
+	model.mode = inputTagView
+	model.editingBall = &session.Ball{
+		ID:       "juggler-3",
+		Title:    "Task with multiple tags",
+		State:    session.StatePending,
+		Tags:     []string{"backend", "api", "authentication"},
+	}
+	model.textInput.SetValue("")
+	model.textInput.Focus()
+	catwalk.RunModel(t, "testdata/input_tag_with_tags", model)
+}
+
+// TestInputTagViewTyping tests the tag input dialog while typing a new tag.
+func TestInputTagViewTyping(t *testing.T) {
+	model := createTestSplitViewModel(t)
+	model.mode = inputTagView
+	model.editingBall = &session.Ball{
+		ID:       "juggler-3",
+		Title:    "Task with some tags",
+		State:    session.StatePending,
+		Tags:     []string{"backend", "api"},
+	}
+	model.textInput.SetValue("security")
+	model.textInput.Focus()
+	catwalk.RunModel(t, "testdata/input_tag_typing", model)
+}
+
+// TestInputTagViewRemove tests the tag input dialog showing remove syntax.
+func TestInputTagViewRemove(t *testing.T) {
+	model := createTestSplitViewModel(t)
+	model.mode = inputTagView
+	model.editingBall = &session.Ball{
+		ID:       "juggler-3",
+		Title:    "Task with tags to remove",
+		State:    session.StatePending,
+		Tags:     []string{"backend", "obsolete", "api"},
+	}
+	model.textInput.SetValue("-obsolete")
+	model.textInput.Focus()
+	catwalk.RunModel(t, "testdata/input_tag_remove", model)
+}
+
 // Helper functions for creating test data
 func formatBallID(i int) string {
 	return fmt.Sprintf("juggler-%d", i)

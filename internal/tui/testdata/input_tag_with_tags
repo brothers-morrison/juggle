@@ -1,0 +1,21 @@
+# Test: Tag input dialog with existing tags
+
+run
+----
+-- view:
+Edit Tags␤
+␤
+Ball: juggler-3␤
+Title: Task with multiple tags␤
+␤
+Current Tags:␤
+   backend ␤
+   api ␤
+   authentication ␤
+␤
+╭──────────────────────────────────────────────────╮␤
+│ >                                                │␤
+╰──────────────────────────────────────────────────╯␤
+␤
+Enter = submit | Esc = cancel␤
+                             Type tag name to add | Prefix with - to remove (e.g., -mytag)🛇

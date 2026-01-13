@@ -1,0 +1,21 @@
+# Test: Tag input dialog showing remove syntax
+
+run
+----
+-- view:
+Edit Tags␤
+␤
+Ball: juggler-3␤
+Title: Task with tags to remove␤
+␤
+Current Tags:␤
+   backend ␤
+   obsolete ␤
+   api ␤
+␤
+╭──────────────────────────────────────────────────╮␤
+│ > -obsolete                                      │␤
+╰──────────────────────────────────────────────────╯␤
+␤
+Enter = submit | Esc = cancel␤
+                             Type tag name to add | Prefix with - to remove (e.g., -mytag)🛇

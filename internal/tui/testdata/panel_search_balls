@@ -1,0 +1,12 @@
+# Test: Panel search dialog for balls
+
+run
+----
+-- view:
+Filter Balls␤
+␤
+╭──────────────────────────────────────────────────╮␤
+│ >                                                │␤
+╰──────────────────────────────────────────────────╯␤
+␤
+Enter = apply filter | Esc = cancel␤
