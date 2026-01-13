@@ -30,6 +30,24 @@ For each ball, evaluate and improve:
 - Would an agent know what to build without asking questions?
 - Is scope clear (what's in vs out)?
 
+### 5. Model Size Assessment
+- Assign appropriate model size based on task complexity:
+  - `small` (haiku): Simple fixes, documentation, straightforward implementations
+  - `medium` (sonnet): Standard features, moderate complexity, most tasks
+  - `large` (opus): Complex refactoring, architectural changes, multi-file coordinated changes
+- Default to `medium` if unsure - it handles most tasks well
+- Only use `large` for genuinely complex work requiring deep reasoning
+
+### 6. Dependency Tracking
+- Identify balls that must complete before others can start
+- Use `--add-dep` to explicitly link dependent balls
+- Common dependency patterns:
+  - Database schema changes before API changes
+  - Core library changes before consumer updates
+  - Test infrastructure before test implementation
+  - Research/investigation balls before implementation balls
+- Avoid over-dependency: only add deps when order genuinely matters
+
 ## Actions
 
 Use juggle CLI commands to make improvements:
@@ -41,8 +59,18 @@ juggle update <id> --ac "First criterion" --ac "Second criterion"
 # Adjust priority
 juggle update <id> --priority high
 
-# Update intent
-juggle update <id> --intent "Clearer description of what to build"
+# Update title
+juggle update <id> --title "Clearer description of what to build"
+
+# Set model size for cost optimization
+juggle update <id> --model-size small   # Simple tasks
+juggle update <id> --model-size medium  # Standard tasks (default)
+juggle update <id> --model-size large   # Complex tasks
+
+# Add/remove dependencies between balls
+juggle update <id> --add-dep <other-ball-id>
+juggle update <id> --remove-dep <other-ball-id>
+juggle update <id> --set-deps <id1>,<id2>  # Replace all deps
 
 # Mark as blocked if dependencies exist
 juggle update <id> --state blocked --reason "Depends on ball-X"
