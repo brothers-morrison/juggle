@@ -31,6 +31,8 @@ var (
 	agentBallID      string
 	agentInteractive bool
 	agentModel       string
+	agentDelay       int // Delay between iterations in minutes (overrides config)
+	agentFuzz        int // +/- variance in delay minutes (overrides config)
 )
 
 // agentCmd is the parent command for agent operations
@@ -110,7 +112,16 @@ Examples:
   juggle agent run my-feature --debug
 
   # Select from sessions across all discovered projects
-  juggle agent run --all`,
+  juggle agent run --all
+
+  # Override iteration delay (5 minutes, overrides config)
+  juggle agent run my-feature --delay 5
+
+  # Override delay with variance (5 minutes ± 2 minutes)
+  juggle agent run my-feature --delay 5 --fuzz 2
+
+  # Disable delay entirely (overrides config even if set)
+  juggle agent run my-feature --delay 0`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runAgentRun,
 }
@@ -156,6 +167,8 @@ func init() {
 	agentRunCmd.Flags().StringVarP(&agentBallID, "ball", "b", "", "Work on a specific ball only (defaults to 1 iteration, interactive)")
 	agentRunCmd.Flags().BoolVarP(&agentInteractive, "interactive", "i", false, "Run in interactive mode (full Claude TUI, defaults to 1 iteration)")
 	agentRunCmd.Flags().StringVarP(&agentModel, "model", "m", "", "Model to use (opus, sonnet, haiku). Default: opus for large balls, sonnet for others")
+	agentRunCmd.Flags().IntVar(&agentDelay, "delay", 0, "Delay between iterations in minutes (overrides config, 0 = no delay)")
+	agentRunCmd.Flags().IntVar(&agentFuzz, "fuzz", 0, "Random +/- variance in delay minutes (overrides config)")
 
 	agentCmd.AddCommand(agentRunCmd)
 	agentCmd.AddCommand(agentRefineCmd)
@@ -944,10 +957,33 @@ func runAgentRun(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Timeout per iteration: %v\n", agentTimeout)
 	}
 
-	// Load global iteration delay settings
-	iterDelay := 2 * time.Second // default fallback
-	delayMinutes, fuzz, err := session.GetGlobalIterationDelayWithOptions(GetConfigOptions())
-	if err == nil && delayMinutes > 0 {
+	// Load iteration delay settings (flags override config)
+	var iterDelay time.Duration
+	var delayMinutes, fuzz int
+
+	// Check if --delay flag was explicitly provided
+	if cmd.Flags().Changed("delay") {
+		delayMinutes = agentDelay
+		// Check if --fuzz was also provided, otherwise default to 0
+		if cmd.Flags().Changed("fuzz") {
+			fuzz = agentFuzz
+		}
+	} else {
+		// Load from config
+		var err error
+		delayMinutes, fuzz, err = session.GetGlobalIterationDelayWithOptions(GetConfigOptions())
+		if err != nil {
+			delayMinutes = 0
+			fuzz = 0
+		}
+		// Override fuzz from flag if set
+		if cmd.Flags().Changed("fuzz") {
+			fuzz = agentFuzz
+		}
+	}
+
+	// If delay is 0, skip the delay feature entirely (regardless of fuzz)
+	if delayMinutes > 0 {
 		iterDelay = calculateFuzzyDelay(delayMinutes, fuzz)
 		fmt.Printf("Iteration delay: %v", iterDelay.Round(time.Second))
 		if fuzz > 0 {
