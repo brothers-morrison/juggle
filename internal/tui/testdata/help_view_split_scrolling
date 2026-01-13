@@ -1,0 +1,32 @@
+# Test: Help view scrolling behavior
+
+run
+----
+-- view:
+Juggler TUI - Complete Keybindings Reference␤
+                                            ␤
+␤
+  ↑ 10 more lines above␤
+  j/k              Navigate sessions (auto-selects)␤
+  Enter            Select session and go to balls panel␤
+  a                Add new session␤
+  A                Launch agent for selected session␤
+  e                Edit session description␤
+  d                Delete session (with confirmation)␤
+  /                Filter sessions␤
+  Ctrl+U           Clear filter␤
+␤
+Balls Panel - State Changes (s + key)␤
+                                     ␤
+  s                Start two-key state change sequence:␤
+    sc               Complete ball (→ complete, archives)␤
+    ss               Start ball (→ in_progress)␤
+    sb               Block ball (prompts for reason)␤
+    sp               Set to pending␤
+    sa               Archive completed ball␤
+␤
+Balls Panel - Toggle Filters (t + key)␤
+                                      ␤
+  ↓ 60 more lines below␤
+␤
+j/k = scroll | ? or Esc = close help🛇

@@ -1,0 +1,32 @@
+# Test: Comprehensive split help view
+
+run
+----
+-- view:
+Juggler TUI - Complete Keybindings Reference␤
+                                            ␤
+␤
+Navigation␤
+          ␤
+  Tab / l          Next panel (Sessions → Balls → Activity)␤
+  Shift+Tab / h    Previous panel␤
+  j / ↓            Move down / Scroll down␤
+  k / ↑            Move up / Scroll up␤
+  Enter            Select item / Expand␤
+  Space            Go back (in Balls panel)␤
+  Esc              Back / Deselect / Close␤
+␤
+Sessions Panel␤
+              ␤
+  j/k              Navigate sessions (auto-selects)␤
+  Enter            Select session and go to balls panel␤
+  a                Add new session␤
+  A                Launch agent for selected session␤
+  e                Edit session description␤
+  d                Delete session (with confirmation)␤
+  /                Filter sessions␤
+  Ctrl+U           Clear filter␤
+␤
+  ↓ 69 more lines below␤
+␤
+j/k = scroll | ? or Esc = close help🛇

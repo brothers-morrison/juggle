@@ -1008,6 +1008,28 @@ func TestConfirmAgentCancelDialog(t *testing.T) {
 	catwalk.RunModel(t, "testdata/confirm_agent_cancel", model)
 }
 
+// TestHelpViewLegacy tests the legacy help view rendering.
+func TestHelpViewLegacy(t *testing.T) {
+	model := createTestSplitViewModel(t)
+	model.mode = helpView
+	catwalk.RunModel(t, "testdata/help_view_legacy", model)
+}
+
+// TestHelpViewSplitComprehensive tests the comprehensive split help view.
+func TestHelpViewSplitComprehensive(t *testing.T) {
+	model := createTestSplitViewModel(t)
+	model.mode = splitHelpView
+	catwalk.RunModel(t, "testdata/help_view_split_comprehensive", model)
+}
+
+// TestHelpViewSplitScrolling tests scrolling behavior in the help view.
+func TestHelpViewSplitScrolling(t *testing.T) {
+	model := createTestSplitViewModel(t)
+	model.mode = splitHelpView
+	model.helpScrollOffset = 10 // Scroll to middle of help content
+	catwalk.RunModel(t, "testdata/help_view_split_scrolling", model)
+}
+
 // Helper functions for creating test data
 func formatBallID(i int) string {
 	return fmt.Sprintf("juggler-%d", i)

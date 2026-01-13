@@ -1,0 +1,44 @@
+# Test: Legacy help view rendering
+
+run
+----
+-- view:
+🎯 Juggler TUI - Help␤
+                     ␤
+␤
+Navigation␤
+          ␤
+  ↑ / k  Move up␤
+  ↓ / j  Move down␤
+  Enter  View ball details␤
+  b  Back to list␤
+  Esc  Back to list (or exit from list view)␤
+␤
+State Changes (s + key)␤
+                       ␤
+  sc  Complete ball (→ complete, archives)␤
+  ss  Start ball (→ in_progress)␤
+  sb  Block ball (prompts for reason)␤
+  sp  Set to pending␤
+  sa  Archive completed ball␤
+␤
+Toggle Filters (t + key)␤
+                        ␤
+  tc  Toggle complete balls visibility␤
+  tb  Toggle blocked balls visibility␤
+  ti  Toggle in_progress balls visibility␤
+  tp  Toggle pending balls visibility␤
+  ta  Show all states␤
+␤
+Other␤
+     ␤
+  a  Add new ball␤
+  e  Edit ball␤
+  d  Delete ball (with confirmation)␤
+  o  Cycle sort order␤
+  R  Refresh/reload balls␤
+  ?  Toggle this help␤
+  q / Ctrl+C  Quit␤
+␤
+␤
+Press 'b' or '?' to go back🛇
