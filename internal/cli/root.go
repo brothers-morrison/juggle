@@ -10,24 +10,26 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:   "juggle",
-	Short: "Manage multiple tasks being juggled simultaneously",
+	Short: "Run AI agent loops with good UX",
 	SilenceUsage: true,
 	SilenceErrors: true,
-	Long: `Juggle tracks concurrent work items (balls) across projects.
+	Long: `Juggle runs autonomous AI agent loops with good UX. Define tasks with
+acceptance criteria, start the loop, and add/modify tasks while it runs.
+No JSON editing - just TUI or CLI commands.
 
 Quick start:
-  juggle plan              Plan a new ball interactively
-  juggle                   Show balls in progress
-  juggle tui               Interactive terminal UI
-  juggle sessions start X  Start working on session X
+  juggle plan              Define a new task interactively
+  juggle tui               Interactive terminal UI (add/edit tasks live)
+  juggle agent run         Start the autonomous agent loop
+  juggle                   Show tasks in progress
 
-Ball operations:
-  juggle <id>              Start a pending ball / show details
+Task operations:
+  juggle <id>              Start a pending task / show details
   juggle <id> blocked "X"  Mark blocked with reason
   juggle <id> complete     Mark complete and archive
-  juggle update <id> ...   Update ball properties
+  juggle update <id> ...   Update task properties
 
-Ball states: pending → in_progress → complete (or blocked)`,
+Task states: pending → in_progress → complete (or blocked)`,
 	RunE:                       runRootCommand,
 	Args:                       cobra.ArbitraryArgs,
 	DisableFlagParsing:         false,
@@ -102,6 +104,11 @@ func DiscoverProjectsForCommand(config *session.Config, store *session.Store) ([
 	return []string{cwd}, nil
 }
 
+// SetVersion sets the version string for the CLI
+func SetVersion(v string) {
+	rootCmd.Version = v
+}
+
 // Execute runs the root command
 func Execute() error {
 	return rootCmd.Execute()
@@ -154,8 +161,9 @@ func customHelpFunc(cmd *cobra.Command, args []string) {
 	fmt.Println()
 
 	fmt.Println("Flags:")
-	fmt.Println("  -a, --all    Search across all projects")
-	fmt.Println("  -h, --help   Help for juggle")
+	fmt.Println("  -a, --all      Search across all projects")
+	fmt.Println("  -h, --help     Help for juggle")
+	fmt.Println("  -v, --version  Version for juggle")
 	fmt.Println()
 	fmt.Println("Use \"juggle [command] --help\" for more information about a command.")
 }

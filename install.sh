@@ -6,7 +6,7 @@
 set -e
 
 # Configuration
-REPO="jmoiron/juggle"
+REPO="ohare93/juggler"
 INSTALL_DIR="${HOME}/.local/bin"
 BINARY_NAME="juggle"
 
@@ -82,7 +82,10 @@ install_binary() {
     local version="$2"
     local tmp_dir
     local download_url
-    local archive_name="${BINARY_NAME}-${version}-${platform}.tar.gz"
+    # Convert platform from "linux-amd64" to "linux_amd64" and strip v prefix from version
+    local version_num="${version#v}"
+    local platform_underscore="${platform//-/_}"
+    local archive_name="${BINARY_NAME}_${version_num}_${platform_underscore}.tar.gz"
 
     info "Installing Juggle ${version} for ${platform}..."
 

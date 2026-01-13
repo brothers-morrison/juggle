@@ -1,17 +1,18 @@
 ---
 name: juggler
-description: Task management for tracking concurrent work sessions ("balls") across projects. Use when working on a project with a .juggler/ directory, when user mentions juggler balls/sessions, or when planning tasks before agent loops. Helps create well-structured tasks with acceptance criteria and update state during execution.
+description: Manage tasks via CLI commands during agent loops. Use when working on a project with a .juggler/ directory, when user mentions juggler balls/tasks, or when you need to update task state or log progress.
 ---
 
 # Juggler
 
-Juggler is structured task storage (like `prd.json`) for concurrent work sessions. Each task ("ball") has state, acceptance criteria, and belongs to a session for grouping.
+Juggler runs autonomous AI agent loops with good UX for the developer. This skill teaches you (the agent) how to use CLI commands to manage tasks - updating state, logging progress, and checking acceptance criteria as you work.
 
 ## Core Concepts
 
 ### Balls = Tasks
 
 A ball is a unit of work with:
+
 - **Intent**: What you're trying to accomplish
 - **Acceptance Criteria**: Verifiable conditions that define "done"
 - **State**: pending → in_progress → complete (or blocked)
@@ -21,6 +22,7 @@ A ball is a unit of work with:
 ### Sessions = Groupings
 
 A session groups related balls and provides:
+
 - **Context**: Background info, constraints, architecture notes (read by agents)
 - **Progress**: Append-only log of what happened (memory across loop iterations)
 
@@ -31,6 +33,7 @@ Sessions give agents memory between iterations - context is the "brief" and prog
 Acceptance criteria define when a ball is DONE. Write them so an agent (or human) can verify completion objectively.
 
 **Good acceptance criteria are:**
+
 - Verifiable: Can be checked with a command or inspection
 - Specific: No ambiguity about what "done" means
 - Include verification: Tests pass, builds succeed, etc.
@@ -54,6 +57,7 @@ juggle plan "Add login endpoint" \
 ```
 
 **Always include a verification criterion** like:
+
 - `go test ./... passes`
 - `npm run test passes`
 - `cargo build succeeds`
@@ -128,6 +132,7 @@ juggle update myapp-5 --state complete --json
 ### Log Progress
 
 Progress entries are timestamped and persist across loop iterations. Use them for:
+
 - Recording what was accomplished
 - Noting decisions made
 - Flagging issues for next iteration
@@ -156,22 +161,22 @@ juggle list
 
 ## Ball States
 
-| State | Meaning |
-|-------|---------|
-| `pending` | Planned, not yet started |
-| `in_progress` | Currently being worked on |
-| `blocked` | Stuck (reason in `blocked_reason` field) |
-| `complete` | Done and archived |
+| State         | Meaning                                  |
+| ------------- | ---------------------------------------- |
+| `pending`     | Planned, not yet started                 |
+| `in_progress` | Currently being worked on                |
+| `blocked`     | Stuck (reason in `blocked_reason` field) |
+| `complete`    | Done and archived                        |
 
 ### Model Size
 
 Model size indicates the preferred LLM model for cost optimization:
 
-| Size | Model | Use For |
-|------|-------|---------|
-| `small` | haiku | Simple fixes, docs, straightforward implementations |
-| `medium` | sonnet | Standard features, moderate complexity |
-| `large` | opus | Complex refactoring, architectural changes |
+| Size     | Model  | Use For                                             |
+| -------- | ------ | --------------------------------------------------- |
+| `small`  | haiku  | Simple fixes, docs, straightforward implementations |
+| `medium` | sonnet | Standard features, moderate complexity              |
+| `large`  | opus   | Complex refactoring, architectural changes          |
 
 When running the agent with a specific model (`--model`), balls matching that model size are prioritized. This allows running cheaper models for simple tasks.
 
@@ -202,6 +207,7 @@ Balls can depend on other balls to express ordering requirements. Dependencies e
 ### Specifying Dependencies
 
 When creating a ball:
+
 ```bash
 # Create a ball that depends on another ball
 juggle plan "Add user profile page" --depends-on my-app-5
@@ -211,6 +217,7 @@ juggle plan "Integrate auth with profile" --depends-on auth-ball-1 --depends-on 
 ```
 
 When updating an existing ball:
+
 ```bash
 # Add a dependency
 juggle update my-app-10 --add-dep my-app-5
@@ -225,6 +232,7 @@ juggle update my-app-10 --set-deps my-app-5,my-app-6
 ### ID Resolution
 
 Dependency IDs support:
+
 - Full ball ID: `my-project-abc12345`
 - Short ID: `abc12345`
 - Prefix match: `abc` (if unique)
@@ -232,6 +240,7 @@ Dependency IDs support:
 ### Circular Dependency Detection
 
 Juggler automatically detects and rejects circular dependencies:
+
 ```bash
 # This will fail if ball-A depends on ball-B and ball-B depends on ball-A
 juggle update ball-A --add-dep ball-B
@@ -241,6 +250,7 @@ juggle update ball-A --add-dep ball-B
 ### Agent Priority Ordering
 
 When the agent receives balls, dependencies are considered for ordering:
+
 1. **In-progress balls first** (unfinished work from previous iterations)
 2. **Balls with satisfied dependencies** (all dependencies complete)
 3. **Balls with pending dependencies** (blocked until dependencies complete)
@@ -266,6 +276,7 @@ juggle plan "Task intent" \
 ```
 
 In non-interactive mode:
+
 - Intent is required (via args or `--intent`)
 - Priority defaults to `medium`
 - State defaults to `pending`
@@ -309,31 +320,31 @@ The agent run command will error gracefully if no session is provided and stdin 
 
 ### Planning Commands
 
-| Command | Description |
-|---------|-------------|
-| `juggle sessions create <id> -m "desc"` | Create session |
+| Command                                        | Description                 |
+| ---------------------------------------------- | --------------------------- |
+| `juggle sessions create <id> -m "desc"`        | Create session              |
 | `juggle sessions create <id> --context "text"` | Create with initial context |
-| `juggle sessions context <id> --set "text"` | Set session context |
-| `juggle sessions context <id> --edit` | Edit context in $EDITOR |
-| `juggle plan "intent" -c "criterion"` | Create ball with criteria |
-| `juggle plan "intent" --session <id>` | Create ball in session |
-| `juggle plan "intent" --depends-on <ball-id>` | Create ball with dependency |
-| `juggle plan "intent" --non-interactive` | Create ball without prompts |
+| `juggle sessions context <id> --set "text"`    | Set session context         |
+| `juggle sessions context <id> --edit`          | Edit context in $EDITOR     |
+| `juggle plan "intent" -c "criterion"`          | Create ball with criteria   |
+| `juggle plan "intent" --session <id>`          | Create ball in session      |
+| `juggle plan "intent" --depends-on <ball-id>`  | Create ball with dependency |
+| `juggle plan "intent" --non-interactive`       | Create ball without prompts |
 
 ### State Update Commands
 
-| Command | Description |
-|---------|-------------|
-| `juggle update <id> --state <state>` | Update ball state |
-| `juggle update <id> --state blocked --reason "why"` | Block with reason |
-| `juggle update <id> --add-dep <ball-id>` | Add dependency |
-| `juggle update <id> --remove-dep <ball-id>` | Remove dependency |
-| `juggle update <id> --set-deps <ids>` | Replace all dependencies |
-| `juggle progress append <session> "text"` | Log progress entry |
-| `juggle show <id> [--json]` | View ball details |
-| `juggle sessions show <id>` | View session with balls |
-| `juggle sessions delete <id> --yes` | Delete session without prompt |
-| `juggle delete <id> --force` | Delete ball without prompt |
+| Command                                             | Description                   |
+| --------------------------------------------------- | ----------------------------- |
+| `juggle update <id> --state <state>`                | Update ball state             |
+| `juggle update <id> --state blocked --reason "why"` | Block with reason             |
+| `juggle update <id> --add-dep <ball-id>`            | Add dependency                |
+| `juggle update <id> --remove-dep <ball-id>`         | Remove dependency             |
+| `juggle update <id> --set-deps <ids>`               | Replace all dependencies      |
+| `juggle progress append <session> "text"`           | Log progress entry            |
+| `juggle show <id> [--json]`                         | View ball details             |
+| `juggle sessions show <id>`                         | View session with balls       |
+| `juggle sessions delete <id> --yes`                 | Delete session without prompt |
+| `juggle delete <id> --force`                        | Delete ball without prompt    |
 
 ## File Locations
 

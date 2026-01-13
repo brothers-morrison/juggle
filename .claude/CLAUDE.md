@@ -54,7 +54,7 @@ go fmt ./...
 
 ### Core Concepts
 
-**Juggler** tracks concurrent work sessions ("balls") across multiple projects using a juggling metaphor. Each ball represents a task with state tracking, todos, and context preservation across conversations.
+**Juggler** runs autonomous AI agent loops with good UX. Define tasks ("balls") with acceptance criteria via TUI or CLI, start the agent loop (`juggle agent run`), and add or modify tasks while it runs. No JSON editing - the TUI and CLI handle all task management.
 
 ### State Machine
 
