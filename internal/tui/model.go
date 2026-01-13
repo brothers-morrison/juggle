@@ -210,6 +210,9 @@ type Model struct {
 	historyScrollOffset int                       // Scroll offset for history view
 	historyOutput       string                    // Content of selected history's output file
 	historyOutputOffset int                       // Scroll offset for output view
+
+	// Time provider for testability
+	nowFunc func() time.Time // Can be overridden in tests
 }
 
 // newContextTextarea creates a textarea for the context field with appropriate settings
@@ -244,6 +247,7 @@ func InitialModel(store *session.Store, config *session.Config, localOnly bool) 
 		activityLog:  make([]ActivityEntry, 0),
 		textInput:    ti,
 		contextInput: newContextTextarea(),
+		nowFunc:      time.Now,
 	}
 }
 
@@ -282,6 +286,7 @@ func InitialSplitModelWithWatcher(store *session.Store, sessionStore *session.Se
 		textInput:          ti,
 		contextInput:       newContextTextarea(),
 		fileWatcher:        w,
+		nowFunc:            time.Now,
 	}
 }
 
@@ -302,8 +307,12 @@ func (m Model) Init() tea.Cmd {
 
 // addActivity adds an entry to the activity log
 func (m *Model) addActivity(msg string) {
+	nowTime := time.Now()
+	if m.nowFunc != nil {
+		nowTime = m.nowFunc()
+	}
 	entry := ActivityEntry{
-		Time:    time.Now(),
+		Time:    nowTime,
 		Message: msg,
 	}
 	// Keep last 100 entries

@@ -3,6 +3,7 @@ package tui
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -203,6 +204,12 @@ func createTestSplitViewModel(t *testing.T) Model {
 		agentStatus:          AgentStatus{},
 		pendingKeySequence:   "",
 		activityLog:          make([]ActivityEntry, 0),
+	}
+
+	// Set fixed time for deterministic tests
+	fixedTime := time.Date(2025, 1, 13, 16, 41, 11, 0, time.UTC)
+	m.nowFunc = func() time.Time {
+		return fixedTime
 	}
 
 	return m
