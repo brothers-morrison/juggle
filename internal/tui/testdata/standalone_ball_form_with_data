@@ -1,0 +1,23 @@
+# Test: Form with pre-populated data
+# Should display intent, context, tags, and acceptance criteria
+
+run
+----
+-- view:
+Create New Ball␤
+␤
+Context:␤
+┃ Some context for the task                                 ␤
+Title: Test task intent␤
+␤
+Acceptance Criteria:␤
+  1. First criterion␤
+  2. Second criterion␤
+  + (add criterion)␤
+␤
+Tags: feature, backend␤
+Session: (none)␤
+Model Size: (default) small medium large␤
+Depends On: (none)␤
+␤
+Navigation: ↑/↓ fields • Tab next • ←/→ options • Enter next/add AC • Ctrl+S save • Esc cancel␤

@@ -30,6 +30,12 @@
       ],
       "test-agent-integration": [
         "go test -v -tags=integration ./internal/agent_integration_test/..."
+      ],
+      "test-tui": [
+        "go test -v ./internal/tui/... -run 'TestStandaloneBall'"
+      ],
+      "test-tui-rewrite": [
+        "go test -v ./internal/tui/... -run 'TestStandaloneBall' -rewrite"
       ]
     }
   }

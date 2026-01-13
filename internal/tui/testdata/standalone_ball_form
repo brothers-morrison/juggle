@@ -1,0 +1,21 @@
+# Test: Initial empty form view
+# The form should display with context field focused
+
+run
+----
+-- view:
+Create New Ball␤
+␤
+Context:␤
+┃ Background context for this task                          ␤
+Title: (empty)␤
+␤
+Acceptance Criteria: (none - consider adding criteria)␤
+  + (add criterion)␤
+␤
+Tags: (none)␤
+Session: (none)␤
+Model Size: (default) small medium large␤
+Depends On: (none)␤
+␤
+Navigation: ↑/↓ fields • Tab next • ←/→ options • Enter next/add AC • Ctrl+S save • Esc cancel␤

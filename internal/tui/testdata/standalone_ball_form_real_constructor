@@ -1,0 +1,22 @@
+# Test: Using real NewStandaloneBallModel constructor
+
+run
+----
+-- view:
+Create New Ball␤
+␤
+Context:␤
+┃ One Two Three Four Five Six Seven Eight Nine Ten          ␤
+┃ Eleven Twelve                                             ␤
+┃                                                           ␤
+Title: Test intent␤
+␤
+Acceptance Criteria: (none - consider adding criteria)␤
+  + (add criterion)␤
+␤
+Tags: (none)␤
+Session: (none)␤
+Model Size: (default) small medium large␤
+Depends On: (none)␤
+␤
+Navigation: ↑/↓ fields • Tab next • ←/→ options • Enter next/add AC • Ctrl+S save • Esc cancel␤

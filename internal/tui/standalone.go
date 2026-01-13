@@ -127,6 +127,7 @@ func (m *StandaloneBallModel) PrePopulate(intent, context string, tags []string,
 	}
 
 	m.pendingBallDependsOn = dependsOn
+	adjustStandaloneContextHeight(m)
 }
 
 func (m StandaloneBallModel) Init() tea.Cmd {
@@ -978,7 +979,7 @@ func adjustStandaloneContextHeight(m *StandaloneBallModel) {
 		}
 	}
 
-	height := wrappedLines
+	height := wrappedLines + 1 // +1 for cursor line
 	if height < 1 {
 		height = 1
 	}
