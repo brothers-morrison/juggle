@@ -181,8 +181,8 @@ func listAllBalls(cmd *cobra.Command) error {
 		return fmt.Errorf("failed to get current directory: %w", err)
 	}
 
-	// If current directory has .juggler, ensure it's tracked
-	if _, err := os.Stat(filepath.Join(cwd, ".juggler")); err == nil {
+	// If current directory has .juggle, ensure it's tracked
+	if _, err := os.Stat(filepath.Join(cwd, ".juggle")); err == nil {
 		_ = session.EnsureProjectInSearchPaths(cwd)
 	}
 

@@ -171,20 +171,20 @@ func TestEndToEndWorkflow(t *testing.T) {
 
 // TestEdgeCases tests edge cases and error handling
 func TestEdgeCases(t *testing.T) {
-	t.Run("MissingJugglerDir", func(t *testing.T) {
+	t.Run("MissingJuggleDir", func(t *testing.T) {
 		tempDir := t.TempDir()
 
-		// Try to load balls without .juggler directory
+		// Try to load balls without .juggle directory
 		store, err := session.NewStore(tempDir)
 		if err != nil {
 			// This is expected - NewStore should create the directory
-			t.Logf("NewStore created .juggler directory (expected): %v", err)
+			t.Logf("NewStore created .juggle directory (expected): %v", err)
 		}
 
 		// After NewStore, directory should exist
-		jugglerDir := filepath.Join(tempDir, ".juggler")
-		if _, err := os.Stat(jugglerDir); os.IsNotExist(err) {
-			t.Error(".juggler directory was not created by NewStore")
+		juggleDir := filepath.Join(tempDir, ".juggle")
+		if _, err := os.Stat(juggleDir); os.IsNotExist(err) {
+			t.Error(".juggle directory was not created by NewStore")
 		}
 
 		// Should be able to load balls (empty list)

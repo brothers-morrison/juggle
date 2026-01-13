@@ -231,15 +231,15 @@ func TestTruncateID(t *testing.T) {
 	}{
 		{
 			name:     "short ID",
-			id:       "juggler-5",
+			id:       "juggle-5",
 			maxLen:   15,
-			expected: "juggler-5",
+			expected: "juggle-5",
 		},
 		{
 			name:     "long timestamp ID",
-			id:       "juggler-20251012-143438",
+			id:       "juggle-20251012-143438",
 			maxLen:   15,
-			expected: "juggler-...3438",
+			expected: "juggle-...3438",
 		},
 		{
 			name:     "exactly max length",
@@ -2395,23 +2395,23 @@ func TestAllBallsSameProject(t *testing.T) {
 		{
 			name: "single ball",
 			balls: []*session.Ball{
-				{ID: "juggler-1", WorkingDir: "/home/user/juggler"},
+				{ID: "juggle-1", WorkingDir: "/home/user/juggle"},
 			},
 			expected: true,
 		},
 		{
 			name: "multiple balls same project",
 			balls: []*session.Ball{
-				{ID: "juggler-1", WorkingDir: "/home/user/juggler"},
-				{ID: "juggler-2", WorkingDir: "/home/user/juggler"},
-				{ID: "juggler-3", WorkingDir: "/home/user/juggler"},
+				{ID: "juggle-1", WorkingDir: "/home/user/juggle"},
+				{ID: "juggle-2", WorkingDir: "/home/user/juggle"},
+				{ID: "juggle-3", WorkingDir: "/home/user/juggle"},
 			},
 			expected: true,
 		},
 		{
 			name: "multiple balls different projects",
 			balls: []*session.Ball{
-				{ID: "juggler-1", WorkingDir: "/home/user/juggler"},
+				{ID: "juggle-1", WorkingDir: "/home/user/juggle"},
 				{ID: "myapp-1", WorkingDir: "/home/user/myapp"},
 			},
 			expected: false,
@@ -2419,7 +2419,7 @@ func TestAllBallsSameProject(t *testing.T) {
 		{
 			name: "three different projects",
 			balls: []*session.Ball{
-				{ID: "juggler-1", WorkingDir: "/home/user/juggler"},
+				{ID: "juggle-1", WorkingDir: "/home/user/juggle"},
 				{ID: "myapp-1", WorkingDir: "/home/user/myapp"},
 				{ID: "other-1", WorkingDir: "/home/user/other"},
 			},
@@ -2444,14 +2444,14 @@ func TestCompareBallIDs(t *testing.T) {
 		id2      string
 		expected int // -1 if id1 < id2, 0 if equal, 1 if id1 > id2
 	}{
-		{"juggler-1", "juggler-2", -1},
-		{"juggler-2", "juggler-1", 1},
-		{"juggler-5", "juggler-5", 0},
-		{"juggler-10", "juggler-2", 1},  // Numeric comparison, 10 > 2
-		{"juggler-1", "juggler-10", -1}, // Numeric comparison, 1 < 10
+		{"juggle-1", "juggle-2", -1},
+		{"juggle-2", "juggle-1", 1},
+		{"juggle-5", "juggle-5", 0},
+		{"juggle-10", "juggle-2", 1},  // Numeric comparison, 10 > 2
+		{"juggle-1", "juggle-10", -1}, // Numeric comparison, 1 < 10
 		{"project-99", "project-100", -1},
 		{"aaa-1", "zzz-1", -1}, // Falls back to string comparison for same number
-		{"noid", "juggler-1", 1}, // No numeric part falls back to string comparison
+		{"noid", "juggle-1", 1}, // No numeric part falls back to string comparison
 	}
 
 	for _, tt := range tests {
@@ -2470,13 +2470,13 @@ func TestExtractBallNumber(t *testing.T) {
 		id       string
 		expected int
 	}{
-		{"juggler-1", 1},
-		{"juggler-99", 99},
+		{"juggle-1", 1},
+		{"juggle-99", 99},
 		{"myapp-1000", 1000},
 		{"project-name-123", 123},
 		{"nohyphen", -1},
 		{"ends-with-hyphen-", -1},
-		{"juggler-abc", -1}, // Non-numeric suffix
+		{"juggle-abc", -1}, // Non-numeric suffix
 		{"", -1},
 	}
 
@@ -2548,10 +2548,10 @@ func TestToggleSortOrder(t *testing.T) {
 // Test sorting balls by ID ascending
 func TestSortBallsByIDAscending(t *testing.T) {
 	balls := []*session.Ball{
-		{ID: "juggler-10"},
-		{ID: "juggler-2"},
-		{ID: "juggler-1"},
-		{ID: "juggler-100"},
+		{ID: "juggle-10"},
+		{ID: "juggle-2"},
+		{ID: "juggle-1"},
+		{ID: "juggle-100"},
 	}
 
 	model := Model{
@@ -2560,7 +2560,7 @@ func TestSortBallsByIDAscending(t *testing.T) {
 
 	model.sortBalls(balls)
 
-	expected := []string{"juggler-1", "juggler-2", "juggler-10", "juggler-100"}
+	expected := []string{"juggle-1", "juggle-2", "juggle-10", "juggle-100"}
 	for i, ball := range balls {
 		if ball.ID != expected[i] {
 			t.Errorf("Expected ball at index %d to be %q, got %q", i, expected[i], ball.ID)
@@ -2571,9 +2571,9 @@ func TestSortBallsByIDAscending(t *testing.T) {
 // Test sorting balls by ID descending
 func TestSortBallsByIDDescending(t *testing.T) {
 	balls := []*session.Ball{
-		{ID: "juggler-1"},
-		{ID: "juggler-10"},
-		{ID: "juggler-2"},
+		{ID: "juggle-1"},
+		{ID: "juggle-10"},
+		{ID: "juggle-2"},
 	}
 
 	model := Model{
@@ -2582,7 +2582,7 @@ func TestSortBallsByIDDescending(t *testing.T) {
 
 	model.sortBalls(balls)
 
-	expected := []string{"juggler-10", "juggler-2", "juggler-1"}
+	expected := []string{"juggle-10", "juggle-2", "juggle-1"}
 	for i, ball := range balls {
 		if ball.ID != expected[i] {
 			t.Errorf("Expected ball at index %d to be %q, got %q", i, expected[i], ball.ID)
@@ -2593,10 +2593,10 @@ func TestSortBallsByIDDescending(t *testing.T) {
 // Test sorting balls by priority
 func TestSortBallsByPriority(t *testing.T) {
 	balls := []*session.Ball{
-		{ID: "juggler-1", Priority: session.PriorityLow},
-		{ID: "juggler-2", Priority: session.PriorityUrgent},
-		{ID: "juggler-3", Priority: session.PriorityMedium},
-		{ID: "juggler-4", Priority: session.PriorityHigh},
+		{ID: "juggle-1", Priority: session.PriorityLow},
+		{ID: "juggle-2", Priority: session.PriorityUrgent},
+		{ID: "juggle-3", Priority: session.PriorityMedium},
+		{ID: "juggle-4", Priority: session.PriorityHigh},
 	}
 
 	model := Model{
@@ -2606,7 +2606,7 @@ func TestSortBallsByPriority(t *testing.T) {
 	model.sortBalls(balls)
 
 	// Should be sorted by priority: urgent, high, medium, low
-	expectedOrder := []string{"juggler-2", "juggler-4", "juggler-3", "juggler-1"}
+	expectedOrder := []string{"juggle-2", "juggle-4", "juggle-3", "juggle-1"}
 	for i, ball := range balls {
 		if ball.ID != expectedOrder[i] {
 			t.Errorf("Expected ball at index %d to be %q, got %q", i, expectedOrder[i], ball.ID)
@@ -2617,9 +2617,9 @@ func TestSortBallsByPriority(t *testing.T) {
 // Test that same priority balls are sorted by ID ascending
 func TestSortBallsByPriorityThenID(t *testing.T) {
 	balls := []*session.Ball{
-		{ID: "juggler-10", Priority: session.PriorityMedium},
-		{ID: "juggler-2", Priority: session.PriorityMedium},
-		{ID: "juggler-1", Priority: session.PriorityMedium},
+		{ID: "juggle-10", Priority: session.PriorityMedium},
+		{ID: "juggle-2", Priority: session.PriorityMedium},
+		{ID: "juggle-1", Priority: session.PriorityMedium},
 	}
 
 	model := Model{
@@ -2629,7 +2629,7 @@ func TestSortBallsByPriorityThenID(t *testing.T) {
 	model.sortBalls(balls)
 
 	// All same priority, should be sorted by ID ascending
-	expected := []string{"juggler-1", "juggler-2", "juggler-10"}
+	expected := []string{"juggle-1", "juggle-2", "juggle-10"}
 	for i, ball := range balls {
 		if ball.ID != expected[i] {
 			t.Errorf("Expected ball at index %d to be %q, got %q", i, expected[i], ball.ID)
@@ -2640,9 +2640,9 @@ func TestSortBallsByPriorityThenID(t *testing.T) {
 // Test filterBallsForSession applies sorting
 func TestFilterBallsForSessionAppliesSorting(t *testing.T) {
 	balls := []*session.Ball{
-		{ID: "juggler-10", State: session.StatePending, Tags: []string{"test"}},
-		{ID: "juggler-2", State: session.StatePending, Tags: []string{"test"}},
-		{ID: "juggler-1", State: session.StatePending, Tags: []string{"test"}},
+		{ID: "juggle-10", State: session.StatePending, Tags: []string{"test"}},
+		{ID: "juggle-2", State: session.StatePending, Tags: []string{"test"}},
+		{ID: "juggle-1", State: session.StatePending, Tags: []string{"test"}},
 	}
 
 	model := Model{
@@ -2655,7 +2655,7 @@ func TestFilterBallsForSessionAppliesSorting(t *testing.T) {
 	result := model.filterBallsForSession()
 
 	// Should be sorted by ID ascending
-	expected := []string{"juggler-1", "juggler-2", "juggler-10"}
+	expected := []string{"juggle-1", "juggle-2", "juggle-10"}
 	for i, ball := range result {
 		if ball.ID != expected[i] {
 			t.Errorf("Expected ball at index %d to be %q, got %q", i, expected[i], ball.ID)
@@ -4137,7 +4137,7 @@ func TestStatusBarFilterIndicatorPresent(t *testing.T) {
 }
 
 // =============================================================================
-// Panel Navigation Tests (juggler-66)
+// Panel Navigation Tests (juggle-66)
 // =============================================================================
 
 // TestEnterOnSessionMovesFocusToBallsPanel verifies that pressing Enter on a session
@@ -4733,7 +4733,7 @@ func TestCompleteSessionSwitchWorkflow(t *testing.T) {
 	}
 }
 
-// Tests for Ball Detail Pane (juggler-67)
+// Tests for Ball Detail Pane (juggle-67)
 
 // TestBallDetailPanelShowsAllAcceptanceCriteria verifies that all acceptance criteria are shown
 func TestBallDetailPanelShowsAllAcceptanceCriteria(t *testing.T) {
@@ -5133,7 +5133,7 @@ func TestActivityLogScrollingInActivityMode(t *testing.T) {
 	}
 }
 
-// TestTUILocalScopeDefault verifies that TUI defaults to local scope (juggler-102)
+// TestTUILocalScopeDefault verifies that TUI defaults to local scope (juggle-102)
 func TestTUILocalScopeDefault(t *testing.T) {
 	t.Run("InitialModel defaults to local when passed true", func(t *testing.T) {
 		var store *session.Store
@@ -6701,7 +6701,7 @@ func TestHistoryViewGoToTopBottom(t *testing.T) {
 
 func TestHKeyOpensHistory(t *testing.T) {
 	// Create a model with splitView mode and a store
-	tmpDir, _ := os.MkdirTemp("", "juggler-test-*")
+	tmpDir, _ := os.MkdirTemp("", "juggle-test-*")
 	defer os.RemoveAll(tmpDir)
 
 	store, _ := session.NewStore(tmpDir)
@@ -7010,7 +7010,7 @@ func TestGPassesThroughWhenAgentOutputHidden(t *testing.T) {
 }
 
 // === AgentProcess Race Condition Tests ===
-// These tests verify the race condition fixes for agent cancellation (juggler-85)
+// These tests verify the race condition fixes for agent cancellation (juggle-85)
 
 // Test that IsCancelled is thread-safe (atomic.Bool)
 func TestAgentProcessIsCancelledThreadSafe(t *testing.T) {
@@ -7510,7 +7510,7 @@ func TestHandleToggleKeySequence_AllKeys(t *testing.T) {
 	}
 }
 
-// Test toggle filter updates filteredBalls list (AC2 of juggler-05a88026)
+// Test toggle filter updates filteredBalls list (AC2 of juggle-05a88026)
 func TestToggleFilter_UpdatesFilteredBalls(t *testing.T) {
 	// Create model with balls of different states
 	model := Model{
@@ -7560,7 +7560,7 @@ func TestToggleFilter_UpdatesFilteredBalls(t *testing.T) {
 	}
 }
 
-// Test all filters off shows empty list (AC3 of juggler-05a88026)
+// Test all filters off shows empty list (AC3 of juggle-05a88026)
 func TestToggleFilter_AllFiltersOff(t *testing.T) {
 	model := Model{
 		balls: []*session.Ball{
@@ -7602,7 +7602,7 @@ func TestToggleFilter_AllFiltersOff(t *testing.T) {
 	}
 }
 
-// Test status bar shows toggle message (AC4 of juggler-05a88026)
+// Test status bar shows toggle message (AC4 of juggle-05a88026)
 func TestToggleFilter_StatusBarShowsMessage(t *testing.T) {
 	model := Model{
 		filterStates: map[string]bool{

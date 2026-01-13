@@ -56,28 +56,28 @@ Can be piped directly to 'claude -p'.
 
 Examples:
   # Export current project balls
-  juggler export --format json --output balls.json
+  juggle export --format json --output balls.json
 
   # Export all discovered project balls
-  juggler export --all --format csv
+  juggle export --all --format csv
 
   # Export session in Ralph format for agent use
-  juggler export --session my-feature --format ralph
+  juggle export --session my-feature --format ralph
 
   # Export ALL balls in repo as agent prompt (no session filter)
   juggle export --session all --format agent | claude -p
 
   # Export session as complete agent prompt
-  juggler export --session my-feature --format agent | claude -p
+  juggle export --session my-feature --format agent | claude -p
 
   # Export specific balls by ID (supports full or short IDs)
-  juggler export --ball-ids "juggler-5,48" --format json
+  juggle export --ball-ids "juggle-5,48" --format json
 
   # Export only in_progress balls
-  juggler export --filter-state in_progress --format json
+  juggle export --filter-state in_progress --format json
 
   # Combine filters: export pending and in_progress balls from all projects
-  juggler export --all --filter-state "pending,in_progress" --format csv`,
+  juggle export --all --filter-state "pending,in_progress" --format csv`,
 	RunE: runExport,
 }
 
@@ -127,7 +127,7 @@ func runExport(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(projects) == 0 {
-		return fmt.Errorf("no projects with .juggler directories found")
+		return fmt.Errorf("no projects with .juggle directories found")
 	}
 
 	// Load all balls from discovered projects

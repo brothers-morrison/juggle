@@ -8,7 +8,7 @@ import (
 	"github.com/ohare93/juggle/internal/session"
 )
 
-// Cross-project tests for session selector functionality (juggler-95)
+// Cross-project tests for session selector functionality (juggle-95)
 
 func TestSessionSelector_AllProjectsFlag(t *testing.T) {
 	// AC 1-3: Create two project directories with sessions, set GlobalOpts.AllProjects=true,
@@ -95,7 +95,7 @@ func TestSessionSelector_CrossProjectSelection(t *testing.T) {
 	env.CreateSessionInProject(t, projectB, "session-b", "Session B")
 	ballB := env.CreateBallInProject(t, projectB, "Ball in B", session.PriorityHigh)
 	ballB.Tags = []string{"session-b"}
-	storeB, err := session.NewStoreWithConfig(projectB, session.StoreConfig{JugglerDirName: ".juggler"})
+	storeB, err := session.NewStoreWithConfig(projectB, session.StoreConfig{JuggleDirName: ".juggle"})
 	if err != nil {
 		t.Fatalf("Failed to create store for project B: %v", err)
 	}
@@ -333,7 +333,7 @@ func TestSessionSelector_MultipleBallsAcrossProjects(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		ball := env.CreateBallInProject(t, projectB, "Ball in B", session.PriorityHigh)
 		ball.Tags = []string{"session-b"}
-		storeB, _ := session.NewStoreWithConfig(projectB, session.StoreConfig{JugglerDirName: ".juggler"})
+		storeB, _ := session.NewStoreWithConfig(projectB, session.StoreConfig{JuggleDirName: ".juggle"})
 		if err := storeB.UpdateBall(ball); err != nil {
 			t.Fatalf("Failed to update ball B: %v", err)
 		}

@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	projectStorePath = ".juggler"
+	projectStorePath = ".juggle"
 	ballsFile        = "balls.jsonl"
 	archiveDir       = "archive"
 	archiveBallsFile = "balls.jsonl"
@@ -20,13 +20,13 @@ const (
 // Store handles persistence of sessions in a project directory
 // StoreConfig holds configurable options for Store
 type StoreConfig struct {
-	JugglerDirName string // Name of the juggler directory (default: ".juggler")
+	JuggleDirName string // Name of the juggle directory (default: ".juggle")
 }
 
 // DefaultStoreConfig returns the default store configuration
 func DefaultStoreConfig() StoreConfig {
 	return StoreConfig{
-		JugglerDirName: projectStorePath,
+		JuggleDirName: projectStorePath,
 	}
 }
 
@@ -57,13 +57,13 @@ func NewStoreWithConfig(projectDir string, config StoreConfig) (*Store, error) {
 		projectDir = cwd
 	}
 
-	storePath := filepath.Join(projectDir, config.JugglerDirName)
+	storePath := filepath.Join(projectDir, config.JuggleDirName)
 	ballsPath := filepath.Join(storePath, ballsFile)
 	archivePath := filepath.Join(storePath, archiveDir, archiveBallsFile)
 
 	// Ensure directories exist
 	if err := os.MkdirAll(storePath, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create %s directory: %w", config.JugglerDirName, err)
+		return nil, fmt.Errorf("failed to create %s directory: %w", config.JuggleDirName, err)
 	}
 
 	archiveDirPath := filepath.Join(storePath, archiveDir)

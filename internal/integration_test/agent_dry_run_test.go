@@ -214,13 +214,13 @@ func TestAgentPromptGeneration_SessionNotFound(t *testing.T) {
 	_, err := cli.GenerateAgentPromptForTest(env.ProjectDir, "non-existent-session", false, "")
 	// This might not error if the session simply has no balls
 	// The behavior is to return an empty balls list
-	// Actually, it should error if no projects exist with jugglerDir
+	// Actually, it should error if no projects exist with juggleDir
 	// Let me check the implementation...
 
 	// Based on the code, if projects exist but session not found, it returns empty balls
 	// but if no projects found, it returns error
 	if err != nil {
-		// This is expected if no juggler dir exists
+		// This is expected if no juggle dir exists
 		t.Log("Expected error for missing project:", err)
 	}
 }

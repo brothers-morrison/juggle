@@ -59,7 +59,7 @@ that aren't tagged to any specific session.
 The agent will:
 1. Generate a prompt using 'juggle export --format agent'
 2. Spawn claude with the prepared prompt
-3. Capture output to .juggler/sessions/<id>/last_output.txt
+3. Capture output to .juggle/sessions/<id>/last_output.txt
 4. Check for COMPLETE/BLOCKED signals after each iteration
 5. Repeat until done or max iterations reached
 
@@ -82,13 +82,13 @@ Examples:
   juggle agent run my-feature --iterations 5
 
   # Work on a specific ball only (1 iteration, interactive mode)
-  juggle agent run my-feature --ball juggler-5
+  juggle agent run my-feature --ball juggle-5
 
   # Work on specific ball without specifying session (uses "all" meta-session)
-  juggle agent run --ball juggler-5
+  juggle agent run --ball juggle-5
 
   # Work on specific ball with multiple iterations (non-interactive)
-  juggle agent run my-feature --ball juggler-5 -n 3
+  juggle agent run my-feature --ball juggle-5 -n 3
 
   # Run in interactive mode (full Claude TUI)
   juggle agent run my-feature --interactive
@@ -254,12 +254,12 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 	// Create output file path using storage ID
 	// For "all" meta-session, ensure the _all session directory exists
 	if isAllSession {
-		allDir := filepath.Join(config.ProjectDir, ".juggler", "sessions", "_all")
+		allDir := filepath.Join(config.ProjectDir, ".juggle", "sessions", "_all")
 		if err := os.MkdirAll(allDir, 0755); err != nil {
 			return nil, fmt.Errorf("failed to create _all session directory: %w", err)
 		}
 	}
-	outputPath := filepath.Join(config.ProjectDir, ".juggler", "sessions", storageID, "last_output.txt")
+	outputPath := filepath.Join(config.ProjectDir, ".juggle", "sessions", storageID, "last_output.txt")
 
 	result := &AgentResult{
 		StartedAt: startTime,
@@ -1043,7 +1043,7 @@ func runAgentRun(cmd *cobra.Command, args []string) error {
 
 	// Map "all" meta-session to "_all" for output path
 	outputStorageID := sessionStorageID(sessionID)
-	outputPath := filepath.Join(projectDir, ".juggler", "sessions", outputStorageID, "last_output.txt")
+	outputPath := filepath.Join(projectDir, ".juggle", "sessions", outputStorageID, "last_output.txt")
 	fmt.Printf("\nOutput saved to: %s\n", outputPath)
 
 	return nil
@@ -1073,7 +1073,7 @@ func generateAgentPrompt(projectDir, sessionID string, debug bool, ballID string
 	}
 
 	if len(projects) == 0 {
-		return "", fmt.Errorf("no projects with .juggler directories found")
+		return "", fmt.Errorf("no projects with .juggle directories found")
 	}
 
 	// Load all balls from discovered projects
@@ -1345,7 +1345,7 @@ func loadBallsForRefine(projectDir, sessionID string) ([]*session.Ball, error) {
 	}
 
 	if len(projects) == 0 {
-		return nil, fmt.Errorf("no projects with .juggler directories found")
+		return nil, fmt.Errorf("no projects with .juggle directories found")
 	}
 
 	// Load all balls from discovered projects
@@ -1702,7 +1702,7 @@ func loadBallsForModelSelection(projectDir, sessionID, ballID string) ([]*sessio
 	}
 
 	if len(projects) == 0 {
-		return nil, fmt.Errorf("no projects with .juggler directories found")
+		return nil, fmt.Errorf("no projects with .juggle directories found")
 	}
 
 	// Load all balls from discovered projects

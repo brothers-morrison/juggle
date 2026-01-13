@@ -1,5 +1,5 @@
 // Package agent provides the agent prompt template and runner interface
-// for running AI agents with juggler.
+// for running AI agents with juggle.
 package agent
 
 import (

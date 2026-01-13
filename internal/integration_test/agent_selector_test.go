@@ -202,7 +202,7 @@ func TestAgentRun_DryRunWithOptionalSession(t *testing.T) {
 	}
 }
 
-// Tests for --ball flag without session argument (juggler-101)
+// Tests for --ball flag without session argument (juggle-101)
 
 func TestAgentRun_BallFlagWithoutSession(t *testing.T) {
 	// Test that --ball flag without session uses "all" meta-session

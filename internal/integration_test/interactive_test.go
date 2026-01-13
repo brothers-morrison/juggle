@@ -156,7 +156,7 @@ func TestSessionCreationLogic(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	sessionStore, err := session.NewSessionStore(env.JugglerDir)
+	sessionStore, err := session.NewSessionStore(env.JuggleDir)
 	if err != nil {
 		t.Fatalf("Failed to create session store: %v", err)
 	}
@@ -194,7 +194,7 @@ func TestTaggingBallToSession(t *testing.T) {
 	store := env.GetStore(t)
 
 	// Create a session
-	sessionStore, err := session.NewSessionStore(env.JugglerDir)
+	sessionStore, err := session.NewSessionStore(env.JuggleDir)
 	if err != nil {
 		t.Fatalf("Failed to create session store: %v", err)
 	}

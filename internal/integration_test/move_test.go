@@ -14,7 +14,7 @@ func TestMoveCommand(t *testing.T) {
 	t.Run("MoveToAnotherProject", testMoveToAnotherProject)
 	t.Run("MoveUpdatesWorkingDir", testMoveUpdatesWorkingDir)
 	t.Run("MoveNonexistentBall", testMoveNonexistentBall)
-	t.Run("MoveToNonJugglerProject", testMoveToNonJugglerProject)
+	t.Run("MoveToNonJuggleProject", testMoveToNonJuggleProject)
 	t.Run("MovePreservesMetadata", testMovePreservesMetadata)
 	t.Run("MoveRemovesFromSource", testMoveRemovesFromSource)
 	t.Run("MoveWithShortID", testMoveWithShortID)
@@ -28,7 +28,7 @@ func testMoveToAnotherProject(t *testing.T) {
 	envB := SetupTestEnv(t)
 	defer CleanupTestEnv(t, envB)
 
-	// Initialize .juggler directory in project B by getting store
+	// Initialize .juggle directory in project B by getting store
 	_ = envB.GetStore(t)
 
 	// Setup config with both projects so discovery works
@@ -74,7 +74,7 @@ func testMoveUpdatesWorkingDir(t *testing.T) {
 	envB := SetupTestEnv(t)
 	defer CleanupTestEnv(t, envB)
 
-	// Initialize .juggler directory in project B
+	// Initialize .juggle directory in project B
 	_ = envB.GetStore(t)
 
 	// Setup config with both projects
@@ -108,7 +108,7 @@ func testMoveNonexistentBall(t *testing.T) {
 	envB := SetupTestEnv(t)
 	defer CleanupTestEnv(t, envB)
 
-	// Initialize .juggler directories
+	// Initialize .juggle directories
 	_ = envA.GetStore(t)
 	_ = envB.GetStore(t)
 
@@ -124,25 +124,25 @@ func testMoveNonexistentBall(t *testing.T) {
 	}
 }
 
-func testMoveToNonJugglerProject(t *testing.T) {
+func testMoveToNonJuggleProject(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
 	ball := env.CreateBall(t, "Test", session.PriorityMedium)
 
-	// Create temp dir without .juggler
-	nonJugglerDir, err := os.MkdirTemp("", "non-juggler-*")
+	// Create temp dir without .juggle
+	nonJuggleDir, err := os.MkdirTemp("", "non-juggle-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(nonJugglerDir)
+	defer os.RemoveAll(nonJuggleDir)
 
-	output, exitCode := runMoveCommandWithError(t, env.ProjectDir, ball.ID, nonJugglerDir)
+	output, exitCode := runMoveCommandWithError(t, env.ProjectDir, ball.ID, nonJuggleDir)
 	if exitCode == 0 {
-		t.Error("Expected non-zero exit code for non-juggler project")
+		t.Error("Expected non-zero exit code for non-juggle project")
 	}
-	if !strings.Contains(output, "not a juggler project") {
-		t.Errorf("Expected 'not a juggler project' in error, got: %s", output)
+	if !strings.Contains(output, "not a juggle project") {
+		t.Errorf("Expected 'not a juggle project' in error, got: %s", output)
 	}
 }
 
@@ -152,7 +152,7 @@ func testMovePreservesMetadata(t *testing.T) {
 	envB := SetupTestEnv(t)
 	defer CleanupTestEnv(t, envB)
 
-	// Initialize .juggler directory in project B
+	// Initialize .juggle directory in project B
 	_ = envB.GetStore(t)
 
 	// Setup config with both projects
@@ -207,7 +207,7 @@ func testMoveRemovesFromSource(t *testing.T) {
 	envB := SetupTestEnv(t)
 	defer CleanupTestEnv(t, envB)
 
-	// Initialize .juggler directory in project B
+	// Initialize .juggle directory in project B
 	_ = envB.GetStore(t)
 
 	// Setup config with both projects
@@ -262,7 +262,7 @@ func testMoveWithShortID(t *testing.T) {
 	envB := SetupTestEnv(t)
 	defer CleanupTestEnv(t, envB)
 
-	// Initialize .juggler directory in project B
+	// Initialize .juggle directory in project B
 	_ = envB.GetStore(t)
 
 	// Setup config with both projects
@@ -331,7 +331,7 @@ func setupConfigWithProjects(t *testing.T, configHome string, projectDirs ...str
 
 	if err := config.SaveWithOptions(session.ConfigOptions{
 		ConfigHome:     configHome,
-		JugglerDirName: ".juggler",
+		JuggleDirName: ".juggle",
 	}); err != nil {
 		t.Fatalf("Failed to save config: %v", err)
 	}
@@ -340,13 +340,13 @@ func setupConfigWithProjects(t *testing.T, configHome string, projectDirs ...str
 func runMoveCommand(t *testing.T, workingDir string, ballID string, targetDir string) string {
 	t.Helper()
 
-	jugglerRoot := "/home/jmo/Development/juggler"
-	juggleBinary := filepath.Join(jugglerRoot, "juggle")
+	juggleRoot := "/home/jmo/Development/juggler"
+	juggleBinary := filepath.Join(juggleRoot, "juggle")
 
 	// Build juggle binary if it doesn't exist
 	if _, err := os.Stat(juggleBinary); os.IsNotExist(err) {
 		buildCmd := exec.Command("go", "build", "-o", "juggle", "./cmd/juggle")
-		buildCmd.Dir = jugglerRoot
+		buildCmd.Dir = juggleRoot
 		if output, err := buildCmd.CombinedOutput(); err != nil {
 			t.Fatalf("Failed to build juggle: %v\nOutput: %s", err, output)
 		}
@@ -368,13 +368,13 @@ func runMoveCommand(t *testing.T, workingDir string, ballID string, targetDir st
 func runMoveCommandWithError(t *testing.T, workingDir string, ballID string, targetDir string) (string, int) {
 	t.Helper()
 
-	jugglerRoot := "/home/jmo/Development/juggler"
-	juggleBinary := filepath.Join(jugglerRoot, "juggle")
+	juggleRoot := "/home/jmo/Development/juggler"
+	juggleBinary := filepath.Join(juggleRoot, "juggle")
 
 	// Build binary if needed
 	if _, err := os.Stat(juggleBinary); os.IsNotExist(err) {
 		buildCmd := exec.Command("go", "build", "-o", "juggle", "./cmd/juggle")
-		buildCmd.Dir = jugglerRoot
+		buildCmd.Dir = juggleRoot
 		if output, err := buildCmd.CombinedOutput(); err != nil {
 			t.Fatalf("Failed to build juggle: %v\nOutput: %s", err, output)
 		}

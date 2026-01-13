@@ -12,7 +12,7 @@ import (
 var projectsCmd = &cobra.Command{
 	Use:   "projects",
 	Short: "List and manage tracked projects",
-	Long:  `List all projects with .juggler directories and manage search paths.`,
+	Long:  `List all projects with .juggle directories and manage search paths.`,
 	RunE:  runProjects,
 }
 
@@ -48,7 +48,7 @@ func runProjects(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(projectInfos) == 0 {
-		fmt.Println("No projects with .juggler directories found.")
+		fmt.Println("No projects with .juggle directories found.")
 		fmt.Println("\nSearch paths:")
 		for _, path := range config.SearchPaths {
 			if _, err := os.Stat(path); os.IsNotExist(err) {
@@ -57,7 +57,7 @@ func runProjects(cmd *cobra.Command, args []string) error {
 				fmt.Printf("  - %s\n", path)
 			}
 		}
-		fmt.Println("\nAdd a search path with: juggler projects add <path>")
+		fmt.Println("\nAdd a search path with: juggle projects add <path>")
 		return nil
 	}
 

@@ -27,13 +27,13 @@ var progressAppendCmd = &cobra.Command{
 	Long: `Append a timestamped entry to a session's progress.txt file.
 
 The session-id can be provided as the first argument, or via the
-JUGGLER_SESSION_ID environment variable.
+JUGGLE_SESSION_ID environment variable.
 
 Creates progress.txt if it doesn't exist.
 
 Examples:
   juggle progress append my-session "Completed user story US-001"
-  JUGGLER_SESSION_ID=my-session juggle progress append "Fixed auth bug"
+  JUGGLE_SESSION_ID=my-session juggle progress append "Fixed auth bug"
   juggle progress append my-session "Message" --json`,
 	Args: cobra.RangeArgs(1, 2),
 	RunE: runProgressAppend,
@@ -54,9 +54,9 @@ func runProgressAppend(cmd *cobra.Command, args []string) error {
 		text = args[1]
 	} else {
 		// Single arg - use env var for session ID
-		sessionID = os.Getenv("JUGGLER_SESSION_ID")
+		sessionID = os.Getenv("JUGGLE_SESSION_ID")
 		if sessionID == "" {
-			err := fmt.Errorf("session ID required: provide as first argument or set JUGGLER_SESSION_ID")
+			err := fmt.Errorf("session ID required: provide as first argument or set JUGGLE_SESSION_ID")
 			if progressAppendJSONFlag {
 				return printProgressAppendJSONError(err)
 			}

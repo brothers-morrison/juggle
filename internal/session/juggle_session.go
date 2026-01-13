@@ -102,7 +102,7 @@ func NewSessionStoreWithConfig(projectDir string, config StoreConfig) (*SessionS
 
 // sessionPath returns the path to a session's directory
 func (s *SessionStore) sessionPath(id string) string {
-	return filepath.Join(s.projectDir, s.config.JugglerDirName, sessionsDir, id)
+	return filepath.Join(s.projectDir, s.config.JuggleDirName, sessionsDir, id)
 }
 
 // sessionFilePath returns the path to a session's JSON file
@@ -171,7 +171,7 @@ func (s *SessionStore) LoadSession(id string) (*JuggleSession, error) {
 
 // ListSessions discovers all sessions in the project
 func (s *SessionStore) ListSessions() ([]*JuggleSession, error) {
-	sessionsPath := filepath.Join(s.projectDir, s.config.JugglerDirName, sessionsDir)
+	sessionsPath := filepath.Join(s.projectDir, s.config.JuggleDirName, sessionsDir)
 
 	// If sessions directory doesn't exist, return empty list
 	if _, err := os.Stat(sessionsPath); os.IsNotExist(err) {

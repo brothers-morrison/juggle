@@ -16,7 +16,7 @@ func TestConfigDefaults_SparseConfig(t *testing.T) {
 	defer CleanupTestEnv(t, env)
 
 	// Create a sparse config with only search_paths (missing delay fields)
-	configPath := filepath.Join(env.ConfigHome, ".juggler", "config.json")
+	configPath := filepath.Join(env.ConfigHome, ".juggle", "config.json")
 	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
 		t.Fatalf("Failed to create config dir: %v", err)
 	}
@@ -32,7 +32,7 @@ func TestConfigDefaults_SparseConfig(t *testing.T) {
 	// Load the config (should trigger default population)
 	opts := session.ConfigOptions{
 		ConfigHome:     env.ConfigHome,
-		JugglerDirName: ".juggler",
+		JuggleDirName: ".juggle",
 	}
 	config, err := session.LoadConfigWithOptions(opts)
 	if err != nil {
@@ -77,7 +77,7 @@ func TestConfigDefaults_UnknownFieldsPreserved(t *testing.T) {
 	defer CleanupTestEnv(t, env)
 
 	// Create a config with unknown fields
-	configPath := filepath.Join(env.ConfigHome, ".juggler", "config.json")
+	configPath := filepath.Join(env.ConfigHome, ".juggle", "config.json")
 	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
 		t.Fatalf("Failed to create config dir: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestConfigDefaults_UnknownFieldsPreserved(t *testing.T) {
 	// Load the config
 	opts := session.ConfigOptions{
 		ConfigHome:     env.ConfigHome,
-		JugglerDirName: ".juggler",
+		JuggleDirName: ".juggle",
 	}
 	config, err := session.LoadConfigWithOptions(opts)
 	if err != nil {
@@ -151,11 +151,11 @@ func TestConfigDefaults_EmptyConfigPopulated(t *testing.T) {
 	// Don't create any config file - let LoadConfigWithOptions create defaults
 	opts := session.ConfigOptions{
 		ConfigHome:     env.ConfigHome,
-		JugglerDirName: ".juggler",
+		JuggleDirName: ".juggle",
 	}
 
 	// Ensure the config file doesn't exist
-	configPath := filepath.Join(env.ConfigHome, ".juggler", "config.json")
+	configPath := filepath.Join(env.ConfigHome, ".juggle", "config.json")
 	if _, err := os.Stat(configPath); err == nil {
 		os.Remove(configPath)
 	}
@@ -186,7 +186,7 @@ func TestConfigDefaults_UnknownFieldsGetterEmpty(t *testing.T) {
 	defer CleanupTestEnv(t, env)
 
 	// Create a valid config without unknown fields
-	configPath := filepath.Join(env.ConfigHome, ".juggler", "config.json")
+	configPath := filepath.Join(env.ConfigHome, ".juggle", "config.json")
 	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
 		t.Fatalf("Failed to create config dir: %v", err)
 	}
@@ -204,7 +204,7 @@ func TestConfigDefaults_UnknownFieldsGetterEmpty(t *testing.T) {
 	// Load config
 	opts := session.ConfigOptions{
 		ConfigHome:     env.ConfigHome,
-		JugglerDirName: ".juggler",
+		JuggleDirName: ".juggle",
 	}
 	config, err := session.LoadConfigWithOptions(opts)
 	if err != nil {
@@ -235,7 +235,7 @@ func TestConfigDefaults_SavePreservesUnknown(t *testing.T) {
 	defer CleanupTestEnv(t, env)
 
 	// Create a config with unknown fields
-	configPath := filepath.Join(env.ConfigHome, ".juggler", "config.json")
+	configPath := filepath.Join(env.ConfigHome, ".juggle", "config.json")
 	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
 		t.Fatalf("Failed to create config dir: %v", err)
 	}
@@ -252,7 +252,7 @@ func TestConfigDefaults_SavePreservesUnknown(t *testing.T) {
 	// Load config
 	opts := session.ConfigOptions{
 		ConfigHome:     env.ConfigHome,
-		JugglerDirName: ".juggler",
+		JuggleDirName: ".juggle",
 	}
 	config, err := session.LoadConfigWithOptions(opts)
 	if err != nil {

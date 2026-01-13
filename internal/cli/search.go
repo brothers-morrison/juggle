@@ -69,7 +69,7 @@ func runSearch(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(projects) == 0 {
-		fmt.Println("No projects with .juggler directories found.")
+		fmt.Println("No projects with .juggle directories found.")
 		return nil
 	}
 

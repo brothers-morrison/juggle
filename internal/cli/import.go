@@ -33,15 +33,15 @@ var (
 // importCmd is the parent command for import operations
 var importCmd = &cobra.Command{
 	Use:   "import",
-	Short: "Import external data into juggler",
-	Long:  `Import external data (like prd.json from ralph) into juggler balls.`,
+	Short: "Import external data into juggle",
+	Long:  `Import external data (like prd.json from ralph) into juggle balls.`,
 }
 
 // importRalphCmd imports prd.json user stories as balls
 var importRalphCmd = &cobra.Command{
 	Use:   "ralph <prd.json>",
 	Short: "Import prd.json user stories as balls",
-	Long: `Import user stories from a prd.json file as juggler balls.
+	Long: `Import user stories from a prd.json file as juggle balls.
 
 Creates balls from user stories with the following mappings:
   - title           → intent
@@ -69,7 +69,7 @@ Examples:
 var importGitHubCmd = &cobra.Command{
 	Use:   "github <owner/repo>",
 	Short: "Import GitHub issues as balls",
-	Long: `Import issues from a GitHub repository as juggler balls.
+	Long: `Import issues from a GitHub repository as juggle balls.
 
 Creates balls from issues with the following mappings:
   - issue title     → intent

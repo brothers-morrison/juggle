@@ -152,7 +152,7 @@ func findMatchingFiles(repoRoot, query string, maxResults int) []string {
 		".git":         true,
 		"node_modules": true,
 		"vendor":       true,
-		".juggler":     true,
+		".juggle":     true,
 		"__pycache__":  true,
 		".venv":        true,
 		"venv":         true,

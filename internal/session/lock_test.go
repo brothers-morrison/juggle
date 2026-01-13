@@ -35,7 +35,7 @@ func TestAcquireSessionLock_Success(t *testing.T) {
 	defer lock.Release()
 
 	// Verify lock file exists
-	lockPath := filepath.Join(tmpDir, ".juggler", "sessions", "test-session", "agent.lock")
+	lockPath := filepath.Join(tmpDir, ".juggle", "sessions", "test-session", "agent.lock")
 	if _, err := os.Stat(lockPath); os.IsNotExist(err) {
 		t.Error("lock file should exist after acquiring lock")
 	}

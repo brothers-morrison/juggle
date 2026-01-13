@@ -59,7 +59,7 @@ func (m Model) renderListView() string {
 	var b strings.Builder
 
 	// Title
-	title := titleStyle.Render("🎯 Juggler - Task Manager")
+	title := titleStyle.Render("🎯 Juggle - Task Manager")
 	b.WriteString(title + "\n\n")
 
 	// Stats with active filters
@@ -116,7 +116,7 @@ func (m Model) renderDetailView() string {
 func (m Model) renderHelpView() string {
 	var b strings.Builder
 
-	title := titleStyle.Render("🎯 Juggler TUI - Help")
+	title := titleStyle.Render("🎯 Juggle TUI - Help")
 	b.WriteString(title + "\n\n")
 
 	b.WriteString(helpSection("Navigation", []helpItem{
@@ -686,7 +686,7 @@ func (m Model) renderTagView() string {
 func (m Model) renderSplitHelpView() string {
 	var b strings.Builder
 
-	title := titleStyle.Render("Juggler TUI - Complete Keybindings Reference")
+	title := titleStyle.Render("Juggle TUI - Complete Keybindings Reference")
 	b.WriteString(title + "\n\n")
 
 	// Build all help sections - organized by category

@@ -27,7 +27,7 @@ func TestCheckCommand_NoProjects(t *testing.T) {
 	}
 	if err := cfg.SaveWithOptions(session.ConfigOptions{
 		ConfigHome:     tmpDir,
-		JugglerDirName: ".juggler",
+		JuggleDirName: ".juggle",
 	}); err != nil {
 		t.Fatalf("failed to save config: %v", err)
 	}
@@ -61,12 +61,12 @@ func TestCheckCommand_NoJugglingBalls(t *testing.T) {
 	}
 	if err := cfg.SaveWithOptions(session.ConfigOptions{
 		ConfigHome:     tmpDir,
-		JugglerDirName: ".juggler",
+		JuggleDirName: ".juggle",
 	}); err != nil {
 		t.Fatalf("failed to save config: %v", err)
 	}
 
-	// Create store and juggler directory
+	// Create store and juggle directory
 	store, err := session.NewStore(projectDir)
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
@@ -110,7 +110,7 @@ func TestCheckCommand_SingleJugglingBall(t *testing.T) {
 	}
 	if err := cfg.SaveWithOptions(session.ConfigOptions{
 		ConfigHome:     tmpDir,
-		JugglerDirName: ".juggler",
+		JuggleDirName: ".juggle",
 	}); err != nil {
 		t.Fatalf("failed to save config: %v", err)
 	}
@@ -159,7 +159,7 @@ func TestCheckCommand_MultipleJugglingBalls(t *testing.T) {
 	}
 	if err := cfg.SaveWithOptions(session.ConfigOptions{
 		ConfigHome:     tmpDir,
-		JugglerDirName: ".juggler",
+		JuggleDirName: ".juggle",
 	}); err != nil {
 		t.Fatalf("failed to save config: %v", err)
 	}
@@ -232,7 +232,7 @@ func TestCheckCommand_MixedStates(t *testing.T) {
 	}
 	if err := cfg.SaveWithOptions(session.ConfigOptions{
 		ConfigHome:     tmpDir,
-		JugglerDirName: ".juggler",
+		JuggleDirName: ".juggle",
 	}); err != nil {
 		t.Fatalf("failed to save config: %v", err)
 	}
@@ -356,7 +356,7 @@ func TestCheckCommand_DifferentBallStates(t *testing.T) {
 	}
 	if err := cfg.SaveWithOptions(session.ConfigOptions{
 		ConfigHome:     tmpDir,
-		JugglerDirName: ".juggler",
+		JuggleDirName: ".juggle",
 	}); err != nil {
 		t.Fatalf("failed to save config: %v", err)
 	}

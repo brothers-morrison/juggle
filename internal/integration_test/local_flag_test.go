@@ -13,7 +13,7 @@ func TestLocalFlag(t *testing.T) {
 	project2 := t.TempDir()
 
 	// Setup project 1
-	store1, err := session.NewStoreWithConfig(project1, session.StoreConfig{JugglerDirName: ".juggler"})
+	store1, err := session.NewStoreWithConfig(project1, session.StoreConfig{JuggleDirName: ".juggle"})
 	if err != nil {
 		t.Fatalf("Failed to create store1: %v", err)
 	}
@@ -30,7 +30,7 @@ func TestLocalFlag(t *testing.T) {
 	}
 
 	// Setup project 2
-	store2, err := session.NewStoreWithConfig(project2, session.StoreConfig{JugglerDirName: ".juggler"})
+	store2, err := session.NewStoreWithConfig(project2, session.StoreConfig{JuggleDirName: ".juggle"})
 	if err != nil {
 		t.Fatalf("Failed to create store2: %v", err)
 	}
@@ -240,11 +240,11 @@ func TestLocalFlag(t *testing.T) {
 		}
 	})
 
-	t.Run("LocalFlag_NoJugglerDirectory", func(t *testing.T) {
-		// Test with --local when current directory has no .juggler
-		noJugglerDir := t.TempDir()
+	t.Run("LocalFlag_NoJuggleDirectory", func(t *testing.T) {
+		// Test with --local when current directory has no .juggle
+		noJuggleDir := t.TempDir()
 		cli.GlobalOpts.LocalOnly = true
-		cli.GlobalOpts.ProjectDir = noJugglerDir
+		cli.GlobalOpts.ProjectDir = noJuggleDir
 
 		config, err := cli.LoadConfigForCommand()
 		if err != nil {
@@ -258,13 +258,13 @@ func TestLocalFlag(t *testing.T) {
 			t.Fatalf("Failed to discover projects: %v", err)
 		}
 
-		// Should return current directory even if no .juggler exists
+		// Should return current directory even if no .juggle exists
 		if len(projects) != 1 {
 			t.Errorf("Expected 1 project (current dir), got %d", len(projects))
 		}
 
-		if len(projects) > 0 && projects[0] != noJugglerDir {
-			t.Errorf("Expected current directory %s, got %s", noJugglerDir, projects[0])
+		if len(projects) > 0 && projects[0] != noJuggleDir {
+			t.Errorf("Expected current directory %s, got %s", noJuggleDir, projects[0])
 		}
 	})
 

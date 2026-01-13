@@ -21,7 +21,7 @@ func TestExportLocal(t *testing.T) {
 	project2 := t.TempDir()
 
 	// Setup project 1
-	store1, err := session.NewStoreWithConfig(project1, session.StoreConfig{JugglerDirName: ".juggler"})
+	store1, err := session.NewStoreWithConfig(project1, session.StoreConfig{JuggleDirName: ".juggle"})
 	if err != nil {
 		t.Fatalf("Failed to create store1: %v", err)
 	}
@@ -40,7 +40,7 @@ func TestExportLocal(t *testing.T) {
 	}
 
 	// Setup project 2
-	store2, err := session.NewStoreWithConfig(project2, session.StoreConfig{JugglerDirName: ".juggler"})
+	store2, err := session.NewStoreWithConfig(project2, session.StoreConfig{JuggleDirName: ".juggle"})
 	if err != nil {
 		t.Fatalf("Failed to create store2: %v", err)
 	}
@@ -122,7 +122,7 @@ func TestExportLocal(t *testing.T) {
 func TestExportBallIDs(t *testing.T) {
 	project := t.TempDir()
 
-	store, err := session.NewStoreWithConfig(project, session.StoreConfig{JugglerDirName: ".juggler"})
+	store, err := session.NewStoreWithConfig(project, session.StoreConfig{JuggleDirName: ".juggle"})
 	if err != nil {
 		t.Fatalf("Failed to create store: %v", err)
 	}
@@ -313,7 +313,7 @@ func (e *BallNotFoundError) Error() string {
 func TestExportFilterState(t *testing.T) {
 	project := t.TempDir()
 
-	store, err := session.NewStoreWithConfig(project, session.StoreConfig{JugglerDirName: ".juggler"})
+	store, err := session.NewStoreWithConfig(project, session.StoreConfig{JuggleDirName: ".juggle"})
 	if err != nil {
 		t.Fatalf("Failed to create store: %v", err)
 	}
@@ -470,7 +470,7 @@ func (e *InvalidStateError) Error() string {
 func TestExportIncludeDone(t *testing.T) {
 	project := t.TempDir()
 
-	store, err := session.NewStoreWithConfig(project, session.StoreConfig{JugglerDirName: ".juggler"})
+	store, err := session.NewStoreWithConfig(project, session.StoreConfig{JuggleDirName: ".juggle"})
 	if err != nil {
 		t.Fatalf("Failed to create store: %v", err)
 	}
@@ -538,7 +538,7 @@ func TestExportIncludeDone(t *testing.T) {
 func TestExportCSVFormat(t *testing.T) {
 	project := t.TempDir()
 
-	store, err := session.NewStoreWithConfig(project, session.StoreConfig{JugglerDirName: ".juggler"})
+	store, err := session.NewStoreWithConfig(project, session.StoreConfig{JuggleDirName: ".juggle"})
 	if err != nil {
 		t.Fatalf("Failed to create store: %v", err)
 	}
@@ -687,7 +687,7 @@ func exportToCSV(balls []*session.Ball) ([]byte, error) {
 func TestExportJSONFormat(t *testing.T) {
 	project := t.TempDir()
 
-	store, err := session.NewStoreWithConfig(project, session.StoreConfig{JugglerDirName: ".juggler"})
+	store, err := session.NewStoreWithConfig(project, session.StoreConfig{JuggleDirName: ".juggle"})
 	if err != nil {
 		t.Fatalf("Failed to create store: %v", err)
 	}
@@ -787,7 +787,7 @@ func TestExportRalphFormat(t *testing.T) {
 	}
 
 	// Create ball store and balls with the session tag
-	ballStore, err := session.NewStoreWithConfig(project, session.StoreConfig{JugglerDirName: ".juggler"})
+	ballStore, err := session.NewStoreWithConfig(project, session.StoreConfig{JuggleDirName: ".juggle"})
 	if err != nil {
 		t.Fatalf("Failed to create ball store: %v", err)
 	}
@@ -973,7 +973,7 @@ func TestExportSessionWithAllFlag(t *testing.T) {
 	project2 := t.TempDir()
 
 	// Setup project 1 with a ball tagged with a session
-	store1, err := session.NewStoreWithConfig(project1, session.StoreConfig{JugglerDirName: ".juggler"})
+	store1, err := session.NewStoreWithConfig(project1, session.StoreConfig{JuggleDirName: ".juggle"})
 	if err != nil {
 		t.Fatalf("Failed to create store1: %v", err)
 	}
@@ -1008,7 +1008,7 @@ func TestExportSessionWithAllFlag(t *testing.T) {
 	}
 
 	// Setup project 2 with a ball also tagged with the same session
-	store2, err := session.NewStoreWithConfig(project2, session.StoreConfig{JugglerDirName: ".juggler"})
+	store2, err := session.NewStoreWithConfig(project2, session.StoreConfig{JuggleDirName: ".juggle"})
 	if err != nil {
 		t.Fatalf("Failed to create store2: %v", err)
 	}
@@ -1153,7 +1153,7 @@ func TestExportSortsBallsWithInProgressFirst(t *testing.T) {
 		t.Fatalf("Failed to create session: %v", err)
 	}
 
-	ballStore, err := session.NewStoreWithConfig(project, session.StoreConfig{JugglerDirName: ".juggler"})
+	ballStore, err := session.NewStoreWithConfig(project, session.StoreConfig{JuggleDirName: ".juggle"})
 	if err != nil {
 		t.Fatalf("Failed to create ball store: %v", err)
 	}
@@ -1289,7 +1289,7 @@ func TestExportSortsBallsWithDependencies(t *testing.T) {
 		t.Fatalf("Failed to create session: %v", err)
 	}
 
-	ballStore, err := session.NewStoreWithConfig(project, session.StoreConfig{JugglerDirName: ".juggler"})
+	ballStore, err := session.NewStoreWithConfig(project, session.StoreConfig{JuggleDirName: ".juggle"})
 	if err != nil {
 		t.Fatalf("Failed to create ball store: %v", err)
 	}
@@ -1358,7 +1358,7 @@ func TestExportSortsBallsWithSatisfiedDependencies(t *testing.T) {
 		t.Fatalf("Failed to create session: %v", err)
 	}
 
-	ballStore, err := session.NewStoreWithConfig(project, session.StoreConfig{JugglerDirName: ".juggler"})
+	ballStore, err := session.NewStoreWithConfig(project, session.StoreConfig{JuggleDirName: ".juggle"})
 	if err != nil {
 		t.Fatalf("Failed to create ball store: %v", err)
 	}
@@ -1446,7 +1446,7 @@ func TestExportAgentIncludesInProgressBalls(t *testing.T) {
 	}
 
 	// Create ball store
-	ballStore, err := session.NewStoreWithConfig(project, session.StoreConfig{JugglerDirName: ".juggler"})
+	ballStore, err := session.NewStoreWithConfig(project, session.StoreConfig{JuggleDirName: ".juggle"})
 	if err != nil {
 		t.Fatalf("Failed to create ball store: %v", err)
 	}
@@ -1527,7 +1527,7 @@ func TestExportAgentExcludesCompleteBallsByDefault(t *testing.T) {
 	}
 
 	// Create ball store
-	ballStore, err := session.NewStoreWithConfig(project, session.StoreConfig{JugglerDirName: ".juggler"})
+	ballStore, err := session.NewStoreWithConfig(project, session.StoreConfig{JuggleDirName: ".juggle"})
 	if err != nil {
 		t.Fatalf("Failed to create ball store: %v", err)
 	}
@@ -1667,7 +1667,7 @@ func TestExportRalphExcludesCompleteBallsByDefault(t *testing.T) {
 	project := t.TempDir()
 
 	// Create ball store
-	ballStore, err := session.NewStoreWithConfig(project, session.StoreConfig{JugglerDirName: ".juggler"})
+	ballStore, err := session.NewStoreWithConfig(project, session.StoreConfig{JuggleDirName: ".juggle"})
 	if err != nil {
 		t.Fatalf("Failed to create ball store: %v", err)
 	}

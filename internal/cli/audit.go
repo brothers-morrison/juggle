@@ -53,8 +53,8 @@ func runAudit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get current directory: %w", err)
 	}
 
-	// If current directory has .juggler, ensure it's tracked
-	if _, err := os.Stat(filepath.Join(cwd, ".juggler")); err == nil {
+	// If current directory has .juggle, ensure it's tracked
+	if _, err := os.Stat(filepath.Join(cwd, ".juggle")); err == nil {
 		_ = session.EnsureProjectInSearchPaths(cwd)
 	}
 
@@ -76,7 +76,7 @@ func runAudit(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(projects) == 0 {
-		fmt.Println("No projects with .juggler directories found.")
+		fmt.Println("No projects with .juggle directories found.")
 		fmt.Println("\nStart tracking work with: juggle start")
 		return nil
 	}
@@ -182,7 +182,7 @@ func renderAuditReport(metricsMap map[string]*ProjectMetrics, projectPaths []str
 		Foreground(lipgloss.Color("12")). // Blue
 		MarginBottom(1)
 
-	fmt.Println(headerStyle.Render("🎯 Juggler Audit Report"))
+	fmt.Println(headerStyle.Render("🎯 Juggle Audit Report"))
 	fmt.Println(headerStyle.Render("======================="))
 
 	// Project details

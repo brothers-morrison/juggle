@@ -578,13 +578,13 @@ func runJuggleCommand(t *testing.T, workingDir string, args ...string) string {
 
 	// Find juggle binary in the repo root
 	// From workingDir (temp test dir), go up to repo root
-	jugglerRoot := "/home/jmo/Development/juggler"
-	juggleBinary := filepath.Join(jugglerRoot, "juggle")
+	juggleRoot := "/home/jmo/Development/juggler"
+	juggleBinary := filepath.Join(juggleRoot, "juggle")
 
 	// Build juggle binary if it doesn't exist
 	if _, err := os.Stat(juggleBinary); os.IsNotExist(err) {
 		buildCmd := exec.Command("go", "build", "-o", "juggle", "./cmd/juggle")
-		buildCmd.Dir = jugglerRoot
+		buildCmd.Dir = juggleRoot
 		if output, err := buildCmd.CombinedOutput(); err != nil {
 			t.Fatalf("Failed to build juggle: %v\nOutput: %s", err, output)
 		}
@@ -609,13 +609,13 @@ func runJuggleCommand(t *testing.T, workingDir string, args ...string) string {
 func runJuggleCommandWithError(t *testing.T, workingDir string, args ...string) (string, int) {
 	t.Helper()
 
-	jugglerRoot := "/home/jmo/Development/juggler"
-	juggleBinary := filepath.Join(jugglerRoot, "juggle")
+	juggleRoot := "/home/jmo/Development/juggler"
+	juggleBinary := filepath.Join(juggleRoot, "juggle")
 
 	// Build binary if needed
 	if _, err := os.Stat(juggleBinary); os.IsNotExist(err) {
 		buildCmd := exec.Command("go", "build", "-o", "juggle", "./cmd/juggle")
-		buildCmd.Dir = jugglerRoot
+		buildCmd.Dir = juggleRoot
 		if output, err := buildCmd.CombinedOutput(); err != nil {
 			t.Fatalf("Failed to build juggle: %v\nOutput: %s", err, output)
 		}
@@ -646,14 +646,14 @@ func setupConfigWithTestProject(t *testing.T, env *TestEnv) {
 	t.Helper()
 
 	// Create config file that includes our test project directory in search paths
-	// DiscoverProjects checks if path/.juggler exists, so we need to add ProjectDir directly
-	// Note: config file must be at configHome/.juggler/config.json
-	jugglerConfigDir := filepath.Join(env.ConfigHome, ".juggler")
-	if err := os.MkdirAll(jugglerConfigDir, 0755); err != nil {
-		t.Fatalf("Failed to create juggler config dir: %v", err)
+	// DiscoverProjects checks if path/.juggle exists, so we need to add ProjectDir directly
+	// Note: config file must be at configHome/.juggle/config.json
+	juggleConfigDir := filepath.Join(env.ConfigHome, ".juggle")
+	if err := os.MkdirAll(juggleConfigDir, 0755); err != nil {
+		t.Fatalf("Failed to create juggle config dir: %v", err)
 	}
 
-	configPath := filepath.Join(jugglerConfigDir, "config.json")
+	configPath := filepath.Join(juggleConfigDir, "config.json")
 	configContent := fmt.Sprintf(`{
   "search_paths": ["%s"]
 }`, env.ProjectDir)

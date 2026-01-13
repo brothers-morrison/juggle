@@ -14,14 +14,14 @@ func TestSyncRalph(t *testing.T) {
 	// Create temp directory
 	tmpDir := t.TempDir()
 
-	// Create .juggler directory
-	jugglerDir := filepath.Join(tmpDir, ".juggler")
-	if err := os.MkdirAll(jugglerDir, 0755); err != nil {
-		t.Fatalf("failed to create .juggler dir: %v", err)
+	// Create .juggle directory
+	juggleDir := filepath.Join(tmpDir, ".juggle")
+	if err := os.MkdirAll(juggleDir, 0755); err != nil {
+		t.Fatalf("failed to create .juggle dir: %v", err)
 	}
 
 	// Create archive directory
-	archiveDir := filepath.Join(jugglerDir, "archive")
+	archiveDir := filepath.Join(juggleDir, "archive")
 	if err := os.MkdirAll(archiveDir, 0755); err != nil {
 		t.Fatalf("failed to create archive dir: %v", err)
 	}
@@ -134,14 +134,14 @@ func TestSyncRalphUpdate(t *testing.T) {
 	// Create temp directory
 	tmpDir := t.TempDir()
 
-	// Create .juggler directory
-	jugglerDir := filepath.Join(tmpDir, ".juggler")
-	if err := os.MkdirAll(jugglerDir, 0755); err != nil {
-		t.Fatalf("failed to create .juggler dir: %v", err)
+	// Create .juggle directory
+	juggleDir := filepath.Join(tmpDir, ".juggle")
+	if err := os.MkdirAll(juggleDir, 0755); err != nil {
+		t.Fatalf("failed to create .juggle dir: %v", err)
 	}
 
 	// Create archive directory
-	archiveDir := filepath.Join(jugglerDir, "archive")
+	archiveDir := filepath.Join(juggleDir, "archive")
 	if err := os.MkdirAll(archiveDir, 0755); err != nil {
 		t.Fatalf("failed to create archive dir: %v", err)
 	}
@@ -284,14 +284,14 @@ func TestWriteToPRD(t *testing.T) {
 	// Create temp directory
 	tmpDir := t.TempDir()
 
-	// Create .juggler directory
-	jugglerDir := filepath.Join(tmpDir, ".juggler")
-	if err := os.MkdirAll(jugglerDir, 0755); err != nil {
-		t.Fatalf("failed to create .juggler dir: %v", err)
+	// Create .juggle directory
+	juggleDir := filepath.Join(tmpDir, ".juggle")
+	if err := os.MkdirAll(juggleDir, 0755); err != nil {
+		t.Fatalf("failed to create .juggle dir: %v", err)
 	}
 
 	// Create archive directory
-	archiveDir := filepath.Join(jugglerDir, "archive")
+	archiveDir := filepath.Join(juggleDir, "archive")
 	if err := os.MkdirAll(archiveDir, 0755); err != nil {
 		t.Fatalf("failed to create archive dir: %v", err)
 	}
@@ -324,7 +324,7 @@ func TestWriteToPRD(t *testing.T) {
 		t.Fatalf("initial sync failed: %v", err)
 	}
 
-	// Mark first ball as complete in juggler
+	// Mark first ball as complete in juggle
 	store, _ := session.NewStore(tmpDir)
 	balls, _ := store.LoadBalls()
 
@@ -369,14 +369,14 @@ func TestWriteToPRDResearchedState(t *testing.T) {
 	// Create temp directory
 	tmpDir := t.TempDir()
 
-	// Create .juggler directory
-	jugglerDir := filepath.Join(tmpDir, ".juggler")
-	if err := os.MkdirAll(jugglerDir, 0755); err != nil {
-		t.Fatalf("failed to create .juggler dir: %v", err)
+	// Create .juggle directory
+	juggleDir := filepath.Join(tmpDir, ".juggle")
+	if err := os.MkdirAll(juggleDir, 0755); err != nil {
+		t.Fatalf("failed to create .juggle dir: %v", err)
 	}
 
 	// Create archive directory
-	archiveDir := filepath.Join(jugglerDir, "archive")
+	archiveDir := filepath.Join(juggleDir, "archive")
 	if err := os.MkdirAll(archiveDir, 0755); err != nil {
 		t.Fatalf("failed to create archive dir: %v", err)
 	}
@@ -432,14 +432,14 @@ func TestWriteToPRDUpdatesAcceptanceCriteria(t *testing.T) {
 	// Create temp directory
 	tmpDir := t.TempDir()
 
-	// Create .juggler directory
-	jugglerDir := filepath.Join(tmpDir, ".juggler")
-	if err := os.MkdirAll(jugglerDir, 0755); err != nil {
-		t.Fatalf("failed to create .juggler dir: %v", err)
+	// Create .juggle directory
+	juggleDir := filepath.Join(tmpDir, ".juggle")
+	if err := os.MkdirAll(juggleDir, 0755); err != nil {
+		t.Fatalf("failed to create .juggle dir: %v", err)
 	}
 
 	// Create archive directory
-	archiveDir := filepath.Join(jugglerDir, "archive")
+	archiveDir := filepath.Join(juggleDir, "archive")
 	if err := os.MkdirAll(archiveDir, 0755); err != nil {
 		t.Fatalf("failed to create archive dir: %v", err)
 	}
@@ -499,14 +499,14 @@ func TestWriteToPRDNoMatchingBall(t *testing.T) {
 	// Create temp directory
 	tmpDir := t.TempDir()
 
-	// Create .juggler directory
-	jugglerDir := filepath.Join(tmpDir, ".juggler")
-	if err := os.MkdirAll(jugglerDir, 0755); err != nil {
-		t.Fatalf("failed to create .juggler dir: %v", err)
+	// Create .juggle directory
+	juggleDir := filepath.Join(tmpDir, ".juggle")
+	if err := os.MkdirAll(juggleDir, 0755); err != nil {
+		t.Fatalf("failed to create .juggle dir: %v", err)
 	}
 
 	// Create archive directory
-	archiveDir := filepath.Join(jugglerDir, "archive")
+	archiveDir := filepath.Join(juggleDir, "archive")
 	if err := os.MkdirAll(archiveDir, 0755); err != nil {
 		t.Fatalf("failed to create archive dir: %v", err)
 	}
@@ -991,11 +991,11 @@ func TestDetectConflictsDeterministicOrder(t *testing.T) {
 
 // setupTestDir creates the necessary directories for tests
 func setupTestDir(t *testing.T, tmpDir string) {
-	jugglerDir := filepath.Join(tmpDir, ".juggler")
-	if err := os.MkdirAll(jugglerDir, 0755); err != nil {
-		t.Fatalf("failed to create .juggler dir: %v", err)
+	juggleDir := filepath.Join(tmpDir, ".juggle")
+	if err := os.MkdirAll(juggleDir, 0755); err != nil {
+		t.Fatalf("failed to create .juggle dir: %v", err)
 	}
-	archiveDir := filepath.Join(jugglerDir, "archive")
+	archiveDir := filepath.Join(juggleDir, "archive")
 	if err := os.MkdirAll(archiveDir, 0755); err != nil {
 		t.Fatalf("failed to create archive dir: %v", err)
 	}

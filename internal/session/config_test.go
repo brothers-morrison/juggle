@@ -38,16 +38,16 @@ func TestProjectConfig_HasDefaultAcceptanceCriteria(t *testing.T) {
 
 // TestUpdateProjectAcceptanceCriteria tests updating and getting repo-level ACs
 func TestUpdateProjectAcceptanceCriteria(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// Ensure .juggler directory exists
-	jugglerDir := filepath.Join(tmpDir, ".juggler")
-	if err := os.MkdirAll(jugglerDir, 0755); err != nil {
-		t.Fatalf("failed to create .juggler dir: %v", err)
+	// Ensure .juggle directory exists
+	juggleDir := filepath.Join(tmpDir, ".juggle")
+	if err := os.MkdirAll(juggleDir, 0755); err != nil {
+		t.Fatalf("failed to create .juggle dir: %v", err)
 	}
 
 	// Update acceptance criteria
@@ -73,16 +73,16 @@ func TestUpdateProjectAcceptanceCriteria(t *testing.T) {
 
 // TestGetProjectAcceptanceCriteria_Empty tests getting ACs when none exist
 func TestGetProjectAcceptanceCriteria_Empty(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// Ensure .juggler directory exists
-	jugglerDir := filepath.Join(tmpDir, ".juggler")
-	if err := os.MkdirAll(jugglerDir, 0755); err != nil {
-		t.Fatalf("failed to create .juggler dir: %v", err)
+	// Ensure .juggle directory exists
+	juggleDir := filepath.Join(tmpDir, ".juggle")
+	if err := os.MkdirAll(juggleDir, 0755); err != nil {
+		t.Fatalf("failed to create .juggle dir: %v", err)
 	}
 
 	// Get acceptance criteria (should be empty, not error)
@@ -98,16 +98,16 @@ func TestGetProjectAcceptanceCriteria_Empty(t *testing.T) {
 
 // TestProjectAcceptanceCriteria_Persistence tests ACs survive save/load
 func TestProjectAcceptanceCriteria_Persistence(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// Ensure .juggler directory exists
-	jugglerDir := filepath.Join(tmpDir, ".juggler")
-	if err := os.MkdirAll(jugglerDir, 0755); err != nil {
-		t.Fatalf("failed to create .juggler dir: %v", err)
+	// Ensure .juggle directory exists
+	juggleDir := filepath.Join(tmpDir, ".juggle")
+	if err := os.MkdirAll(juggleDir, 0755); err != nil {
+		t.Fatalf("failed to create .juggle dir: %v", err)
 	}
 
 	// Set acceptance criteria
@@ -129,16 +129,16 @@ func TestProjectAcceptanceCriteria_Persistence(t *testing.T) {
 
 // TestProjectAcceptanceCriteria_Clear tests clearing all ACs
 func TestProjectAcceptanceCriteria_Clear(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// Ensure .juggler directory exists
-	jugglerDir := filepath.Join(tmpDir, ".juggler")
-	if err := os.MkdirAll(jugglerDir, 0755); err != nil {
-		t.Fatalf("failed to create .juggler dir: %v", err)
+	// Ensure .juggle directory exists
+	juggleDir := filepath.Join(tmpDir, ".juggle")
+	if err := os.MkdirAll(juggleDir, 0755); err != nil {
+		t.Fatalf("failed to create .juggle dir: %v", err)
 	}
 
 	// Set some criteria

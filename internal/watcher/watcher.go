@@ -26,7 +26,7 @@ type Event struct {
 	SessionID string // For progress changes, the session ID
 }
 
-// Watcher watches for file changes in juggler directories
+// Watcher watches for file changes in juggle directories
 type Watcher struct {
 	watcher *fsnotify.Watcher
 	Events  chan Event
@@ -51,22 +51,22 @@ func New() (*Watcher, error) {
 	}, nil
 }
 
-// WatchProject adds watchers for a project's juggler files
+// WatchProject adds watchers for a project's juggle files
 func (w *Watcher) WatchProject(projectDir string) error {
-	jugglerDir := filepath.Join(projectDir, ".juggler")
+	juggleDir := filepath.Join(projectDir, ".juggle")
 
-	// Check if .juggler directory exists
-	if _, err := os.Stat(jugglerDir); os.IsNotExist(err) {
-		return fmt.Errorf("juggler directory does not exist: %s", jugglerDir)
+	// Check if .juggle directory exists
+	if _, err := os.Stat(juggleDir); os.IsNotExist(err) {
+		return fmt.Errorf("juggle directory does not exist: %s", juggleDir)
 	}
 
-	// Watch the .juggler directory for balls.jsonl changes
-	if err := w.watcher.Add(jugglerDir); err != nil {
-		return fmt.Errorf("failed to watch juggler directory: %w", err)
+	// Watch the .juggle directory for balls.jsonl changes
+	if err := w.watcher.Add(juggleDir); err != nil {
+		return fmt.Errorf("failed to watch juggle directory: %w", err)
 	}
 
 	// Watch sessions directory if it exists
-	sessionsDir := filepath.Join(jugglerDir, "sessions")
+	sessionsDir := filepath.Join(juggleDir, "sessions")
 	if _, err := os.Stat(sessionsDir); err == nil {
 		// Watch the sessions directory
 		if err := w.watcher.Add(sessionsDir); err != nil {

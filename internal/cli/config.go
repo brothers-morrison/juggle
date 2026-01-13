@@ -14,8 +14,8 @@ import (
 
 var configCmd = &cobra.Command{
 	Use:   "config",
-	Short: "Manage juggler configuration",
-	Long: `Manage juggler configuration (repository and global).
+	Short: "Manage juggle configuration",
+	Long: `Manage juggle configuration (repository and global).
 
 Without arguments, displays all current configuration entries.
 
@@ -365,7 +365,7 @@ var configDelayCmd = &cobra.Command{
 	Short: "Manage iteration delay settings (global)",
 	Long: `Manage the delay between agent iterations.
 
-This is a global setting stored in ~/.juggler/config.json.
+This is a global setting stored in ~/.juggle/config.json.
 
 The delay adds a wait time between each agent iteration, with an optional
 "fuzz" factor that adds randomness (+/- the specified minutes).

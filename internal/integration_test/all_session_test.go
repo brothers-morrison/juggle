@@ -165,9 +165,9 @@ func TestAllMetaSession_OutputDirectory(t *testing.T) {
 	}
 
 	// Verify output was written to "_all" directory (not "all")
-	expectedPath := filepath.Join(env.ProjectDir, ".juggler", "sessions", "_all", "last_output.txt")
+	expectedPath := filepath.Join(env.ProjectDir, ".juggle", "sessions", "_all", "last_output.txt")
 	// The directory should have been created
-	allDir := filepath.Join(env.ProjectDir, ".juggler", "sessions", "_all")
+	allDir := filepath.Join(env.ProjectDir, ".juggle", "sessions", "_all")
 	if _, err := filepath.Glob(allDir); err != nil {
 		// Just check it doesn't error - the directory exists
 	}
@@ -371,7 +371,7 @@ func TestAllMetaSession_ProgressAppend(t *testing.T) {
 }
 
 // TestAllMetaSession_ProgressFileLocation tests that progress for "all" is stored
-// in the correct location (.juggler/sessions/_all/progress.txt)
+// in the correct location (.juggle/sessions/_all/progress.txt)
 func TestAllMetaSession_ProgressFileLocation(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
@@ -385,7 +385,7 @@ func TestAllMetaSession_ProgressFileLocation(t *testing.T) {
 	}
 
 	// Check file location
-	expectedPath := filepath.Join(env.ProjectDir, ".juggler", "sessions", "_all", "progress.txt")
+	expectedPath := filepath.Join(env.ProjectDir, ".juggle", "sessions", "_all", "progress.txt")
 	if _, err := os.Stat(expectedPath); os.IsNotExist(err) {
 		t.Errorf("Expected progress file at %s", expectedPath)
 	}

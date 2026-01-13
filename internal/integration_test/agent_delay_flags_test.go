@@ -45,7 +45,7 @@ func TestAgentDelay_ConfigValuesUsedByDefault(t *testing.T) {
 	// Set config with delay values
 	config, err := session.LoadConfigWithOptions(session.ConfigOptions{
 		ConfigHome:     env.ConfigHome,
-		JugglerDirName: ".juggler",
+		JuggleDirName: ".juggle",
 	})
 	if err != nil {
 		t.Fatalf("Failed to load config: %v", err)
@@ -55,7 +55,7 @@ func TestAgentDelay_ConfigValuesUsedByDefault(t *testing.T) {
 	config.SetIterationDelay(3, 1)
 	if err := config.SaveWithOptions(session.ConfigOptions{
 		ConfigHome:     env.ConfigHome,
-		JugglerDirName: ".juggler",
+		JuggleDirName: ".juggle",
 	}); err != nil {
 		t.Fatalf("Failed to save config: %v", err)
 	}
@@ -63,7 +63,7 @@ func TestAgentDelay_ConfigValuesUsedByDefault(t *testing.T) {
 	// Verify config was saved
 	loadedConfig, err := session.LoadConfigWithOptions(session.ConfigOptions{
 		ConfigHome:     env.ConfigHome,
-		JugglerDirName: ".juggler",
+		JuggleDirName: ".juggle",
 	})
 	if err != nil {
 		t.Fatalf("Failed to reload config: %v", err)

@@ -14,7 +14,7 @@ import (
 
 var checkCmd = &cobra.Command{
 	Use:   "check",
-	Short: "Check current juggler state and get workflow guidance",
+	Short: "Check current juggle state and get workflow guidance",
 	Long: `Interactive workflow helper that detects your current juggling state
 and provides appropriate guidance to comply with workflow.
 
@@ -22,7 +22,7 @@ This command helps you:
 - Understand what you're currently working on
 - See if there are ready balls needing attention
 - Get actionable next steps
-- Stay compliant with juggler workflow
+- Stay compliant with juggle workflow
 
 Run this before creating new balls to ensure you're following best practices.`,
 	RunE: runCheck,
@@ -50,9 +50,9 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to discover projects: %w", err)
 	}
 
-	// Handle no .juggler directory
+	// Handle no .juggle directory
 	if len(projects) == 0 {
-		printNoJugglerDir()
+		printNoJuggleDir()
 		return nil
 	}
 
@@ -81,15 +81,15 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	return handleMultipleInProgressBalls(inProgressBalls, pendingBalls)
 }
 
-func printNoJugglerDir() {
+func printNoJuggleDir() {
 	successStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
 	dimStyle := StyleDim
 
-	fmt.Println(successStyle.Render("✅ No juggler directory found"))
+	fmt.Println(successStyle.Render("✅ No juggle directory found"))
 	fmt.Println()
 	fmt.Println("Ready to start new work.")
 	fmt.Println()
-	fmt.Println(dimStyle.Render("Initialize juggler:"))
+	fmt.Println(dimStyle.Render("Initialize juggle:"))
 	fmt.Println("  juggle plan    - Plan work for later")
 	fmt.Println("  juggle start   - Create and start juggling immediately")
 }

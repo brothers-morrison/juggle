@@ -6,15 +6,15 @@ import (
 	"path/filepath"
 )
 
-// DiscoverProjects finds all directories containing .juggler folders
-// DiscoverProjects finds all directories containing .juggler folders
+// DiscoverProjects finds all directories containing .juggle folders
+// DiscoverProjects finds all directories containing .juggle folders
 func DiscoverProjects(config *Config) ([]string, error) {
 	projects := make([]string, 0)
 
 	for _, path := range config.SearchPaths {
-		// Check if path exists and has .juggler directory
-		jugglerPath := filepath.Join(path, ".juggler")
-		if _, err := os.Stat(jugglerPath); err == nil {
+		// Check if path exists and has .juggle directory
+		jugglePath := filepath.Join(path, ".juggle")
+		if _, err := os.Stat(jugglePath); err == nil {
 			projects = append(projects, path)
 		}
 	}

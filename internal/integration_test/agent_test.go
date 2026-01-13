@@ -16,7 +16,7 @@ func (env *TestEnv) CreateSession(t *testing.T, id, description string) *session
 	t.Helper()
 
 	sessionStore, err := session.NewSessionStoreWithConfig(env.ProjectDir, session.StoreConfig{
-		JugglerDirName: ".juggler",
+		JuggleDirName: ".juggle",
 	})
 	if err != nil {
 		t.Fatalf("Failed to create session store: %v", err)
@@ -35,7 +35,7 @@ func (env *TestEnv) GetSessionStore(t *testing.T) *session.SessionStore {
 	t.Helper()
 
 	sessionStore, err := session.NewSessionStoreWithConfig(env.ProjectDir, session.StoreConfig{
-		JugglerDirName: ".juggler",
+		JuggleDirName: ".juggle",
 	})
 	if err != nil {
 		t.Fatalf("Failed to create session store: %v", err)

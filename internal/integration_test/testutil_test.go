@@ -14,7 +14,7 @@ type TestEnv struct {
 	TempDir       string
 	ProjectDir    string
 	ConfigHome    string
-	JugglerDir    string
+	JuggleDir    string
 	OriginalFlags cli.GlobalOptions
 }
 
@@ -23,7 +23,7 @@ func SetupTestEnv(t *testing.T) *TestEnv {
 	t.Helper()
 
 	// Create temporary directory for this test
-	tempDir, err := os.MkdirTemp("", "juggler-test-*")
+	tempDir, err := os.MkdirTemp("", "juggle-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -31,7 +31,7 @@ func SetupTestEnv(t *testing.T) *TestEnv {
 	// Create subdirectories
 	projectDir := filepath.Join(tempDir, "project")
 	configHome := filepath.Join(tempDir, "config")
-	jugglerDir := filepath.Join(projectDir, ".juggler")
+	juggleDir := filepath.Join(projectDir, ".juggle")
 
 	if err := os.MkdirAll(projectDir, 0755); err != nil {
 		t.Fatalf("Failed to create project dir: %v", err)
@@ -44,7 +44,7 @@ func SetupTestEnv(t *testing.T) *TestEnv {
 		TempDir:       tempDir,
 		ProjectDir:    projectDir,
 		ConfigHome:    configHome,
-		JugglerDir:    jugglerDir,
+		JuggleDir:    juggleDir,
 		OriginalFlags: cli.GlobalOpts,
 	}
 
@@ -52,7 +52,7 @@ func SetupTestEnv(t *testing.T) *TestEnv {
 	cli.GlobalOpts = cli.GlobalOptions{
 		ConfigHome: configHome,
 		ProjectDir: projectDir,
-		JugglerDir: ".juggler",
+		JuggleDir: ".juggle",
 	}
 
 	return env
@@ -142,7 +142,7 @@ func (env *TestEnv) AssertBallNotExists(t *testing.T, ballID string) {
 func (env *TestEnv) AssertBallArchived(t *testing.T, ballID string) {
 	t.Helper()
 
-	archivePath := filepath.Join(env.JugglerDir, "archive")
+	archivePath := filepath.Join(env.JuggleDir, "archive")
 	archiveFile := filepath.Join(archivePath, "balls.jsonl")
 
 	if _, err := os.Stat(archiveFile); os.IsNotExist(err) {
@@ -227,9 +227,9 @@ func (env *TestEnv) CreateSecondaryProject(t *testing.T, name string) string {
 	t.Helper()
 
 	projectDir := filepath.Join(env.TempDir, name)
-	jugglerDir := filepath.Join(projectDir, ".juggler")
+	juggleDir := filepath.Join(projectDir, ".juggle")
 
-	if err := os.MkdirAll(jugglerDir, 0755); err != nil {
+	if err := os.MkdirAll(juggleDir, 0755); err != nil {
 		t.Fatalf("Failed to create secondary project dir: %v", err)
 	}
 
@@ -242,7 +242,7 @@ func (env *TestEnv) AddProjectToConfig(t *testing.T, projectDir string) {
 
 	config, err := session.LoadConfigWithOptions(session.ConfigOptions{
 		ConfigHome:     env.ConfigHome,
-		JugglerDirName: ".juggler",
+		JuggleDirName: ".juggle",
 	})
 	if err != nil {
 		t.Fatalf("Failed to load config: %v", err)
@@ -252,7 +252,7 @@ func (env *TestEnv) AddProjectToConfig(t *testing.T, projectDir string) {
 
 	if err := config.SaveWithOptions(session.ConfigOptions{
 		ConfigHome:     env.ConfigHome,
-		JugglerDirName: ".juggler",
+		JuggleDirName: ".juggle",
 	}); err != nil {
 		t.Fatalf("Failed to save config: %v", err)
 	}
@@ -263,7 +263,7 @@ func (env *TestEnv) CreateSessionInProject(t *testing.T, projectDir, id, descrip
 	t.Helper()
 
 	sessionStore, err := session.NewSessionStoreWithConfig(projectDir, session.StoreConfig{
-		JugglerDirName: ".juggler",
+		JuggleDirName: ".juggle",
 	})
 	if err != nil {
 		t.Fatalf("Failed to create session store for project %s: %v", projectDir, err)
@@ -282,7 +282,7 @@ func (env *TestEnv) CreateBallInProject(t *testing.T, projectDir, intent string,
 	t.Helper()
 
 	store, err := session.NewStoreWithConfig(projectDir, session.StoreConfig{
-		JugglerDirName: ".juggler",
+		JuggleDirName: ".juggle",
 	})
 	if err != nil {
 		t.Fatalf("Failed to create store for project %s: %v", projectDir, err)

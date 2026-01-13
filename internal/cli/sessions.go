@@ -54,7 +54,7 @@ var sessionsCreateCmd = &cobra.Command{
 	Long: `Create a new session with the given ID.
 
 The session ID will also be used as a tag to link balls to this session.
-Sessions are stored in .juggler/sessions/<id>/session.json with a
+Sessions are stored in .juggle/sessions/<id>/session.json with a
 corresponding progress.txt file for agent memory.`,
 	Args: cobra.ExactArgs(1),
 	RunE: runSessionsCreate,
@@ -249,7 +249,7 @@ func runSessionsCreate(cmd *cobra.Command, args []string) error {
 	} else if inheritedCount > 0 {
 		fmt.Printf("  Acceptance criteria: (inherited %d from repo defaults)\n", inheritedCount)
 	}
-	fmt.Printf("  Path: .juggler/sessions/%s/\n", id)
+	fmt.Printf("  Path: .juggle/sessions/%s/\n", id)
 
 	return nil
 }

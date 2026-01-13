@@ -131,7 +131,7 @@ func TestAgentRunRecord_Duration(t *testing.T) {
 
 func TestAgentHistoryStore_AppendAndLoad(t *testing.T) {
 	// Create temp directory
-	tmpDir, err := os.MkdirTemp("", "juggler-history-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-history-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -181,7 +181,7 @@ func TestAgentHistoryStore_AppendAndLoad(t *testing.T) {
 }
 
 func TestAgentHistoryStore_LoadHistoryBySession(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-history-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-history-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -223,7 +223,7 @@ func TestAgentHistoryStore_LoadHistoryBySession(t *testing.T) {
 }
 
 func TestAgentHistoryStore_LoadRecentHistory(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-history-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-history-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -253,7 +253,7 @@ func TestAgentHistoryStore_LoadRecentHistory(t *testing.T) {
 }
 
 func TestAgentHistoryStore_EmptyHistory(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-history-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-history-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -276,7 +276,7 @@ func TestAgentHistoryStore_EmptyHistory(t *testing.T) {
 }
 
 func TestAgentHistoryStore_HistoryFilePath(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-history-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-history-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -287,7 +287,7 @@ func TestAgentHistoryStore_HistoryFilePath(t *testing.T) {
 		t.Fatalf("Failed to create history store: %v", err)
 	}
 
-	expectedPath := filepath.Join(tmpDir, ".juggler", "agent_history.jsonl")
+	expectedPath := filepath.Join(tmpDir, ".juggle", "agent_history.jsonl")
 	actualPath := store.historyFilePath()
 
 	if actualPath != expectedPath {

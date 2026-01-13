@@ -18,10 +18,10 @@ var moveCmd = &cobra.Command{
 The ball will be removed from the current project and added to the target project.
 If a ball with the same ID exists in the target, you'll be prompted to provide a new ID.
 
-The target path must be an existing juggler project (contain a .juggler directory).
+The target path must be an existing juggle project (contain a .juggle directory).
 
 Examples:
-  juggle move juggler-5 ~/Development/other-project
+  juggle move juggle-5 ~/Development/other-project
   juggle move 5 ../sibling-project`,
 	Args:              cobra.ExactArgs(2),
 	ValidArgsFunction: CompleteBallIDs, // Complete for first argument only
@@ -42,14 +42,14 @@ func runMove(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid target path: %w", err)
 	}
 
-	// Verify target has .juggler directory
-	jugglerDirName := GlobalOpts.JugglerDir
-	if jugglerDirName == "" {
-		jugglerDirName = ".juggler"
+	// Verify target has .juggle directory
+	juggleDirName := GlobalOpts.JuggleDir
+	if juggleDirName == "" {
+		juggleDirName = ".juggle"
 	}
-	targetJugglerDir := filepath.Join(targetPath, jugglerDirName)
-	if _, err := os.Stat(targetJugglerDir); os.IsNotExist(err) {
-		return fmt.Errorf("target path is not a juggler project (no %s directory): %s", jugglerDirName, targetPath)
+	targetJuggleDir := filepath.Join(targetPath, juggleDirName)
+	if _, err := os.Stat(targetJuggleDir); os.IsNotExist(err) {
+		return fmt.Errorf("target path is not a juggle project (no %s directory): %s", juggleDirName, targetPath)
 	}
 
 	// Find ball across all projects

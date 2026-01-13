@@ -23,15 +23,15 @@ var (
 // syncCmd is the parent command for sync operations
 var syncCmd = &cobra.Command{
 	Use:   "sync",
-	Short: "Sync external state into juggler",
-	Long:  `Sync external state (like prd.json from ralph) into juggler balls.`,
+	Short: "Sync external state into juggle",
+	Long:  `Sync external state (like prd.json from ralph) into juggle balls.`,
 }
 
 // syncRalphCmd syncs prd.json status to balls
 var syncRalphCmd = &cobra.Command{
 	Use:   "ralph [prd.json]",
 	Short: "Sync prd.json status to balls",
-	Long: `Sync prd.json user story status to juggler balls for backward compatibility.
+	Long: `Sync prd.json user story status to juggle balls for backward compatibility.
 
 Reads a prd.json file and updates corresponding balls:
   - passes: true  → state: complete

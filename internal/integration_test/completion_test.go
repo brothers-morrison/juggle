@@ -347,13 +347,13 @@ func testCompleteWithShortID(t *testing.T) {
 func runCompletionCommand(t *testing.T, env *TestEnv, shell string) string {
 	t.Helper()
 
-	jugglerRoot := "/home/jmo/Development/juggler"
-	juggleBinary := filepath.Join(jugglerRoot, "juggle")
+	juggleRoot := "/home/jmo/Development/juggler"
+	juggleBinary := filepath.Join(juggleRoot, "juggle")
 
 	// Build juggle binary if it doesn't exist
 	if _, err := os.Stat(juggleBinary); os.IsNotExist(err) {
 		buildCmd := exec.Command("go", "build", "-o", "juggle", "./cmd/juggle")
-		buildCmd.Dir = jugglerRoot
+		buildCmd.Dir = juggleRoot
 		if output, err := buildCmd.CombinedOutput(); err != nil {
 			t.Fatalf("Failed to build juggle: %v\nOutput: %s", err, output)
 		}
@@ -373,13 +373,13 @@ func runCompletionCommand(t *testing.T, env *TestEnv, shell string) string {
 func runCompletionCommandWithError(t *testing.T, env *TestEnv, shell string) (string, int) {
 	t.Helper()
 
-	jugglerRoot := "/home/jmo/Development/juggler"
-	juggleBinary := filepath.Join(jugglerRoot, "juggle")
+	juggleRoot := "/home/jmo/Development/juggler"
+	juggleBinary := filepath.Join(juggleRoot, "juggle")
 
 	// Build binary if needed
 	if _, err := os.Stat(juggleBinary); os.IsNotExist(err) {
 		buildCmd := exec.Command("go", "build", "-o", "juggle", "./cmd/juggle")
-		buildCmd.Dir = jugglerRoot
+		buildCmd.Dir = juggleRoot
 		if output, err := buildCmd.CombinedOutput(); err != nil {
 			t.Fatalf("Failed to build juggle: %v\nOutput: %s", err, output)
 		}

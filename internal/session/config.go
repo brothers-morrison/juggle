@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	defaultConfigPath = ".juggler/config.json"
+	defaultConfigPath = ".juggle/config.json"
 
 	// Default values for global configuration fields
 	// These are documented here as the canonical source of defaults
@@ -17,19 +17,19 @@ const (
 	DefaultOverloadRetryMinutes  = 10 // Wait 10 minutes before retrying after 529 overload exhaustion
 )
 
-// Config holds global juggler configuration
+// Config holds global juggle configuration
 // ConfigOptions holds configurable options for global config
 type ConfigOptions struct {
-	ConfigHome     string // Override for ~/.juggler directory
-	JugglerDirName string // Name of the juggler directory (default: ".juggler")
+	ConfigHome    string // Override for ~/.juggle directory
+	JuggleDirName string // Name of the juggle directory (default: ".juggle")
 }
 
 // DefaultConfigOptions returns the default config options
 func DefaultConfigOptions() ConfigOptions {
 	home, _ := os.UserHomeDir()
 	return ConfigOptions{
-		ConfigHome:     home,
-		JugglerDirName: ".juggler",
+		ConfigHome:    home,
+		JuggleDirName: ".juggle",
 	}
 }
 
@@ -131,7 +131,7 @@ func DefaultConfig() *Config {
 	}
 }
 
-// LoadConfig loads configuration from ~/.juggler/config.json
+// LoadConfig loads configuration from ~/.juggle/config.json
 func LoadConfig() (*Config, error) {
 	return LoadConfigWithOptions(DefaultConfigOptions())
 }
@@ -148,7 +148,7 @@ func LoadConfigWithOptions(opts ConfigOptions) (*Config, error) {
 		opts.ConfigHome = home
 	}
 
-	configPath := filepath.Join(opts.ConfigHome, opts.JugglerDirName, "config.json")
+	configPath := filepath.Join(opts.ConfigHome, opts.JuggleDirName, "config.json")
 
 	// If config doesn't exist, create with defaults
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
@@ -198,7 +198,7 @@ func (c *Config) SaveWithOptions(opts ConfigOptions) error {
 		opts.ConfigHome = home
 	}
 
-	configPath := filepath.Join(opts.ConfigHome, opts.JugglerDirName, "config.json")
+	configPath := filepath.Join(opts.ConfigHome, opts.JuggleDirName, "config.json")
 	configDir := filepath.Dir(configPath)
 
 	// Ensure directory exists
@@ -282,7 +282,7 @@ func EnsureProjectInSearchPaths(projectDir string) error {
 	return nil
 }
 
-// ProjectConfig holds per-project configuration stored in .juggler/config.json
+// ProjectConfig holds per-project configuration stored in .juggle/config.json
 type ProjectConfig struct {
 	DefaultAcceptanceCriteria []string `json:"default_acceptance_criteria,omitempty"` // Repo-level ACs applied to all sessions
 }
@@ -292,7 +292,7 @@ func DefaultProjectConfig() *ProjectConfig {
 	return &ProjectConfig{}
 }
 
-// LoadProjectConfig loads the project configuration from projectDir/.juggler/config.json
+// LoadProjectConfig loads the project configuration from projectDir/.juggle/config.json
 func LoadProjectConfig(projectDir string) (*ProjectConfig, error) {
 	configPath := filepath.Join(projectDir, projectStorePath, "config.json")
 
@@ -318,7 +318,7 @@ func LoadProjectConfig(projectDir string) (*ProjectConfig, error) {
 	return &config, nil
 }
 
-// SaveProjectConfig saves the project configuration to projectDir/.juggler/config.json
+// SaveProjectConfig saves the project configuration to projectDir/.juggle/config.json
 func SaveProjectConfig(projectDir string, config *ProjectConfig) error {
 	configDir := filepath.Join(projectDir, projectStorePath)
 	configPath := filepath.Join(configDir, "config.json")

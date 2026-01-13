@@ -25,9 +25,9 @@ var tagAddCmd = &cobra.Command{
 	Long: `Add tags to a session. You can add multiple tags at once.
 
 Examples:
-  juggler tag add bug-fix
-  juggler tag add security performance optimization
-  juggler tag add --ball my-app-1 urgent`,
+  juggle tag add bug-fix
+  juggle tag add security performance optimization
+  juggle tag add --ball my-app-1 urgent`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: runTagAdd,
 }
@@ -38,8 +38,8 @@ var tagRmCmd = &cobra.Command{
 	Long: `Remove one or more tags from a session.
 
 Examples:
-  juggler tag rm bug-fix
-  juggler tag rm security performance`,
+  juggle tag rm bug-fix
+  juggle tag rm security performance`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: runTagRm,
 }
@@ -209,7 +209,7 @@ func runTagList(cmd *cobra.Command, args []string) error {
 
 	if len(tagCounts) == 0 {
 		fmt.Println("No tags found across all sessions.")
-		fmt.Println("\nAdd tags with: juggler tag add <tag>")
+		fmt.Println("\nAdd tags with: juggle tag add <tag>")
 		return nil
 	}
 

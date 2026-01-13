@@ -25,13 +25,13 @@ func TestNewWatcher(t *testing.T) {
 func TestWatchProject(t *testing.T) {
 	// Create temp directory structure
 	tmpDir := t.TempDir()
-	jugglerDir := filepath.Join(tmpDir, ".juggler")
-	if err := os.MkdirAll(jugglerDir, 0755); err != nil {
-		t.Fatalf("Failed to create juggler dir: %v", err)
+	juggleDir := filepath.Join(tmpDir, ".juggle")
+	if err := os.MkdirAll(juggleDir, 0755); err != nil {
+		t.Fatalf("Failed to create juggle dir: %v", err)
 	}
 
 	// Create balls.jsonl
-	ballsPath := filepath.Join(jugglerDir, "balls.jsonl")
+	ballsPath := filepath.Join(juggleDir, "balls.jsonl")
 	if err := os.WriteFile(ballsPath, []byte("{}"), 0644); err != nil {
 		t.Fatalf("Failed to create balls.jsonl: %v", err)
 	}
@@ -47,7 +47,7 @@ func TestWatchProject(t *testing.T) {
 	}
 }
 
-func TestWatchProject_NoJugglerDir(t *testing.T) {
+func TestWatchProject_NoJuggleDir(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	w, err := New()
@@ -58,7 +58,7 @@ func TestWatchProject_NoJugglerDir(t *testing.T) {
 
 	err = w.WatchProject(tmpDir)
 	if err == nil {
-		t.Error("Expected error for missing .juggler directory")
+		t.Error("Expected error for missing .juggle directory")
 	}
 }
 
@@ -66,7 +66,7 @@ func TestClassifyEvent_BallsChanged(t *testing.T) {
 	w, _ := New()
 	defer w.Close()
 
-	event := w.classifyEvent("/path/to/.juggler/balls.jsonl")
+	event := w.classifyEvent("/path/to/.juggle/balls.jsonl")
 	if event == nil {
 		t.Fatal("Expected event, got nil")
 	}
@@ -79,7 +79,7 @@ func TestClassifyEvent_ProgressChanged(t *testing.T) {
 	w, _ := New()
 	defer w.Close()
 
-	event := w.classifyEvent("/path/to/.juggler/sessions/my-session/progress.txt")
+	event := w.classifyEvent("/path/to/.juggle/sessions/my-session/progress.txt")
 	if event == nil {
 		t.Fatal("Expected event, got nil")
 	}
@@ -95,7 +95,7 @@ func TestClassifyEvent_SessionChanged(t *testing.T) {
 	w, _ := New()
 	defer w.Close()
 
-	event := w.classifyEvent("/path/to/.juggler/sessions/my-session/session.json")
+	event := w.classifyEvent("/path/to/.juggle/sessions/my-session/session.json")
 	if event == nil {
 		t.Fatal("Expected event, got nil")
 	}
@@ -120,13 +120,13 @@ func TestClassifyEvent_Unknown(t *testing.T) {
 func TestWatcherBallsFileChange(t *testing.T) {
 	// Create temp directory structure
 	tmpDir := t.TempDir()
-	jugglerDir := filepath.Join(tmpDir, ".juggler")
-	if err := os.MkdirAll(jugglerDir, 0755); err != nil {
-		t.Fatalf("Failed to create juggler dir: %v", err)
+	juggleDir := filepath.Join(tmpDir, ".juggle")
+	if err := os.MkdirAll(juggleDir, 0755); err != nil {
+		t.Fatalf("Failed to create juggle dir: %v", err)
 	}
 
 	// Create balls.jsonl
-	ballsPath := filepath.Join(jugglerDir, "balls.jsonl")
+	ballsPath := filepath.Join(juggleDir, "balls.jsonl")
 	if err := os.WriteFile(ballsPath, []byte("{}"), 0644); err != nil {
 		t.Fatalf("Failed to create balls.jsonl: %v", err)
 	}
@@ -165,8 +165,8 @@ func TestWatcherBallsFileChange(t *testing.T) {
 func TestWatcherProgressFileChange(t *testing.T) {
 	// Create temp directory structure
 	tmpDir := t.TempDir()
-	jugglerDir := filepath.Join(tmpDir, ".juggler")
-	sessionsDir := filepath.Join(jugglerDir, "sessions", "test-session")
+	juggleDir := filepath.Join(tmpDir, ".juggle")
+	sessionsDir := filepath.Join(juggleDir, "sessions", "test-session")
 	if err := os.MkdirAll(sessionsDir, 0755); err != nil {
 		t.Fatalf("Failed to create sessions dir: %v", err)
 	}
@@ -178,7 +178,7 @@ func TestWatcherProgressFileChange(t *testing.T) {
 	}
 
 	// Create balls.jsonl (required for WatchProject)
-	ballsPath := filepath.Join(jugglerDir, "balls.jsonl")
+	ballsPath := filepath.Join(juggleDir, "balls.jsonl")
 	if err := os.WriteFile(ballsPath, []byte("{}"), 0644); err != nil {
 		t.Fatalf("Failed to create balls.jsonl: %v", err)
 	}

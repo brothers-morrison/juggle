@@ -118,7 +118,7 @@ func TestBall_SetModelSize(t *testing.T) {
 }
 
 func TestBall_ModelSize_JSON(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -153,7 +153,7 @@ func TestBall_ModelSize_JSON(t *testing.T) {
 }
 
 func TestBall_ContextAndTitle_JSON(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -192,7 +192,7 @@ func TestBall_ContextAndTitle_JSON(t *testing.T) {
 }
 
 func TestBall_IntentToTitle_Migration(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -205,7 +205,7 @@ func TestBall_IntentToTitle_Migration(t *testing.T) {
 
 	// Manually write a legacy ball with "intent" field instead of "title"
 	legacyJSON := `{"id":"test-legacy-1","intent":"Legacy intent value","priority":"medium","state":"pending","started_at":"2024-01-01T00:00:00Z","last_activity":"2024-01-01T00:00:00Z","update_count":0}`
-	ballsPath := filepath.Join(tmpDir, ".juggler", "balls.jsonl")
+	ballsPath := filepath.Join(tmpDir, ".juggle", "balls.jsonl")
 	if err := os.WriteFile(ballsPath, []byte(legacyJSON+"\n"), 0644); err != nil {
 		t.Fatalf("failed to write legacy ball: %v", err)
 	}
@@ -231,7 +231,7 @@ func TestBall_IntentToTitle_Migration(t *testing.T) {
 }
 
 func TestBall_MigrationPreservesTitle(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -244,7 +244,7 @@ func TestBall_MigrationPreservesTitle(t *testing.T) {
 
 	// Write a ball that has both intent and title - title should take precedence
 	mixedJSON := `{"id":"test-mixed-1","intent":"Old intent","title":"New title","priority":"medium","state":"pending","started_at":"2024-01-01T00:00:00Z","last_activity":"2024-01-01T00:00:00Z","update_count":0}`
-	ballsPath := filepath.Join(tmpDir, ".juggler", "balls.jsonl")
+	ballsPath := filepath.Join(tmpDir, ".juggle", "balls.jsonl")
 	if err := os.WriteFile(ballsPath, []byte(mixedJSON+"\n"), 0644); err != nil {
 		t.Fatalf("failed to write mixed ball: %v", err)
 	}
@@ -267,7 +267,7 @@ func TestBall_MigrationPreservesTitle(t *testing.T) {
 
 func TestSessionStore_CreateAndLoadSession(t *testing.T) {
 	// Create temp directory
-	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -289,7 +289,7 @@ func TestSessionStore_CreateAndLoadSession(t *testing.T) {
 	}
 
 	// Verify directory was created
-	sessionDir := filepath.Join(tmpDir, ".juggler", "sessions", "my-session")
+	sessionDir := filepath.Join(tmpDir, ".juggle", "sessions", "my-session")
 	if _, err := os.Stat(sessionDir); os.IsNotExist(err) {
 		t.Error("expected session directory to be created")
 	}
@@ -321,7 +321,7 @@ func TestSessionStore_CreateAndLoadSession(t *testing.T) {
 }
 
 func TestSessionStore_CreateSession_AlreadyExists(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -346,7 +346,7 @@ func TestSessionStore_CreateSession_AlreadyExists(t *testing.T) {
 }
 
 func TestSessionStore_ListSessions(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -382,7 +382,7 @@ func TestSessionStore_ListSessions(t *testing.T) {
 }
 
 func TestSessionStore_UpdateSessionContext(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -417,7 +417,7 @@ func TestSessionStore_UpdateSessionContext(t *testing.T) {
 }
 
 func TestSessionStore_DeleteSession(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -447,14 +447,14 @@ func TestSessionStore_DeleteSession(t *testing.T) {
 	}
 
 	// Verify directory is gone
-	sessionDir := filepath.Join(tmpDir, ".juggler", "sessions", "my-session")
+	sessionDir := filepath.Join(tmpDir, ".juggle", "sessions", "my-session")
 	if _, err := os.Stat(sessionDir); !os.IsNotExist(err) {
 		t.Error("expected session directory to be deleted")
 	}
 }
 
 func TestSessionStore_DeleteSession_NotFound(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -473,7 +473,7 @@ func TestSessionStore_DeleteSession_NotFound(t *testing.T) {
 }
 
 func TestSessionStore_AppendAndLoadProgress(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -514,7 +514,7 @@ func TestSessionStore_AppendAndLoadProgress(t *testing.T) {
 }
 
 func TestSessionStore_AppendProgress_SessionNotFound(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -533,7 +533,7 @@ func TestSessionStore_AppendProgress_SessionNotFound(t *testing.T) {
 }
 
 func TestSessionStore_LoadSession_NotFound(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -551,7 +551,7 @@ func TestSessionStore_LoadSession_NotFound(t *testing.T) {
 }
 
 func TestLoadBallsBySession(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -619,7 +619,7 @@ func TestLoadBallsBySession(t *testing.T) {
 }
 
 func TestLoadBallsBySession_MultipleSessions(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -659,7 +659,7 @@ func TestLoadBallsBySession_MultipleSessions(t *testing.T) {
 
 // TestBallIDFormat tests that new ball IDs use UUID-based format
 func TestBallIDFormat(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -672,7 +672,7 @@ func TestBallIDFormat(t *testing.T) {
 	}
 
 	// UUID-based format: <project>-<8-char-hex>
-	// e.g., "juggler-test-a1b2c3d4"
+	// e.g., "juggle-test-a1b2c3d4"
 	uuidPattern := regexp.MustCompile(`^.+-[0-9a-f]{8}$`)
 	if !uuidPattern.MatchString(ball.ID) {
 		t.Errorf("expected UUID-based ID format (project-8hexchars), got '%s'", ball.ID)
@@ -681,7 +681,7 @@ func TestBallIDFormat(t *testing.T) {
 
 // TestBallIDUniqueness tests that multiple balls get unique IDs
 func TestBallIDUniqueness(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -724,7 +724,7 @@ func TestLegacyBallIDCompatibility(t *testing.T) {
 
 // TestBallIDPrefixMatchesProjectDir tests that ball ID prefix matches the project directory name
 func TestBallIDPrefixMatchesProjectDir(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -746,7 +746,7 @@ func TestBallIDPrefixMatchesProjectDir(t *testing.T) {
 // TestSessionStore_AppendProgress_AllMetaSession tests that _all virtual session
 // creates directory and works for progress logging
 func TestSessionStore_AppendProgress_AllMetaSession(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -764,7 +764,7 @@ func TestSessionStore_AppendProgress_AllMetaSession(t *testing.T) {
 	}
 
 	// Verify directory was created
-	allDir := filepath.Join(tmpDir, ".juggler", "sessions", "_all")
+	allDir := filepath.Join(tmpDir, ".juggle", "sessions", "_all")
 	if _, err := os.Stat(allDir); os.IsNotExist(err) {
 		t.Error("expected _all session directory to be created")
 	}
@@ -796,7 +796,7 @@ func TestSessionStore_AppendProgress_AllMetaSession(t *testing.T) {
 // TestSessionStore_LoadProgress_AllMetaSession_Empty tests that loading from
 // non-existent _all returns empty string (not error)
 func TestSessionStore_LoadProgress_AllMetaSession_Empty(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -872,7 +872,7 @@ func TestJuggleSession_HasAcceptanceCriteria(t *testing.T) {
 
 // TestSessionStore_UpdateSessionAcceptanceCriteria tests updating session ACs
 func TestSessionStore_UpdateSessionAcceptanceCriteria(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -912,7 +912,7 @@ func TestSessionStore_UpdateSessionAcceptanceCriteria(t *testing.T) {
 
 // TestSessionStore_UpdateSessionAcceptanceCriteria_NotFound tests error handling
 func TestSessionStore_UpdateSessionAcceptanceCriteria_NotFound(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -932,7 +932,7 @@ func TestSessionStore_UpdateSessionAcceptanceCriteria_NotFound(t *testing.T) {
 
 // TestSessionStore_UpdateSessionDefaultModel tests updating default model
 func TestSessionStore_UpdateSessionDefaultModel(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -968,7 +968,7 @@ func TestSessionStore_UpdateSessionDefaultModel(t *testing.T) {
 
 // TestSessionStore_UpdateSessionDefaultModel_NotFound tests error handling
 func TestSessionStore_UpdateSessionDefaultModel_NotFound(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -988,7 +988,7 @@ func TestSessionStore_UpdateSessionDefaultModel_NotFound(t *testing.T) {
 
 // TestJuggleSession_AcceptanceCriteria_Persistence tests ACs survive JSON round-trip
 func TestJuggleSession_AcceptanceCriteria_Persistence(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -1033,7 +1033,7 @@ func TestJuggleSession_AcceptanceCriteria_Persistence(t *testing.T) {
 // TestSessionStore_AllMetaSession_NoSessionFile tests that _all doesn't create
 // or require a session.json file (it's a virtual session for storage only)
 func TestSessionStore_AllMetaSession_NoSessionFile(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -1051,13 +1051,13 @@ func TestSessionStore_AllMetaSession_NoSessionFile(t *testing.T) {
 	}
 
 	// Verify session.json does NOT exist (only progress.txt should)
-	sessionPath := filepath.Join(tmpDir, ".juggler", "sessions", "_all", "session.json")
+	sessionPath := filepath.Join(tmpDir, ".juggle", "sessions", "_all", "session.json")
 	if _, err := os.Stat(sessionPath); !os.IsNotExist(err) {
 		t.Error("expected _all to NOT have session.json file")
 	}
 
 	// Verify progress.txt DOES exist
-	progressPath := filepath.Join(tmpDir, ".juggler", "sessions", "_all", "progress.txt")
+	progressPath := filepath.Join(tmpDir, ".juggle", "sessions", "_all", "progress.txt")
 	if _, err := os.Stat(progressPath); os.IsNotExist(err) {
 		t.Error("expected _all to have progress.txt file")
 	}
@@ -1383,13 +1383,13 @@ func TestLowerString(t *testing.T) {
 // TestLoadAllSessions tests loading sessions from multiple projects
 func TestLoadAllSessions(t *testing.T) {
 	// Create two temp project directories
-	project1, err := os.MkdirTemp("", "juggler-project1-*")
+	project1, err := os.MkdirTemp("", "juggle-project1-*")
 	if err != nil {
 		t.Fatalf("failed to create project1 dir: %v", err)
 	}
 	defer os.RemoveAll(project1)
 
-	project2, err := os.MkdirTemp("", "juggler-project2-*")
+	project2, err := os.MkdirTemp("", "juggle-project2-*")
 	if err != nil {
 		t.Fatalf("failed to create project2 dir: %v", err)
 	}
@@ -1450,13 +1450,13 @@ func TestLoadAllSessions(t *testing.T) {
 // TestLoadAllSessions_EmptyProject tests loading sessions when a project has no sessions
 func TestLoadAllSessions_EmptyProject(t *testing.T) {
 	// Create two temp project directories
-	project1, err := os.MkdirTemp("", "juggler-project1-*")
+	project1, err := os.MkdirTemp("", "juggle-project1-*")
 	if err != nil {
 		t.Fatalf("failed to create project1 dir: %v", err)
 	}
 	defer os.RemoveAll(project1)
 
-	project2, err := os.MkdirTemp("", "juggler-project2-*")
+	project2, err := os.MkdirTemp("", "juggle-project2-*")
 	if err != nil {
 		t.Fatalf("failed to create project2 dir: %v", err)
 	}

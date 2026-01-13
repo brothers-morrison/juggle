@@ -103,7 +103,7 @@ func TestConfigOperations(t *testing.T) {
 	// Load config (should create default if not exists)
 	config, err := session.LoadConfigWithOptions(session.ConfigOptions{
 		ConfigHome:     env.ConfigHome,
-		JugglerDirName: ".juggler",
+		JuggleDirName: ".juggle",
 	})
 	if err != nil {
 		t.Fatalf("Failed to load config: %v", err)
@@ -113,7 +113,7 @@ func TestConfigOperations(t *testing.T) {
 	config.SearchPaths = []string{"/test/path1", "/test/path2"}
 	if err := config.SaveWithOptions(session.ConfigOptions{
 		ConfigHome:     env.ConfigHome,
-		JugglerDirName: ".juggler",
+		JuggleDirName: ".juggle",
 	}); err != nil {
 		t.Fatalf("Failed to save config: %v", err)
 	}
@@ -121,7 +121,7 @@ func TestConfigOperations(t *testing.T) {
 	// Reload and verify
 	reloaded, err := session.LoadConfigWithOptions(session.ConfigOptions{
 		ConfigHome:     env.ConfigHome,
-		JugglerDirName: ".juggler",
+		JuggleDirName: ".juggle",
 	})
 	if err != nil {
 		t.Fatalf("Failed to reload config: %v", err)

@@ -27,12 +27,12 @@ var historyCmd = &cobra.Command{
 By default shows the 20 most recently completed balls. Use flags to filter and search.
 
 Examples:
-  juggler history                    # Show 20 most recent completed balls
-  juggler history bug                # Search for "bug" in intent
-  juggler history --tags feature     # Show completed balls with "feature" tag
-  juggler history --priority urgent  # Show completed urgent balls
-  juggler history --stats            # Show archive statistics
-  juggler history --after 2025-10-01 # Show balls completed after Oct 1, 2025`,
+  juggle history                    # Show 20 most recent completed balls
+  juggle history bug                # Search for "bug" in intent
+  juggle history --tags feature     # Show completed balls with "feature" tag
+  juggle history --priority urgent  # Show completed urgent balls
+  juggle history --stats            # Show archive statistics
+  juggle history --after 2025-10-01 # Show balls completed after Oct 1, 2025`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runHistory,
 }
@@ -71,7 +71,7 @@ func runHistory(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(projects) == 0 {
-		fmt.Println("No projects with .juggler directories found.")
+		fmt.Println("No projects with .juggle directories found.")
 		return nil
 	}
 

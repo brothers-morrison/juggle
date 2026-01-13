@@ -38,12 +38,12 @@ Task states: pending → in_progress → complete (or blocked)`,
 
 // GlobalOptions holds global configuration flags for testing and path overrides
 type GlobalOptions struct {
-	ConfigHome   string // Override for ~/.juggler directory
-	ProjectDir   string // Override for current working directory
-	JugglerDir   string // Override for .juggler directory name
-	AllProjects  bool   // Enable cross-project discovery (default is local only)
-	LocalOnly    bool   // DEPRECATED: use AllProjects instead (kept for backward compat)
-	JSONOutput   bool   // Output as JSON
+	ConfigHome  string // Override for ~/.juggle directory
+	ProjectDir  string // Override for current working directory
+	JuggleDir   string // Override for .juggle directory name
+	AllProjects bool   // Enable cross-project discovery (default is local only)
+	LocalOnly   bool   // DEPRECATED: use AllProjects instead (kept for backward compat)
+	JSONOutput  bool   // Output as JSON
 }
 
 // GlobalOpts holds the parsed global flags (exported for testing)
@@ -60,7 +60,7 @@ func GetWorkingDir() (string, error) {
 // GetStoreConfig returns StoreConfig based on global flags
 func GetStoreConfig() session.StoreConfig {
 	return session.StoreConfig{
-		JugglerDirName: GlobalOpts.JugglerDir,
+		JuggleDirName: GlobalOpts.JuggleDir,
 	}
 }
 
@@ -70,8 +70,8 @@ func GetConfigOptions() session.ConfigOptions {
 	if GlobalOpts.ConfigHome != "" {
 		opts.ConfigHome = GlobalOpts.ConfigHome
 	}
-	if GlobalOpts.JugglerDir != "" {
-		opts.JugglerDirName = GlobalOpts.JugglerDir
+	if GlobalOpts.JuggleDir != "" {
+		opts.JuggleDirName = GlobalOpts.JuggleDir
 	}
 	return opts
 }
@@ -178,9 +178,9 @@ func customSessionHelpFunc(cmd *cobra.Command, args []string) {
 
 func init() {
 	// Add persistent global flags for testing and path overrides
-	rootCmd.PersistentFlags().StringVar(&GlobalOpts.ConfigHome, "config-home", "", "Override ~/.juggler directory (for testing)")
+	rootCmd.PersistentFlags().StringVar(&GlobalOpts.ConfigHome, "config-home", "", "Override ~/.juggle directory (for testing)")
 	rootCmd.PersistentFlags().StringVar(&GlobalOpts.ProjectDir, "project-dir", "", "Override working directory (for testing)")
-	rootCmd.PersistentFlags().StringVar(&GlobalOpts.JugglerDir, "juggler-dir", ".juggler", "Override .juggler directory name")
+	rootCmd.PersistentFlags().StringVar(&GlobalOpts.JuggleDir, "juggle-dir", ".juggle", "Override .juggle directory name")
 	rootCmd.PersistentFlags().BoolVarP(&GlobalOpts.AllProjects, "all", "a", false, "Search across all discovered projects")
 	rootCmd.PersistentFlags().BoolVar(&GlobalOpts.LocalOnly, "local", false, "DEPRECATED: Local is now the default (this flag is a no-op)")
 	rootCmd.PersistentFlags().MarkHidden("local") // Hide deprecated flag

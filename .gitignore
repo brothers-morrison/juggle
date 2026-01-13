@@ -1,7 +1,9 @@
 # Binaries
 /juggler
 /juggle
-.juggler/
+
+# Config folder
+.juggle/
 
 # Devbox
 /.devbox/

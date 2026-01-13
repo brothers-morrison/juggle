@@ -12,9 +12,9 @@ import (
 // TestExportRalph_WithGlobalACs tests that Ralph export includes global ACs
 func TestExportRalph_WithGlobalACs(t *testing.T) {
 	tmpDir := t.TempDir()
-	jugglerDir := filepath.Join(tmpDir, ".juggler")
-	if err := os.MkdirAll(jugglerDir, 0755); err != nil {
-		t.Fatalf("failed to create .juggler dir: %v", err)
+	juggleDir := filepath.Join(tmpDir, ".juggle")
+	if err := os.MkdirAll(juggleDir, 0755); err != nil {
+		t.Fatalf("failed to create .juggle dir: %v", err)
 	}
 
 	// Set repo-level ACs
@@ -90,9 +90,9 @@ func TestExportRalph_WithGlobalACs(t *testing.T) {
 // TestExportAgent_WithGlobalACs tests that Agent export includes global ACs
 func TestExportAgent_WithGlobalACs(t *testing.T) {
 	tmpDir := t.TempDir()
-	jugglerDir := filepath.Join(tmpDir, ".juggler")
-	if err := os.MkdirAll(jugglerDir, 0755); err != nil {
-		t.Fatalf("failed to create .juggler dir: %v", err)
+	juggleDir := filepath.Join(tmpDir, ".juggle")
+	if err := os.MkdirAll(juggleDir, 0755); err != nil {
+		t.Fatalf("failed to create .juggle dir: %v", err)
 	}
 
 	// Set repo-level ACs
@@ -147,9 +147,9 @@ func TestExportAgent_WithGlobalACs(t *testing.T) {
 // TestExportRalph_NoGlobalACs tests that export works without global ACs
 func TestExportRalph_NoGlobalACs(t *testing.T) {
 	tmpDir := t.TempDir()
-	jugglerDir := filepath.Join(tmpDir, ".juggler")
-	if err := os.MkdirAll(jugglerDir, 0755); err != nil {
-		t.Fatalf("failed to create .juggler dir: %v", err)
+	juggleDir := filepath.Join(tmpDir, ".juggle")
+	if err := os.MkdirAll(juggleDir, 0755); err != nil {
+		t.Fatalf("failed to create .juggle dir: %v", err)
 	}
 
 	// Create a session (no ACs at any level)
@@ -193,9 +193,9 @@ func TestExportRalph_NoGlobalACs(t *testing.T) {
 // TestExportRalph_OnlyRepoACs tests export with only repo-level ACs
 func TestExportRalph_OnlyRepoACs(t *testing.T) {
 	tmpDir := t.TempDir()
-	jugglerDir := filepath.Join(tmpDir, ".juggler")
-	if err := os.MkdirAll(jugglerDir, 0755); err != nil {
-		t.Fatalf("failed to create .juggler dir: %v", err)
+	juggleDir := filepath.Join(tmpDir, ".juggle")
+	if err := os.MkdirAll(juggleDir, 0755); err != nil {
+		t.Fatalf("failed to create .juggle dir: %v", err)
 	}
 
 	// Set repo-level ACs only
@@ -255,9 +255,9 @@ func TestExportRalph_OnlyRepoACs(t *testing.T) {
 // TestExportRalph_OnlySessionACs tests export with only session-level ACs
 func TestExportRalph_OnlySessionACs(t *testing.T) {
 	tmpDir := t.TempDir()
-	jugglerDir := filepath.Join(tmpDir, ".juggler")
-	if err := os.MkdirAll(jugglerDir, 0755); err != nil {
-		t.Fatalf("failed to create .juggler dir: %v", err)
+	juggleDir := filepath.Join(tmpDir, ".juggle")
+	if err := os.MkdirAll(juggleDir, 0755); err != nil {
+		t.Fatalf("failed to create .juggle dir: %v", err)
 	}
 
 	// Create a session with ACs but no repo ACs

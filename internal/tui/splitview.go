@@ -920,7 +920,7 @@ func allBallsSameProject(balls []*session.Ball) bool {
 	}
 	firstProject := ""
 	for i, ball := range balls {
-		// Extract project prefix from ID (e.g., "juggler" from "juggler-5")
+		// Extract project prefix from ID (e.g., "juggle" from "juggle-5")
 		project := ball.FolderName()
 		if i == 0 {
 			firstProject = project

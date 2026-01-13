@@ -18,7 +18,7 @@ import (
 func createTestStandaloneBallModel(t *testing.T) StandaloneBallModel {
 	t.Helper()
 
-	tmpDir, err := os.MkdirTemp("", "juggler-tui-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-tui-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -114,7 +114,7 @@ func TestStandaloneBallFormVeryLongContext(t *testing.T) {
 
 // TestStandaloneBallFormRealConstructor tests using the actual NewStandaloneBallModel constructor.
 func TestStandaloneBallFormRealConstructor(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-tui-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-tui-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -133,7 +133,7 @@ func TestStandaloneBallFormRealConstructor(t *testing.T) {
 
 // TestStandaloneBallFormTypingLongContext tests typing long text into context field.
 func TestStandaloneBallFormTypingLongContext(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-tui-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-tui-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -152,7 +152,7 @@ func TestStandaloneBallFormTypingLongContext(t *testing.T) {
 func createTestSplitViewModel(t *testing.T) Model {
 	t.Helper()
 
-	tmpDir, err := os.MkdirTemp("", "juggler-tui-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-tui-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -321,9 +321,9 @@ func TestDependencySelectorWithBalls(t *testing.T) {
 	model := createTestSplitViewModel(t)
 	model.mode = dependencySelectorView
 	balls := []*session.Ball{
-		{ID: "juggler-1", Title: "First pending task", State: session.StatePending, Priority: session.PriorityMedium},
-		{ID: "juggler-2", Title: "Second in progress task", State: session.StateInProgress, Priority: session.PriorityHigh},
-		{ID: "juggler-3", Title: "Third blocked task", State: session.StateBlocked, Priority: session.PriorityLow},
+		{ID: "juggle-1", Title: "First pending task", State: session.StatePending, Priority: session.PriorityMedium},
+		{ID: "juggle-2", Title: "Second in progress task", State: session.StateInProgress, Priority: session.PriorityHigh},
+		{ID: "juggle-3", Title: "Third blocked task", State: session.StateBlocked, Priority: session.PriorityLow},
 	}
 	model.dependencySelectBalls = balls
 	model.dependencySelectIndex = 0
@@ -336,13 +336,13 @@ func TestDependencySelectorWithSelection(t *testing.T) {
 	model := createTestSplitViewModel(t)
 	model.mode = dependencySelectorView
 	balls := []*session.Ball{
-		{ID: "juggler-1", Title: "First pending task", State: session.StatePending, Priority: session.PriorityMedium},
-		{ID: "juggler-2", Title: "Second in progress task", State: session.StateInProgress, Priority: session.PriorityHigh},
-		{ID: "juggler-3", Title: "Third blocked task", State: session.StateBlocked, Priority: session.PriorityLow},
+		{ID: "juggle-1", Title: "First pending task", State: session.StatePending, Priority: session.PriorityMedium},
+		{ID: "juggle-2", Title: "Second in progress task", State: session.StateInProgress, Priority: session.PriorityHigh},
+		{ID: "juggle-3", Title: "Third blocked task", State: session.StateBlocked, Priority: session.PriorityLow},
 	}
 	selectedActive := make(map[string]bool)
-	selectedActive["juggler-1"] = true
-	selectedActive["juggler-3"] = true
+	selectedActive["juggle-1"] = true
+	selectedActive["juggle-3"] = true
 
 	model.dependencySelectBalls = balls
 	model.dependencySelectIndex = 1
@@ -365,26 +365,26 @@ func TestBallsPanelWithBalls(t *testing.T) {
 	model.activePanel = BallsPanel
 	model.balls = []*session.Ball{
 		{
-			ID:       "juggler-1",
+			ID:       "juggle-1",
 			Title:    "First pending task",
 			State:    session.StatePending,
 			Priority: session.PriorityLow,
 		},
 		{
-			ID:       "juggler-2",
+			ID:       "juggle-2",
 			Title:    "Second in progress task",
 			State:    session.StateInProgress,
 			Priority: session.PriorityMedium,
 		},
 		{
-			ID:            "juggler-3",
+			ID:            "juggle-3",
 			Title:         "Third blocked task",
 			State:         session.StateBlocked,
 			BlockedReason: "Waiting for dependencies",
 			Priority:      session.PriorityHigh,
 		},
 		{
-			ID:       "juggler-4",
+			ID:       "juggle-4",
 			Title:    "Fourth complete task",
 			State:    session.StateComplete,
 			Priority: session.PriorityUrgent,
@@ -402,10 +402,10 @@ func TestBallsPanelWithPriorityColumn(t *testing.T) {
 	model.activePanel = BallsPanel
 	model.showPriorityColumn = true
 	model.balls = []*session.Ball{
-		{ID: "juggler-1", Title: "Low priority task", State: session.StatePending, Priority: session.PriorityLow},
-		{ID: "juggler-2", Title: "Medium priority task", State: session.StateInProgress, Priority: session.PriorityMedium},
-		{ID: "juggler-3", Title: "High priority task", State: session.StateBlocked, Priority: session.PriorityHigh},
-		{ID: "juggler-4", Title: "Urgent task", State: session.StateComplete, Priority: session.PriorityUrgent},
+		{ID: "juggle-1", Title: "Low priority task", State: session.StatePending, Priority: session.PriorityLow},
+		{ID: "juggle-2", Title: "Medium priority task", State: session.StateInProgress, Priority: session.PriorityMedium},
+		{ID: "juggle-3", Title: "High priority task", State: session.StateBlocked, Priority: session.PriorityHigh},
+		{ID: "juggle-4", Title: "Urgent task", State: session.StateComplete, Priority: session.PriorityUrgent},
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 1
@@ -419,9 +419,9 @@ func TestBallsPanelWithTagsColumn(t *testing.T) {
 	model.activePanel = BallsPanel
 	model.showTagsColumn = true
 	model.balls = []*session.Ball{
-		{ID: "juggler-1", Title: "Tagged task one", State: session.StatePending, Tags: []string{"feature", "backend"}},
-		{ID: "juggler-2", Title: "Tagged task two", State: session.StateInProgress, Tags: []string{"bugfix", "ui"}},
-		{ID: "juggler-3", Title: "Task with many tags", State: session.StateBlocked, Tags: []string{"docs", "refactor", "testing"}},
+		{ID: "juggle-1", Title: "Tagged task one", State: session.StatePending, Tags: []string{"feature", "backend"}},
+		{ID: "juggle-2", Title: "Tagged task two", State: session.StateInProgress, Tags: []string{"bugfix", "ui"}},
+		{ID: "juggle-3", Title: "Task with many tags", State: session.StateBlocked, Tags: []string{"docs", "refactor", "testing"}},
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 2
@@ -436,19 +436,19 @@ func TestBallsPanelWithTestsColumn(t *testing.T) {
 	model.showTestsColumn = true
 	model.balls = []*session.Ball{
 		{
-			ID:                   "juggler-1",
+			ID:                   "juggle-1",
 			Title:                "Task with no tests",
 			State:                session.StatePending,
 			AcceptanceCriteria:   []string{},
 		},
 		{
-			ID:                   "juggler-2",
+			ID:                   "juggle-2",
 			Title:                "Task with some tests",
 			State:                session.StateInProgress,
 			AcceptanceCriteria:   []string{"AC 1: Test X", "AC 2: Test Y"},
 		},
 		{
-			ID:                   "juggler-3",
+			ID:                   "juggle-3",
 			Title:                "Task with many tests",
 			State:                session.StateBlocked,
 			AcceptanceCriteria:   []string{"AC 1", "AC 2", "AC 3", "AC 4", "AC 5"},
@@ -469,7 +469,7 @@ func TestBallsPanelMultipleColumns(t *testing.T) {
 	model.showTestsColumn = true
 	model.balls = []*session.Ball{
 		{
-			ID:                   "juggler-1",
+			ID:                   "juggle-1",
 			Title:                "First complex task",
 			State:                session.StatePending,
 			Priority:             session.PriorityHigh,
@@ -477,7 +477,7 @@ func TestBallsPanelMultipleColumns(t *testing.T) {
 			AcceptanceCriteria:   []string{"AC 1", "AC 2"},
 		},
 		{
-			ID:                   "juggler-2",
+			ID:                   "juggle-2",
 			Title:                "Second complex task",
 			State:                session.StateInProgress,
 			Priority:             session.PriorityMedium,
@@ -497,9 +497,9 @@ func TestBallsPanelSortByID(t *testing.T) {
 	model.activePanel = BallsPanel
 	model.sortOrder = SortByIDASC
 	model.balls = []*session.Ball{
-		{ID: "juggler-3", Title: "Third task", State: session.StatePending},
-		{ID: "juggler-1", Title: "First task", State: session.StateInProgress},
-		{ID: "juggler-2", Title: "Second task", State: session.StateBlocked},
+		{ID: "juggle-3", Title: "Third task", State: session.StatePending},
+		{ID: "juggle-1", Title: "First task", State: session.StateInProgress},
+		{ID: "juggle-2", Title: "Second task", State: session.StateBlocked},
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 0
@@ -514,10 +514,10 @@ func TestBallsPanelSortByPriority(t *testing.T) {
 	model.sortOrder = SortByPriority
 	model.showPriorityColumn = true
 	model.balls = []*session.Ball{
-		{ID: "juggler-1", Title: "Low priority", State: session.StatePending, Priority: session.PriorityLow},
-		{ID: "juggler-4", Title: "Urgent task", State: session.StateInProgress, Priority: session.PriorityUrgent},
-		{ID: "juggler-2", Title: "Medium priority", State: session.StateBlocked, Priority: session.PriorityMedium},
-		{ID: "juggler-3", Title: "High priority", State: session.StateComplete, Priority: session.PriorityHigh},
+		{ID: "juggle-1", Title: "Low priority", State: session.StatePending, Priority: session.PriorityLow},
+		{ID: "juggle-4", Title: "Urgent task", State: session.StateInProgress, Priority: session.PriorityUrgent},
+		{ID: "juggle-2", Title: "Medium priority", State: session.StateBlocked, Priority: session.PriorityMedium},
+		{ID: "juggle-3", Title: "High priority", State: session.StateComplete, Priority: session.PriorityHigh},
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 0
@@ -531,19 +531,19 @@ func TestBallsPanelWithBlockedReason(t *testing.T) {
 	model.activePanel = BallsPanel
 	model.balls = []*session.Ball{
 		{
-			ID:            "juggler-1",
+			ID:            "juggle-1",
 			Title:         "Blocked by dependency",
 			State:         session.StateBlocked,
-			BlockedReason: "Waiting for juggler-2 to complete",
+			BlockedReason: "Waiting for juggle-2 to complete",
 		},
 		{
-			ID:            "juggler-2",
+			ID:            "juggle-2",
 			Title:         "Blocked by external event",
 			State:         session.StateBlocked,
 			BlockedReason: "Awaiting API credentials from DevOps",
 		},
 		{
-			ID:       "juggler-3",
+			ID:       "juggle-3",
 			Title:    "In progress task",
 			State:    session.StateInProgress,
 		},
@@ -560,21 +560,21 @@ func TestBallsPanelWithDependencies(t *testing.T) {
 	model.activePanel = BallsPanel
 	model.balls = []*session.Ball{
 		{
-			ID:       "juggler-1",
+			ID:       "juggle-1",
 			Title:    "Task with no deps",
 			State:    session.StatePending,
 		},
 		{
-			ID:        "juggler-2",
+			ID:        "juggle-2",
 			Title:     "Task with dependencies",
 			State:     session.StatePending,
-			DependsOn: []string{"juggler-1"},
+			DependsOn: []string{"juggle-1"},
 		},
 		{
-			ID:        "juggler-3",
+			ID:        "juggle-3",
 			Title:     "Task with multiple deps",
 			State:     session.StateInProgress,
-			DependsOn: []string{"juggler-1", "juggler-2"},
+			DependsOn: []string{"juggle-1", "juggle-2"},
 		},
 	}
 	model.filteredBalls = model.balls
@@ -619,7 +619,7 @@ func TestActivityLogViewEmpty(t *testing.T) {
 	model.bottomPaneMode = BottomPaneActivity
 	model.activityLog = make([]ActivityEntry, 0)
 	model.balls = append(model.balls, &session.Ball{
-		ID:    "juggler-1",
+		ID:    "juggle-1",
 		Title: "Sample ball",
 		State: session.StatePending,
 	})
@@ -637,12 +637,12 @@ func TestActivityLogViewWithEntries(t *testing.T) {
 	model.activityLog = []ActivityEntry{
 		{Time: fixedTime.Add(0), Message: "Balls loaded"},
 		{Time: fixedTime.Add(1 * time.Second), Message: "Sessions loaded"},
-		{Time: fixedTime.Add(2 * time.Second), Message: "Ball juggler-1 selected"},
+		{Time: fixedTime.Add(2 * time.Second), Message: "Ball juggle-1 selected"},
 		{Time: fixedTime.Add(3 * time.Second), Message: "Activity log refreshed"},
 	}
 
 	model.balls = append(model.balls, &session.Ball{
-		ID:    "juggler-1",
+		ID:    "juggle-1",
 		Title: "Sample ball",
 		State: session.StatePending,
 	})
@@ -657,7 +657,7 @@ func TestBallDetailView(t *testing.T) {
 	model.bottomPaneMode = BottomPaneDetail
 
 	model.balls = append(model.balls, &session.Ball{
-		ID:        "juggler-1",
+		ID:        "juggle-1",
 		Title:     "Fix authentication bug",
 		State:     session.StateInProgress,
 		Priority:  session.PriorityHigh,
@@ -684,7 +684,7 @@ func TestSplitBottomPane(t *testing.T) {
 	}
 
 	model.balls = append(model.balls, &session.Ball{
-		ID:        "juggler-1",
+		ID:        "juggle-1",
 		Title:     "Add test coverage",
 		State:     session.StateInProgress,
 		Priority:  session.PriorityMedium,
@@ -710,7 +710,7 @@ func TestCyclingBottomPaneModes(t *testing.T) {
 	}
 
 	model.balls = append(model.balls, &session.Ball{
-		ID:    "juggler-1",
+		ID:    "juggle-1",
 		Title: "Test ball",
 		State: session.StatePending,
 	})
@@ -734,7 +734,7 @@ func TestActivityLogScrolling(t *testing.T) {
 	}
 
 	model.balls = append(model.balls, &session.Ball{
-		ID:    "juggler-1",
+		ID:    "juggle-1",
 		Title: "Test ball",
 		State: session.StatePending,
 	})
@@ -756,7 +756,7 @@ func TestDetailViewScrolling(t *testing.T) {
 		"context and acceptance criteria that may be quite lengthy."
 
 	model.balls = append(model.balls, &session.Ball{
-		ID:        "juggler-1",
+		ID:        "juggle-1",
 		Title:     "Long context ball",
 		State:     session.StateInProgress,
 		Priority:  session.PriorityHigh,
@@ -786,7 +786,7 @@ func TestAgentOutputPanelVisible(t *testing.T) {
 	}
 
 	model.balls = append(model.balls, &session.Ball{
-		ID:    "juggler-1",
+		ID:    "juggle-1",
 		Title: "Test ball",
 		State: session.StatePending,
 	})
@@ -813,7 +813,7 @@ func TestAgentOutputPanelExpanded(t *testing.T) {
 	}
 
 	model.balls = append(model.balls, &session.Ball{
-		ID:    "juggler-1",
+		ID:    "juggle-1",
 		Title: "Test ball",
 		State: session.StatePending,
 	})
@@ -823,7 +823,7 @@ func TestAgentOutputPanelExpanded(t *testing.T) {
 
 // TestConfirmDeleteListView tests the delete confirmation dialog in list view.
 func TestConfirmDeleteListView(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-tui-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-tui-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -836,8 +836,8 @@ func TestConfirmDeleteListView(t *testing.T) {
 
 	// Create balls
 	balls := []*session.Ball{
-		{ID: "juggler-1", Title: "Important task", State: session.StatePending, Priority: session.PriorityHigh},
-		{ID: "juggler-2", Title: "Another task", State: session.StateInProgress, Priority: session.PriorityMedium},
+		{ID: "juggle-1", Title: "Important task", State: session.StatePending, Priority: session.PriorityHigh},
+		{ID: "juggle-2", Title: "Another task", State: session.StateInProgress, Priority: session.PriorityMedium},
 	}
 	for _, ball := range balls {
 		if err := store.AppendBall(ball); err != nil {
@@ -901,7 +901,7 @@ func TestConfirmDeleteListView(t *testing.T) {
 
 // TestConfirmDeleteSplitView tests the delete confirmation dialog in split view.
 func TestConfirmDeleteSplitView(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-tui-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-tui-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -914,8 +914,8 @@ func TestConfirmDeleteSplitView(t *testing.T) {
 
 	// Create balls
 	balls := []*session.Ball{
-		{ID: "juggler-1", Title: "Critical bug fix", State: session.StateInProgress, Priority: session.PriorityHigh, Tags: []string{"bug", "urgent"}},
-		{ID: "juggler-2", Title: "Feature development", State: session.StatePending, Priority: session.PriorityMedium},
+		{ID: "juggle-1", Title: "Critical bug fix", State: session.StateInProgress, Priority: session.PriorityHigh, Tags: []string{"bug", "urgent"}},
+		{ID: "juggle-2", Title: "Feature development", State: session.StatePending, Priority: session.PriorityMedium},
 	}
 	for _, ball := range balls {
 		if err := store.AppendBall(ball); err != nil {
@@ -986,9 +986,9 @@ func TestConfirmAgentLaunchDialog(t *testing.T) {
 		Description: "Backend development tasks",
 	}
 	model.balls = []*session.Ball{
-		{ID: "juggler-1", Title: "Implement API endpoint", State: session.StatePending},
-		{ID: "juggler-2", Title: "Add database migration", State: session.StatePending},
-		{ID: "juggler-3", Title: "Write unit tests", State: session.StatePending},
+		{ID: "juggle-1", Title: "Implement API endpoint", State: session.StatePending},
+		{ID: "juggle-2", Title: "Add database migration", State: session.StatePending},
+		{ID: "juggle-3", Title: "Write unit tests", State: session.StatePending},
 	}
 	model.filteredBalls = model.balls
 
@@ -1049,8 +1049,8 @@ func TestCatwalkStatusBarBallsPanel(t *testing.T) {
 	model := createTestSplitViewModel(t)
 	model.activePanel = BallsPanel
 	model.balls = []*session.Ball{
-		{ID: "juggler-1", Title: "First task", State: session.StatePending},
-		{ID: "juggler-2", Title: "Second task", State: session.StateInProgress},
+		{ID: "juggle-1", Title: "First task", State: session.StatePending},
+		{ID: "juggle-2", Title: "Second task", State: session.StateInProgress},
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 0
@@ -1071,7 +1071,7 @@ func TestCatwalkStatusBarActivityPanel(t *testing.T) {
 	}
 
 	model.balls = []*session.Ball{
-		{ID: "juggler-1", Title: "Sample ball", State: session.StatePending},
+		{ID: "juggle-1", Title: "Sample ball", State: session.StatePending},
 	}
 	model.filteredBalls = model.balls
 	catwalk.RunModel(t, "testdata/status_bar_activity_panel", model)
@@ -1086,9 +1086,9 @@ func TestCatwalkStatusBarWithFilters(t *testing.T) {
 	model.filterStates["blocked"] = false
 
 	model.balls = []*session.Ball{
-		{ID: "juggler-1", Title: "Pending task", State: session.StatePending},
-		{ID: "juggler-2", Title: "In progress task", State: session.StateInProgress},
-		{ID: "juggler-3", Title: "Complete task", State: session.StateComplete},
+		{ID: "juggle-1", Title: "Pending task", State: session.StatePending},
+		{ID: "juggle-2", Title: "In progress task", State: session.StateInProgress},
+		{ID: "juggle-3", Title: "Complete task", State: session.StateComplete},
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 0
@@ -1122,8 +1122,8 @@ func TestCatwalkStatusBarWithSearchQuery(t *testing.T) {
 	model.panelSearchQuery = "backend"
 
 	model.balls = []*session.Ball{
-		{ID: "juggler-1", Title: "Backend API task", State: session.StatePending},
-		{ID: "juggler-2", Title: "Frontend task", State: session.StateInProgress},
+		{ID: "juggle-1", Title: "Backend API task", State: session.StatePending},
+		{ID: "juggle-2", Title: "Frontend task", State: session.StateInProgress},
 	}
 	model.filteredBalls = model.balls[:1] // Only first ball matches filter
 	model.cursor = 0
@@ -1176,7 +1176,7 @@ func TestInputBallViewEdit(t *testing.T) {
 	model.mode = inputBallView
 	model.inputAction = actionEdit
 	model.editingBall = &session.Ball{
-		ID:       "juggler-5",
+		ID:       "juggle-5",
 		Title:    "Original title for the ball",
 		State:    session.StatePending,
 		Priority: session.PriorityHigh,
@@ -1191,7 +1191,7 @@ func TestInputBlockedView(t *testing.T) {
 	model := createTestSplitViewModel(t)
 	model.mode = inputBlockedView
 	model.editingBall = &session.Ball{
-		ID:       "juggler-7",
+		ID:       "juggle-7",
 		Title:    "Task that needs to be blocked",
 		State:    session.StateInProgress,
 		Priority: session.PriorityMedium,
@@ -1206,7 +1206,7 @@ func TestInputBlockedViewWithReason(t *testing.T) {
 	model := createTestSplitViewModel(t)
 	model.mode = inputBlockedView
 	model.editingBall = &session.Ball{
-		ID:       "juggler-7",
+		ID:       "juggle-7",
 		Title:    "Task that needs to be blocked",
 		State:    session.StateInProgress,
 		Priority: session.PriorityMedium,
@@ -1291,7 +1291,7 @@ func TestInputTagViewEmpty(t *testing.T) {
 	model := createTestSplitViewModel(t)
 	model.mode = inputTagView
 	model.editingBall = &session.Ball{
-		ID:       "juggler-3",
+		ID:       "juggle-3",
 		Title:    "Task without tags",
 		State:    session.StatePending,
 		Tags:     []string{},
@@ -1306,7 +1306,7 @@ func TestInputTagViewWithTags(t *testing.T) {
 	model := createTestSplitViewModel(t)
 	model.mode = inputTagView
 	model.editingBall = &session.Ball{
-		ID:       "juggler-3",
+		ID:       "juggle-3",
 		Title:    "Task with multiple tags",
 		State:    session.StatePending,
 		Tags:     []string{"backend", "api", "authentication"},
@@ -1321,7 +1321,7 @@ func TestInputTagViewTyping(t *testing.T) {
 	model := createTestSplitViewModel(t)
 	model.mode = inputTagView
 	model.editingBall = &session.Ball{
-		ID:       "juggler-3",
+		ID:       "juggle-3",
 		Title:    "Task with some tags",
 		State:    session.StatePending,
 		Tags:     []string{"backend", "api"},
@@ -1336,7 +1336,7 @@ func TestInputTagViewRemove(t *testing.T) {
 	model := createTestSplitViewModel(t)
 	model.mode = inputTagView
 	model.editingBall = &session.Ball{
-		ID:       "juggler-3",
+		ID:       "juggle-3",
 		Title:    "Task with tags to remove",
 		State:    session.StatePending,
 		Tags:     []string{"backend", "obsolete", "api"},
@@ -1424,7 +1424,7 @@ func TestHistoryViewSelectedDetails(t *testing.T) {
 			BallsComplete: 3,
 			BallsBlocked:  0,
 			BallsTotal:    3,
-			OutputFile:    "/tmp/juggler/backend-work/last_output.txt",
+			OutputFile:    "/tmp/juggle/backend-work/last_output.txt",
 		},
 		{
 			ID:             "1736779271000000000",
@@ -1439,7 +1439,7 @@ func TestHistoryViewSelectedDetails(t *testing.T) {
 			BallsBlocked:   1,
 			BallsTotal:     3,
 			TotalWaitTime:  30 * time.Second,
-			OutputFile:     "/tmp/juggler/frontend-tasks/last_output.txt",
+			OutputFile:     "/tmp/juggle/frontend-tasks/last_output.txt",
 		},
 		{
 			ID:            "1736775671000000000",
@@ -1478,18 +1478,18 @@ func TestHistoryOutputView(t *testing.T) {
 			Result:        "complete",
 			BallsComplete: 3,
 			BallsTotal:    3,
-			OutputFile:    "/tmp/juggler/backend-work/last_output.txt",
+			OutputFile:    "/tmp/juggle/backend-work/last_output.txt",
 		},
 	}
 	model.historyCursor = 0
 	model.historyOutputOffset = 0
 	model.historyOutput = `Starting agent loop for session: backend-work
-Iteration 1/10: Processing ball juggler-1
-Ball juggler-1 completed successfully
-Iteration 2/10: Processing ball juggler-2
-Ball juggler-2 completed successfully
-Iteration 3/10: Processing ball juggler-3
-Ball juggler-3 completed successfully
+Iteration 1/10: Processing ball juggle-1
+Ball juggle-1 completed successfully
+Iteration 2/10: Processing ball juggle-2
+Ball juggle-2 completed successfully
+Iteration 3/10: Processing ball juggle-3
+Ball juggle-3 completed successfully
 All balls complete. Exiting agent loop.
 Total iterations: 3
 Total time: 15m0s`
@@ -1514,7 +1514,7 @@ func TestHistoryOutputViewScrolling(t *testing.T) {
 			Result:        "complete",
 			BallsComplete: 10,
 			BallsTotal:    10,
-			OutputFile:    "/tmp/juggler/backend-work/last_output.txt",
+			OutputFile:    "/tmp/juggle/backend-work/last_output.txt",
 		},
 	}
 	model.historyCursor = 0
@@ -1523,8 +1523,8 @@ func TestHistoryOutputViewScrolling(t *testing.T) {
 	var lines []string
 	lines = append(lines, "Starting agent loop for session: backend-work")
 	for i := 1; i <= 25; i++ {
-		lines = append(lines, fmt.Sprintf("Iteration %d/10: Processing ball juggler-%d", i, i))
-		lines = append(lines, fmt.Sprintf("Ball juggler-%d completed successfully", i))
+		lines = append(lines, fmt.Sprintf("Iteration %d/10: Processing ball juggle-%d", i, i))
+		lines = append(lines, fmt.Sprintf("Ball juggle-%d completed successfully", i))
 	}
 	lines = append(lines, "All balls complete. Exiting agent loop.")
 	lines = append(lines, "Total iterations: 10")
@@ -1573,7 +1573,7 @@ func TestBallFormSessionSelection(t *testing.T) {
 
 // TestBallFormDependencySelector tests the dependency selection dropdown.
 func TestBallFormDependencySelector(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-tui-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-tui-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -1586,9 +1586,9 @@ func TestBallFormDependencySelector(t *testing.T) {
 
 	// Create some balls that can be selected as dependencies
 	balls := []*session.Ball{
-		{ID: "juggler-1", Title: "First pending task", State: session.StatePending, Priority: session.PriorityMedium},
-		{ID: "juggler-2", Title: "Second in progress task", State: session.StateInProgress, Priority: session.PriorityHigh},
-		{ID: "juggler-3", Title: "Third blocked task", State: session.StateBlocked, Priority: session.PriorityLow},
+		{ID: "juggle-1", Title: "First pending task", State: session.StatePending, Priority: session.PriorityMedium},
+		{ID: "juggle-2", Title: "Second in progress task", State: session.StateInProgress, Priority: session.PriorityHigh},
+		{ID: "juggle-3", Title: "Third blocked task", State: session.StateBlocked, Priority: session.PriorityLow},
 	}
 	for _, ball := range balls {
 		if err := store.AppendBall(ball); err != nil {
@@ -1628,7 +1628,7 @@ func TestBallFormDependencySelector(t *testing.T) {
 
 // TestBallFormDependencySelection tests selecting dependencies in the selector.
 func TestBallFormDependencySelection(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggler-tui-test-*")
+	tmpDir, err := os.MkdirTemp("", "juggle-tui-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -1640,9 +1640,9 @@ func TestBallFormDependencySelection(t *testing.T) {
 	}
 
 	balls := []*session.Ball{
-		{ID: "juggler-1", Title: "First pending task", State: session.StatePending, Priority: session.PriorityMedium},
-		{ID: "juggler-2", Title: "Second in progress task", State: session.StateInProgress, Priority: session.PriorityHigh},
-		{ID: "juggler-3", Title: "Third blocked task", State: session.StateBlocked, Priority: session.PriorityLow},
+		{ID: "juggle-1", Title: "First pending task", State: session.StatePending, Priority: session.PriorityMedium},
+		{ID: "juggle-2", Title: "Second in progress task", State: session.StateInProgress, Priority: session.PriorityHigh},
+		{ID: "juggle-3", Title: "Third blocked task", State: session.StateBlocked, Priority: session.PriorityLow},
 	}
 	for _, ball := range balls {
 		if err := store.AppendBall(ball); err != nil {
@@ -1664,7 +1664,7 @@ func TestBallFormDependencySelection(t *testing.T) {
 
 	// Pre-select some dependencies
 	selectedActive := make(map[string]bool)
-	selectedActive["juggler-1"] = true
+	selectedActive["juggle-1"] = true
 
 	model := StandaloneBallModel{
 		store:                  store,
@@ -1718,8 +1718,8 @@ func TestEdgeCaseNarrowTerminal(t *testing.T) {
 	model := createNarrowTerminalModel(t)
 	model.activePanel = BallsPanel
 	model.balls = []*session.Ball{
-		{ID: "juggler-1", Title: "A task with a fairly long title", State: session.StatePending, Priority: session.PriorityMedium},
-		{ID: "juggler-2", Title: "Another task here", State: session.StateInProgress, Priority: session.PriorityHigh},
+		{ID: "juggle-1", Title: "A task with a fairly long title", State: session.StatePending, Priority: session.PriorityMedium},
+		{ID: "juggle-2", Title: "Another task here", State: session.StateInProgress, Priority: session.PriorityHigh},
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 0
@@ -1746,8 +1746,8 @@ func TestEdgeCaseWideTerminal(t *testing.T) {
 	model := createWideTerminalModel(t)
 	model.activePanel = BallsPanel
 	model.balls = []*session.Ball{
-		{ID: "juggler-1", Title: "First task", State: session.StatePending, Priority: session.PriorityMedium, Tags: []string{"feature", "backend"}},
-		{ID: "juggler-2", Title: "Second task", State: session.StateInProgress, Priority: session.PriorityHigh, Tags: []string{"bug"}},
+		{ID: "juggle-1", Title: "First task", State: session.StatePending, Priority: session.PriorityMedium, Tags: []string{"feature", "backend"}},
+		{ID: "juggle-2", Title: "Second task", State: session.StateInProgress, Priority: session.PriorityHigh, Tags: []string{"bug"}},
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 0
@@ -1764,7 +1764,7 @@ func TestEdgeCaseWideTerminalWithAllColumns(t *testing.T) {
 	model.activePanel = BallsPanel
 	model.balls = []*session.Ball{
 		{
-			ID:                 "juggler-1",
+			ID:                 "juggle-1",
 			Title:              "A comprehensive task with many details",
 			State:              session.StatePending,
 			Priority:           session.PriorityUrgent,
@@ -1772,7 +1772,7 @@ func TestEdgeCaseWideTerminalWithAllColumns(t *testing.T) {
 			AcceptanceCriteria: []string{"AC 1", "AC 2", "AC 3", "AC 4"},
 		},
 		{
-			ID:                 "juggler-2",
+			ID:                 "juggle-2",
 			Title:              "Another detailed task",
 			State:              session.StateInProgress,
 			Priority:           session.PriorityHigh,
@@ -1794,9 +1794,9 @@ func TestEdgeCaseShortTerminal(t *testing.T) {
 	model := createShortTerminalModel(t)
 	model.activePanel = BallsPanel
 	model.balls = []*session.Ball{
-		{ID: "juggler-1", Title: "First task", State: session.StatePending},
-		{ID: "juggler-2", Title: "Second task", State: session.StateInProgress},
-		{ID: "juggler-3", Title: "Third task", State: session.StateBlocked},
+		{ID: "juggle-1", Title: "First task", State: session.StatePending},
+		{ID: "juggle-2", Title: "Second task", State: session.StateInProgress},
+		{ID: "juggle-3", Title: "Third task", State: session.StateBlocked},
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 0
@@ -1828,16 +1828,16 @@ func TestEdgeCaseLongTitleTruncation(t *testing.T) {
 	model.activePanel = BallsPanel
 	model.balls = []*session.Ball{
 		{
-			ID:    "juggler-1",
+			ID:    "juggle-1",
 			Title: "This is an extremely long title that should definitely be truncated because it exceeds the available space in the balls panel",
 			State: session.StatePending,
 		},
 		{
-			ID:    "juggler-2",
+			ID:    "juggle-2",
 			Title: "Another very long title that goes on and on and on and should also be truncated to fit the display",
 			State: session.StateInProgress,
 		},
-		{ID: "juggler-3", Title: "Short title", State: session.StateBlocked},
+		{ID: "juggle-3", Title: "Short title", State: session.StateBlocked},
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 0
@@ -1851,11 +1851,11 @@ func TestEdgeCaseLongTitleInNarrowTerminal(t *testing.T) {
 	model.activePanel = BallsPanel
 	model.balls = []*session.Ball{
 		{
-			ID:    "juggler-1",
+			ID:    "juggle-1",
 			Title: "This is a long title that must be truncated in narrow view",
 			State: session.StatePending,
 		},
-		{ID: "juggler-2", Title: "Short", State: session.StateInProgress},
+		{ID: "juggle-2", Title: "Short", State: session.StateInProgress},
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 0
@@ -2014,9 +2014,9 @@ func TestEdgeCaseCursorAtFirstBall(t *testing.T) {
 	model := createTestSplitViewModel(t)
 	model.activePanel = BallsPanel
 	model.balls = []*session.Ball{
-		{ID: "juggler-1", Title: "First ball", State: session.StatePending},
-		{ID: "juggler-2", Title: "Second ball", State: session.StateInProgress},
-		{ID: "juggler-3", Title: "Third ball", State: session.StateBlocked},
+		{ID: "juggle-1", Title: "First ball", State: session.StatePending},
+		{ID: "juggle-2", Title: "Second ball", State: session.StateInProgress},
+		{ID: "juggle-3", Title: "Third ball", State: session.StateBlocked},
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 0 // At the top
@@ -2029,9 +2029,9 @@ func TestEdgeCaseCursorAtLastBall(t *testing.T) {
 	model := createTestSplitViewModel(t)
 	model.activePanel = BallsPanel
 	model.balls = []*session.Ball{
-		{ID: "juggler-1", Title: "First ball", State: session.StatePending},
-		{ID: "juggler-2", Title: "Second ball", State: session.StateInProgress},
-		{ID: "juggler-3", Title: "Third ball", State: session.StateBlocked},
+		{ID: "juggle-1", Title: "First ball", State: session.StatePending},
+		{ID: "juggle-2", Title: "Second ball", State: session.StateInProgress},
+		{ID: "juggle-3", Title: "Third ball", State: session.StateBlocked},
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 2 // At the end
@@ -2073,7 +2073,7 @@ func TestEdgeCaseSingleBall(t *testing.T) {
 	model := createTestSplitViewModel(t)
 	model.activePanel = BallsPanel
 	model.balls = []*session.Ball{
-		{ID: "juggler-only", Title: "The only ball", State: session.StatePending},
+		{ID: "juggle-only", Title: "The only ball", State: session.StatePending},
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 0
@@ -2096,7 +2096,7 @@ func TestEdgeCaseSingleSession(t *testing.T) {
 
 // Helper functions for creating test data
 func formatBallID(i int) string {
-	return fmt.Sprintf("juggler-%d", i)
+	return fmt.Sprintf("juggle-%d", i)
 }
 
 func formatBallTitle(i int) string {

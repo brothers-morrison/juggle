@@ -9,12 +9,12 @@ import (
 	"github.com/ohare93/juggle/internal/session"
 )
 
-// setupTestProject creates a temp directory with a .juggler directory
+// setupTestProject creates a temp directory with a .juggle directory
 func setupTestProject(t *testing.T) (string, func()) {
 	tmpDir := t.TempDir()
-	jugglerDir := filepath.Join(tmpDir, ".juggler")
-	if err := os.MkdirAll(jugglerDir, 0755); err != nil {
-		t.Fatalf("failed to create .juggler dir: %v", err)
+	juggleDir := filepath.Join(tmpDir, ".juggle")
+	if err := os.MkdirAll(juggleDir, 0755); err != nil {
+		t.Fatalf("failed to create .juggle dir: %v", err)
 	}
 
 	// Set up global options
@@ -442,7 +442,7 @@ func TestConfigDelaySet(t *testing.T) {
 	// Verify via session package
 	opts := session.ConfigOptions{
 		ConfigHome:     tmpDir,
-		JugglerDirName: ".juggler",
+		JuggleDirName: ".juggle",
 	}
 	delayMinutes, fuzz, err := session.GetGlobalIterationDelayWithOptions(opts)
 	if err != nil {
@@ -472,7 +472,7 @@ func TestConfigDelaySet_WithFuzz(t *testing.T) {
 	// Verify via session package
 	opts := session.ConfigOptions{
 		ConfigHome:     tmpDir,
-		JugglerDirName: ".juggler",
+		JuggleDirName: ".juggle",
 	}
 	delayMinutes, fuzz, err := session.GetGlobalIterationDelayWithOptions(opts)
 	if err != nil {
@@ -498,7 +498,7 @@ func TestConfigDelayClear(t *testing.T) {
 	// First set a delay
 	opts := session.ConfigOptions{
 		ConfigHome:     tmpDir,
-		JugglerDirName: ".juggler",
+		JuggleDirName: ".juggle",
 	}
 	if err := session.UpdateGlobalIterationDelayWithOptions(opts, 5, 1); err != nil {
 		t.Fatalf("failed to set initial delay: %v", err)
@@ -550,7 +550,7 @@ func TestConfigDelayShow_WithValues(t *testing.T) {
 	// Set a delay
 	opts := session.ConfigOptions{
 		ConfigHome:     tmpDir,
-		JugglerDirName: ".juggler",
+		JuggleDirName: ".juggle",
 	}
 	if err := session.UpdateGlobalIterationDelayWithOptions(opts, 5, 2); err != nil {
 		t.Fatalf("failed to set delay: %v", err)

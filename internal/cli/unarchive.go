@@ -16,8 +16,8 @@ var unarchiveCmd = &cobra.Command{
 The ball will be added back to the active balls list and removed from the archive.
 
 Examples:
-  juggle unarchive juggler-5    # Restore ball juggler-5 from archive
-  juggle juggler-5 unarchive    # Alternative syntax`,
+  juggle unarchive juggle-5    # Restore ball juggle-5 from archive
+  juggle juggle-5 unarchive    # Alternative syntax`,
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: CompleteArchivedBallIDs,
 	RunE:              runUnarchive,

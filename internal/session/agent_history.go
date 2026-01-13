@@ -155,15 +155,15 @@ func NewAgentHistoryStoreWithConfig(projectDir string, config StoreConfig) (*Age
 
 // historyFilePath returns the path to the agent history file
 func (s *AgentHistoryStore) historyFilePath() string {
-	return filepath.Join(s.projectDir, s.config.JugglerDirName, historyFile)
+	return filepath.Join(s.projectDir, s.config.JuggleDirName, historyFile)
 }
 
 // AppendRecord appends a run record to the history file
 func (s *AgentHistoryStore) AppendRecord(record *AgentRunRecord) error {
-	// Ensure .juggler directory exists
-	jugglerDir := filepath.Join(s.projectDir, s.config.JugglerDirName)
-	if err := os.MkdirAll(jugglerDir, 0755); err != nil {
-		return fmt.Errorf("failed to create juggler directory: %w", err)
+	// Ensure .juggle directory exists
+	juggleDir := filepath.Join(s.projectDir, s.config.JuggleDirName)
+	if err := os.MkdirAll(juggleDir, 0755); err != nil {
+		return fmt.Errorf("failed to create juggle directory: %w", err)
 	}
 
 	// Marshal record to JSON
