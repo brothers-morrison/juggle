@@ -1,0 +1,181 @@
+# Test: Model size field cycling with arrow keys
+# This tests cycling through model size options: (default), small, medium, large
+
+# Initial view - model size field focused with default selected
+run
+----
+-- view:
+Create New Ball␤
+␤
+Context: (empty)␤
+Title: (empty)␤
+␤
+Acceptance Criteria: (none - consider adding criteria)␤
+  + (add criterion)␤
+␤
+Tags: (none)␤
+Session: (none)␤
+Model Size:  (default)  small medium large␤
+Depends On: (none)␤
+␤
+Navigation: ↑/↓ fields • Tab next • ←/→ options • Enter next/add AC • Ctrl+S save • Esc cancel␤
+
+# Cycle right to small
+run
+key right
+----
+-- view:
+Create New Ball␤
+␤
+Context: (empty)␤
+Title: (empty)␤
+␤
+Acceptance Criteria: (none - consider adding criteria)␤
+  + (add criterion)␤
+␤
+Tags: (none)␤
+Session: (none)␤
+Model Size: (default)  small  medium large␤
+Depends On: (none)␤
+␤
+Navigation: ↑/↓ fields • Tab next • ←/→ options • Enter next/add AC • Ctrl+S save • Esc cancel␤
+
+# Cycle right to medium
+run
+key right
+----
+-- view:
+Create New Ball␤
+␤
+Context: (empty)␤
+Title: (empty)␤
+␤
+Acceptance Criteria: (none - consider adding criteria)␤
+  + (add criterion)␤
+␤
+Tags: (none)␤
+Session: (none)␤
+Model Size: (default) small  medium  large␤
+Depends On: (none)␤
+␤
+Navigation: ↑/↓ fields • Tab next • ←/→ options • Enter next/add AC • Ctrl+S save • Esc cancel␤
+
+# Cycle right to large
+run
+key right
+----
+-- view:
+Create New Ball␤
+␤
+Context: (empty)␤
+Title: (empty)␤
+␤
+Acceptance Criteria: (none - consider adding criteria)␤
+  + (add criterion)␤
+␤
+Tags: (none)␤
+Session: (none)␤
+Model Size: (default) small medium  large ␤
+Depends On: (none)␤
+␤
+Navigation: ↑/↓ fields • Tab next • ←/→ options • Enter next/add AC • Ctrl+S save • Esc cancel␤
+
+# Cycle right should NOT wrap (stays at large)
+run
+key right
+----
+-- view:
+Create New Ball␤
+␤
+Context: (empty)␤
+Title: (empty)␤
+␤
+Acceptance Criteria: (none - consider adding criteria)␤
+  + (add criterion)␤
+␤
+Tags: (none)␤
+Session: (none)␤
+Model Size: (default) small medium  large ␤
+Depends On: (none)␤
+␤
+Navigation: ↑/↓ fields • Tab next • ←/→ options • Enter next/add AC • Ctrl+S save • Esc cancel␤
+
+# Cycle left back to medium
+run
+key left
+----
+-- view:
+Create New Ball␤
+␤
+Context: (empty)␤
+Title: (empty)␤
+␤
+Acceptance Criteria: (none - consider adding criteria)␤
+  + (add criterion)␤
+␤
+Tags: (none)␤
+Session: (none)␤
+Model Size: (default) small  medium  large␤
+Depends On: (none)␤
+␤
+Navigation: ↑/↓ fields • Tab next • ←/→ options • Enter next/add AC • Ctrl+S save • Esc cancel␤
+
+# Cycle left to small
+run
+key left
+----
+-- view:
+Create New Ball␤
+␤
+Context: (empty)␤
+Title: (empty)␤
+␤
+Acceptance Criteria: (none - consider adding criteria)␤
+  + (add criterion)␤
+␤
+Tags: (none)␤
+Session: (none)␤
+Model Size: (default)  small  medium large␤
+Depends On: (none)␤
+␤
+Navigation: ↑/↓ fields • Tab next • ←/→ options • Enter next/add AC • Ctrl+S save • Esc cancel␤
+
+# Cycle left to default
+run
+key left
+----
+-- view:
+Create New Ball␤
+␤
+Context: (empty)␤
+Title: (empty)␤
+␤
+Acceptance Criteria: (none - consider adding criteria)␤
+  + (add criterion)␤
+␤
+Tags: (none)␤
+Session: (none)␤
+Model Size:  (default)  small medium large␤
+Depends On: (none)␤
+␤
+Navigation: ↑/↓ fields • Tab next • ←/→ options • Enter next/add AC • Ctrl+S save • Esc cancel␤
+
+# Cycle left should NOT wrap (stays at default)
+run
+key left
+----
+-- view:
+Create New Ball␤
+␤
+Context: (empty)␤
+Title: (empty)␤
+␤
+Acceptance Criteria: (none - consider adding criteria)␤
+  + (add criterion)␤
+␤
+Tags: (none)␤
+Session: (none)␤
+Model Size:  (default)  small medium large␤
+Depends On: (none)␤
+␤
+Navigation: ↑/↓ fields • Tab next • ←/→ options • Enter next/add AC • Ctrl+S save • Esc cancel␤

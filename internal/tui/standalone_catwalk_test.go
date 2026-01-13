@@ -1535,6 +1535,153 @@ func TestHistoryOutputViewScrolling(t *testing.T) {
 	catwalk.RunModel(t, "testdata/history_output_view_scrolling", model)
 }
 
+// TestBallFormPriorityCycling tests priority field cycling with left/right arrow keys in the legacy ball form.
+func TestBallFormPriorityCycling(t *testing.T) {
+	model := createTestSplitViewModel(t)
+	model.mode = inputBallFormView
+	model.pendingBallIntent = "Test task for priority cycling"
+	model.pendingBallFormField = 0 // priority field
+	model.pendingBallPriority = 1  // medium
+	model.pendingBallSession = 0   // none
+	model.pendingBallTags = ""
+	catwalk.RunModel(t, "testdata/ball_form_priority_cycling", model)
+}
+
+// TestBallFormModelSizeCycling tests model size field cycling with left/right arrow keys.
+func TestBallFormModelSizeCycling(t *testing.T) {
+	model := createTestStandaloneBallModel(t)
+	// Navigate to model size field (field 5: context=0, intent=1, AC=2, tags=3, session=4, modelSize=5)
+	model.pendingBallFormField = 5
+	model.pendingBallModelSize = 0 // default
+	catwalk.RunModel(t, "testdata/ball_form_model_size_cycling", model)
+}
+
+// TestBallFormSessionSelection tests session selection with left/right arrow keys.
+func TestBallFormSessionSelection(t *testing.T) {
+	model := createTestStandaloneBallModel(t)
+	// Add some sessions for selection
+	model.sessions = []*session.JuggleSession{
+		{ID: "backend-work", Description: "Backend development tasks"},
+		{ID: "frontend-tasks", Description: "Frontend improvements"},
+		{ID: "devops", Description: "DevOps work"},
+	}
+	// Navigate to session field (field 4: context=0, intent=1, AC=2, tags=3, session=4)
+	model.pendingBallFormField = 4
+	model.pendingBallSession = 0 // none
+	catwalk.RunModel(t, "testdata/ball_form_session_selection", model)
+}
+
+// TestBallFormDependencySelector tests the dependency selection dropdown.
+func TestBallFormDependencySelector(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "juggler-tui-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	t.Cleanup(func() { os.RemoveAll(tmpDir) })
+
+	store, err := session.NewStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+
+	// Create some balls that can be selected as dependencies
+	balls := []*session.Ball{
+		{ID: "juggler-1", Title: "First pending task", State: session.StatePending, Priority: session.PriorityMedium},
+		{ID: "juggler-2", Title: "Second in progress task", State: session.StateInProgress, Priority: session.PriorityHigh},
+		{ID: "juggler-3", Title: "Third blocked task", State: session.StateBlocked, Priority: session.PriorityLow},
+	}
+	for _, ball := range balls {
+		if err := store.AppendBall(ball); err != nil {
+			t.Fatalf("failed to append ball: %v", err)
+		}
+	}
+
+	ti := textinput.New()
+	ti.CharLimit = 256
+	ti.Width = 60
+	ti.Placeholder = "What is this ball about? (50 char recommended)"
+	ti.Blur()
+
+	ta := textarea.New()
+	ta.Placeholder = "Background context for this task"
+	ta.CharLimit = 2000
+	ta.SetWidth(60)
+	ta.SetHeight(1)
+	ta.ShowLineNumbers = false
+	ta.Focus()
+
+	model := StandaloneBallModel{
+		store:                  store,
+		textInput:              ti,
+		contextInput:           ta,
+		pendingBallPriority:    1,
+		fileAutocomplete:       NewAutocompleteState(store.ProjectDir()),
+		width:                  80,
+		height:                 24,
+		inDependencySelector:   true,
+		dependencySelectBalls:  balls,
+		dependencySelectIndex:  0,
+		dependencySelectActive: make(map[string]bool),
+	}
+	catwalk.RunModel(t, "testdata/ball_form_dependency_selector", model)
+}
+
+// TestBallFormDependencySelection tests selecting dependencies in the selector.
+func TestBallFormDependencySelection(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "juggler-tui-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	t.Cleanup(func() { os.RemoveAll(tmpDir) })
+
+	store, err := session.NewStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+
+	balls := []*session.Ball{
+		{ID: "juggler-1", Title: "First pending task", State: session.StatePending, Priority: session.PriorityMedium},
+		{ID: "juggler-2", Title: "Second in progress task", State: session.StateInProgress, Priority: session.PriorityHigh},
+		{ID: "juggler-3", Title: "Third blocked task", State: session.StateBlocked, Priority: session.PriorityLow},
+	}
+	for _, ball := range balls {
+		if err := store.AppendBall(ball); err != nil {
+			t.Fatalf("failed to append ball: %v", err)
+		}
+	}
+
+	ti := textinput.New()
+	ti.CharLimit = 256
+	ti.Width = 60
+	ti.Blur()
+
+	ta := textarea.New()
+	ta.CharLimit = 2000
+	ta.SetWidth(60)
+	ta.SetHeight(1)
+	ta.ShowLineNumbers = false
+	ta.Focus()
+
+	// Pre-select some dependencies
+	selectedActive := make(map[string]bool)
+	selectedActive["juggler-1"] = true
+
+	model := StandaloneBallModel{
+		store:                  store,
+		textInput:              ti,
+		contextInput:           ta,
+		pendingBallPriority:    1,
+		fileAutocomplete:       NewAutocompleteState(store.ProjectDir()),
+		width:                  80,
+		height:                 24,
+		inDependencySelector:   true,
+		dependencySelectBalls:  balls,
+		dependencySelectIndex:  1, // cursor on second item
+		dependencySelectActive: selectedActive,
+	}
+	catwalk.RunModel(t, "testdata/ball_form_dependency_selection", model)
+}
+
 // Helper functions for creating test data
 func formatBallID(i int) string {
 	return fmt.Sprintf("juggler-%d", i)
