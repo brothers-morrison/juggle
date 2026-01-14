@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"syscall"
 	"time"
+
+	"github.com/gofrs/flock"
 )
 
 const lockFile = "agent.lock"
@@ -24,7 +25,7 @@ type SessionLock struct {
 	projectDir string
 	config     StoreConfig
 	lockPath   string
-	file       *os.File
+	fileLock   *flock.Flock
 }
 
 // AcquireSessionLock attempts to acquire an exclusive lock on the session.
@@ -47,22 +48,21 @@ func (s *SessionStore) AcquireSessionLock(sessionID string) (*SessionLock, error
 
 	lockPath := filepath.Join(s.sessionPath(sessionID), lockFile)
 
-	// Open/create the lock file
-	file, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0644)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open lock file: %w", err)
-	}
+	// Create the flock
+	fileLock := flock.New(lockPath)
 
 	// Try to acquire exclusive lock (non-blocking)
-	err = syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+	locked, err := fileLock.TryLock()
 	if err != nil {
-		file.Close()
+		return nil, fmt.Errorf("failed to acquire lock: %w", err)
+	}
+	if !locked {
 		// Lock is held by another process - read lock info
 		info, _ := readLockInfo(lockPath)
 		return nil, NewSessionLockedError(sessionID, info)
 	}
 
-	// Write lock info
+	// Write lock info to a separate info file
 	hostname, _ := os.Hostname()
 	info := LockInfo{
 		PID:       os.Getpid(),
@@ -72,22 +72,13 @@ func (s *SessionStore) AcquireSessionLock(sessionID string) (*SessionLock, error
 
 	data, err := json.Marshal(info)
 	if err != nil {
-		syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
-		file.Close()
-		os.Remove(lockPath)
+		fileLock.Unlock()
 		return nil, fmt.Errorf("failed to marshal lock info: %w", err)
 	}
 
-	// Truncate and write
-	if err := file.Truncate(0); err != nil {
-		syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
-		file.Close()
-		return nil, fmt.Errorf("failed to truncate lock file: %w", err)
-	}
-
-	if _, err := file.WriteAt(data, 0); err != nil {
-		syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
-		file.Close()
+	// Write lock info to the lock file
+	if err := os.WriteFile(lockPath, data, 0644); err != nil {
+		fileLock.Unlock()
 		return nil, fmt.Errorf("failed to write lock info: %w", err)
 	}
 
@@ -96,32 +87,26 @@ func (s *SessionStore) AcquireSessionLock(sessionID string) (*SessionLock, error
 		projectDir: s.projectDir,
 		config:     s.config,
 		lockPath:   lockPath,
-		file:       file,
+		fileLock:   fileLock,
 	}, nil
 }
 
 // Release releases the session lock
 func (l *SessionLock) Release() error {
-	if l.file == nil {
+	if l.fileLock == nil {
 		return nil // Already released
 	}
 
 	// Release the flock
-	err := syscall.Flock(int(l.file.Fd()), syscall.LOCK_UN)
-	if err != nil {
-		l.file.Close()
+	if err := l.fileLock.Unlock(); err != nil {
 		return fmt.Errorf("failed to release lock: %w", err)
 	}
 
-	// Close the file
-	if err := l.file.Close(); err != nil {
-		return fmt.Errorf("failed to close lock file: %w", err)
-	}
+	// Remove the lock file (best-effort cleanup - file may already be gone or
+	// we may lack permissions, but the OS-level lock is already released)
+	_ = os.Remove(l.lockPath)
 
-	// Remove the lock file
-	os.Remove(l.lockPath)
-
-	l.file = nil
+	l.fileLock = nil
 	return nil
 }
 
@@ -129,24 +114,28 @@ func (l *SessionLock) Release() error {
 func (s *SessionStore) IsLocked(sessionID string) (bool, *LockInfo) {
 	lockPath := filepath.Join(s.sessionPath(sessionID), lockFile)
 
-	// Try to open and lock the file
-	file, err := os.OpenFile(lockPath, os.O_RDWR, 0644)
-	if err != nil {
-		// File doesn't exist or can't be opened - not locked
+	// Check if lock file exists
+	if _, err := os.Stat(lockPath); os.IsNotExist(err) {
 		return false, nil
 	}
-	defer file.Close()
 
 	// Try to acquire lock (non-blocking)
-	err = syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+	fileLock := flock.New(lockPath)
+	locked, err := fileLock.TryLock()
 	if err != nil {
+		// Error acquiring lock - assume it's locked
+		info, _ := readLockInfo(lockPath)
+		return true, info
+	}
+
+	if !locked {
 		// Lock is held by another process
 		info, _ := readLockInfo(lockPath)
 		return true, info
 	}
 
 	// We got the lock - release it immediately
-	syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
+	fileLock.Unlock()
 	return false, nil
 }
 

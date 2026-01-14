@@ -8,7 +8,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"syscall"
+
+	"github.com/gofrs/flock"
 )
 
 const (
@@ -105,26 +106,21 @@ func NewStoreWithConfig(projectDir string, config StoreConfig) (*Store, error) {
 }
 
 // acquireFileLock acquires an exclusive lock on a file
-// Returns the file handle and cleanup function. The cleanup function should be deferred.
-func acquireFileLock(path string) (*os.File, func(), error) {
+// Returns the flock and cleanup function. The cleanup function should be deferred.
+func acquireFileLock(path string) (*flock.Flock, func(), error) {
 	lockPath := path + ".lock"
-	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0644)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to open lock file %s: %w", lockPath, err)
-	}
+	fileLock := flock.New(lockPath)
 
 	// Acquire exclusive lock (blocking)
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
-		f.Close()
+	if err := fileLock.Lock(); err != nil {
 		return nil, nil, fmt.Errorf("failed to acquire lock on %s: %w", lockPath, err)
 	}
 
 	cleanup := func() {
-		syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
-		f.Close()
+		fileLock.Unlock()
 	}
 
-	return f, cleanup, nil
+	return fileLock, cleanup, nil
 }
 
 // AppendBall adds a new ball to the JSONL file
