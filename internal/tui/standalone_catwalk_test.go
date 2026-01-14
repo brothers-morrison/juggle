@@ -997,24 +997,6 @@ func TestConfirmDeleteSplitView(t *testing.T) {
 	catwalk.RunModel(t, "testdata/confirm_delete_split_view", model)
 }
 
-// TestConfirmAgentLaunchDialog tests the agent launch confirmation dialog.
-func TestConfirmAgentLaunchDialog(t *testing.T) {
-	model := createTestSplitViewModel(t)
-	model.mode = confirmAgentLaunch
-	model.selectedSession = &session.JuggleSession{
-		ID:          "session-1",
-		Description: "Backend development tasks",
-	}
-	model.balls = []*session.Ball{
-		{ID: "juggle-1", Title: "Implement API endpoint", State: session.StatePending},
-		{ID: "juggle-2", Title: "Add database migration", State: session.StatePending},
-		{ID: "juggle-3", Title: "Write unit tests", State: session.StatePending},
-	}
-	model.filteredBalls = model.balls
-
-	catwalk.RunModel(t, "testdata/confirm_agent_launch", model)
-}
-
 // TestConfirmAgentCancelDialog tests the agent cancel confirmation dialog.
 func TestConfirmAgentCancelDialog(t *testing.T) {
 	model := createTestSplitViewModel(t)

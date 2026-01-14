@@ -30,7 +30,6 @@ const (
 	dependencySelectorView         // Dependency selector for ball creation/editing
 	confirmSplitDelete             // Delete confirmation in split view
 	panelSearchView                // Search/filter within current panel
-	confirmAgentLaunch             // Agent launch confirmation
 	confirmAgentCancel             // Agent cancel confirmation
 	inputAcceptanceCriteriaView    // Multi-line acceptance criteria input (legacy)
 	inputBallFormView              // Full ball form with all fields (legacy)

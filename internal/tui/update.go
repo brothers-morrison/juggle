@@ -59,11 +59,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleSplitConfirmDelete(msg)
 		}
 
-		// Handle agent launch confirmation
-		if m.mode == confirmAgentLaunch {
-			return m.handleAgentLaunchConfirm(msg)
-		}
-
 		// Handle agent cancel confirmation
 		if m.mode == confirmAgentCancel {
 			return m.handleAgentCancelConfirm(msg)
@@ -710,13 +705,6 @@ func (m Model) handleSplitViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "P":
 		// Toggle between local project only and all projects
 		return m.handleToggleLocalOnly()
-
-	case "A":
-		// Launch agent for selected session
-		if m.activePanel == SessionsPanel {
-			return m.handleLaunchAgent()
-		}
-		return m, nil
 
 	case "o":
 		// Toggle sort order for balls

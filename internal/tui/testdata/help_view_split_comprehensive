@@ -21,12 +21,11 @@ Sessions Panel␤
   j/k              Navigate sessions (auto-selects)␤
   Enter            Select session and go to balls panel␤
   a                Add new session␤
-  A                Launch agent for selected session␤
   e                Edit session description␤
   d                Delete session (with confirmation)␤
   /                Filter sessions␤
   Ctrl+U           Clear filter␤
 ␤
-  ↓ 69 more lines below␤
+  ↓ 68 more lines below␤
 ␤
 j/k = scroll | ? or Esc = close help🛇

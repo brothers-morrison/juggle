@@ -40,8 +40,6 @@ func (m Model) View() string {
 		return m.renderDependencySelectorView()
 	case confirmSplitDelete:
 		return m.renderSplitConfirmDelete()
-	case confirmAgentLaunch:
-		return m.renderAgentLaunchConfirm()
 	case confirmAgentCancel:
 		return m.renderAgentCancelConfirm()
 	case panelSearchView:
@@ -301,47 +299,6 @@ func (m Model) renderSplitConfirmDelete() string {
 	prompt := lipgloss.NewStyle().
 		Bold(true).
 		Render("Delete? [y/N]")
-	b.WriteString(prompt + "\n\n")
-
-	help := lipgloss.NewStyle().
-		Faint(true).
-		Render("y = confirm | n/Esc = cancel")
-	b.WriteString(help)
-
-	return b.String()
-}
-
-// renderAgentLaunchConfirm renders the agent launch confirmation dialog
-func (m Model) renderAgentLaunchConfirm() string {
-	var b strings.Builder
-
-	title := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("3")). // Yellow
-		Render("Launch Agent")
-	b.WriteString(title + "\n\n")
-
-	// Show session details
-	if m.selectedSession != nil {
-		b.WriteString(fmt.Sprintf("Session: %s\n", m.selectedSession.ID))
-		if m.selectedSession.Description != "" {
-			b.WriteString(fmt.Sprintf("Description: %s\n", m.selectedSession.Description))
-		}
-		ballCount := m.countBallsForSession(m.selectedSession.ID)
-		b.WriteString(fmt.Sprintf("Balls: %d\n", ballCount))
-	}
-
-	b.WriteString(fmt.Sprintf("\nIterations: %d (default)\n", 10))
-	b.WriteString("\n")
-
-	info := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("8")). // Gray
-		Render("The agent will work on pending balls in this session.")
-	b.WriteString(info + "\n\n")
-
-	prompt := lipgloss.NewStyle().
-		Bold(true).
-		Render("Launch agent? [y/N]")
 	b.WriteString(prompt + "\n\n")
 
 	help := lipgloss.NewStyle().
@@ -711,7 +668,6 @@ func (m Model) renderSplitHelpView() string {
 				{"j/k", "Navigate sessions (auto-selects)"},
 				{"Enter", "Select session and go to balls panel"},
 				{"a", "Add new session"},
-				{"A", "Launch agent for selected session"},
 				{"e", "Edit session description"},
 				{"d", "Delete session (with confirmation)"},
 				{"/", "Filter sessions"},
@@ -786,7 +742,6 @@ func (m Model) renderSplitHelpView() string {
 		{
 			title: "Agent Control",
 			items: []helpItem{
-				{"A", "Launch agent for selected session"},
 				{"X", "Cancel running agent (with confirmation)"},
 				{"O", "Toggle agent output visibility"},
 				{"H", "View agent run history"},

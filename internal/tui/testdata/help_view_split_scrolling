@@ -10,7 +10,6 @@ Juggle TUI - Complete Keybindings Reference␤
   j/k              Navigate sessions (auto-selects)␤
   Enter            Select session and go to balls panel␤
   a                Add new session␤
-  A                Launch agent for selected session␤
   e                Edit session description␤
   d                Delete session (with confirmation)␤
   /                Filter sessions␤
@@ -27,6 +26,6 @@ Balls Panel - State Changes (s + key)␤
 ␤
 Balls Panel - Toggle Filters (t + key)␤
                                       ␤
-  ↓ 60 more lines below␤
+  ↓ 59 more lines below␤
 ␤
 j/k = scroll | ? or Esc = close help🛇
