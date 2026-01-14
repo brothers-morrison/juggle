@@ -266,11 +266,11 @@ func TestModelSelectionInAgentLoop(t *testing.T) {
 	// Create a session
 	env.CreateSession(t, "test-session", "Test session for model selection")
 
-	// Create balls with different model preferences
+	// Create ball with model preference in pending state (workable)
 	ball1 := env.CreateBall(t, "Ball 1 - small", session.PriorityMedium)
 	ball1.Tags = []string{"test-session"}
 	ball1.ModelSize = session.ModelSizeSmall
-	ball1.State = session.StateComplete // Complete so loop exits
+	ball1.State = session.StatePending // Pending so loop runs
 	store := env.GetStore(t)
 	if err := store.UpdateBall(ball1); err != nil {
 		t.Fatalf("Failed to update ball1: %v", err)
@@ -279,8 +279,7 @@ func TestModelSelectionInAgentLoop(t *testing.T) {
 	// Setup mock runner
 	mock := agent.NewMockRunner(
 		&agent.RunResult{
-			Output:   "Working...\n<promise>COMPLETE</promise>\nDone.",
-			Complete: true,
+			Output: "Working on the ball...",
 		},
 	)
 	agent.SetRunner(mock)
@@ -293,7 +292,7 @@ func TestModelSelectionInAgentLoop(t *testing.T) {
 		MaxIterations: 1,
 		Trust:         false,
 		IterDelay:     0,
-		// Note: No Model set, so it should auto-select
+		// Note: No Model set, so it should auto-select based on ball preference
 	}
 
 	result, err := cli.RunAgentLoop(config)
@@ -301,20 +300,20 @@ func TestModelSelectionInAgentLoop(t *testing.T) {
 		t.Fatalf("Agent run failed: %v", err)
 	}
 
-	// Verify the loop completed
-	if !result.Complete {
-		t.Error("Expected result.Complete=true")
-	}
-
 	// Verify runner was called (model selection happened)
 	if len(mock.Calls) != 1 {
 		t.Errorf("Expected 1 call to runner, got %d", len(mock.Calls))
 	}
 
-	// The model should have been auto-selected
-	// Since ball1 is complete, with no active balls, it defaults to opus
-	if mock.Calls[0].Model != "opus" {
-		t.Errorf("Expected model=opus (default when no active balls), got %s", mock.Calls[0].Model)
+	// Verify 1 iteration ran
+	if result.Iterations != 1 {
+		t.Errorf("Expected 1 iteration, got %d", result.Iterations)
+	}
+
+	// The model should have been auto-selected based on ball1's preference
+	// ball1 prefers ModelSizeSmall, which maps to "haiku"
+	if mock.Calls[0].Model != "haiku" {
+		t.Errorf("Expected model=haiku (from ball preference), got %s", mock.Calls[0].Model)
 	}
 }
 

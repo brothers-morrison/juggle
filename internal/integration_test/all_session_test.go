@@ -13,9 +13,11 @@ import (
 )
 
 // allSessionMockRunner wraps MockRunner and adds progress to "_all" session
+// and marks balls as complete when COMPLETE is returned
 type allSessionMockRunner struct {
 	mock         *agent.MockRunner
 	sessionStore *session.SessionStore
+	store        *session.Store
 }
 
 func (p *allSessionMockRunner) Run(opts agent.RunOptions) (*agent.RunResult, error) {
@@ -23,7 +25,20 @@ func (p *allSessionMockRunner) Run(opts agent.RunOptions) (*agent.RunResult, err
 	entry := fmt.Sprintf("[Iteration %d] Agent work completed\n", p.mock.NextIndex+1)
 	_ = p.sessionStore.AppendProgress("_all", entry)
 
-	return p.mock.Run(opts)
+	result, err := p.mock.Run(opts)
+
+	// If result is Complete, mark all balls as complete
+	if result != nil && result.Complete && p.store != nil {
+		balls, _ := p.store.LoadBalls()
+		for _, ball := range balls {
+			if ball.State != session.StateComplete {
+				ball.State = session.StateComplete
+				_ = p.store.UpdateBall(ball)
+			}
+		}
+	}
+
+	return result, err
 }
 
 // TestAllMetaSession_AgentRunSkipsSessionVerification tests that "all" meta-session
@@ -32,15 +47,15 @@ func TestAllMetaSession_AgentRunSkipsSessionVerification(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	// Create a ball WITHOUT any session tag (just in the repo)
+	// Create a pending ball WITHOUT any session tag (just in the repo)
 	ball := env.CreateBall(t, "Untagged ball", session.PriorityMedium)
-	ball.State = session.StateComplete // Make it complete so COMPLETE signal works
+	ball.State = session.StatePending // Pending ball for agent to work on
 	store := env.GetStore(t)
 	if err := store.UpdateBall(ball); err != nil {
 		t.Fatalf("Failed to update ball: %v", err)
 	}
 
-	// Setup mock runner that updates progress to "_all" session
+	// Setup mock runner that updates progress to "_all" session and marks balls complete
 	sessionStore := env.GetSessionStore(t)
 	mock := agent.NewMockRunner(
 		&agent.RunResult{
@@ -51,6 +66,7 @@ func TestAllMetaSession_AgentRunSkipsSessionVerification(t *testing.T) {
 	agent.SetRunner(&allSessionMockRunner{
 		mock:         mock,
 		sessionStore: sessionStore,
+		store:        store,
 	})
 	defer agent.ResetRunner()
 

@@ -283,6 +283,30 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 		overloadRetryMinutes, _ = session.GetGlobalOverloadRetryMinutesWithOptions(GetConfigOptions())
 	}
 
+	// Pre-loop check: is there any work the agent can do?
+	// Exit early if all balls are blocked (need human intervention) or no actionable balls exist
+	workable, blockedCount, totalCount, err := countWorkableBalls(config.ProjectDir, config.SessionID, config.BallID)
+	if err != nil {
+		return nil, fmt.Errorf("checking workable balls: %w", err)
+	}
+
+	if workable == 0 {
+		result.EndedAt = time.Now()
+		result.Iterations = 0
+		result.BallsTotal = totalCount
+		result.BallsBlocked = blockedCount
+
+		if blockedCount > 0 {
+			fmt.Fprintf(os.Stderr, "⏸ No actionable work: %d ball(s) blocked, waiting for human intervention\n", blockedCount)
+			result.Blocked = true
+			return result, nil
+		}
+		// No balls at all (all complete/on_hold/researched or truly empty)
+		fmt.Fprintf(os.Stderr, "✓ No actionable balls in session\n")
+		result.Complete = true
+		return result, nil
+	}
+
 	for iteration := 1; iteration <= config.MaxIterations; iteration++ {
 		result.Iterations = iteration
 
@@ -1170,6 +1194,77 @@ func generateAgentPrompt(projectDir, sessionID string, debug bool, ballID string
 	}
 
 	return string(output), nil
+}
+
+// countWorkableBalls returns counts of balls the agent can work on (pending/in_progress) vs blocked
+// This is used for pre-loop validation to exit early when there's no actionable work
+// Balls in complete/researched/on_hold states are excluded (same as agent export)
+// If ballID is specified, only counts that specific ball
+// "all" is a special meta-session that includes all balls in the repo without filtering by tag
+func countWorkableBalls(projectDir, sessionID, ballID string) (workable, blocked, total int, err error) {
+	// Load config
+	config, err := LoadConfigForCommand()
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Create store
+	store, err := NewStoreForCommand(projectDir)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("failed to create store: %w", err)
+	}
+
+	// Discover projects
+	projects, err := DiscoverProjectsForCommand(config, store)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("failed to discover projects: %w", err)
+	}
+
+	// Load all balls
+	allBalls, err := session.LoadAllBalls(projects)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("failed to load balls: %w", err)
+	}
+
+	// "all" is a meta-session that means "all balls in repo"
+	isAllSession := sessionID == "all"
+
+	// Count balls with session tag (or all balls if using "all" meta-session)
+	for _, ball := range allBalls {
+		var matchesSession bool
+		if isAllSession {
+			matchesSession = true // Include all balls
+		} else {
+			for _, tag := range ball.Tags {
+				if tag == sessionID {
+					matchesSession = true
+					break
+				}
+			}
+		}
+
+		if matchesSession {
+			// If filtering by specific ball, skip others
+			if ballID != "" && ball.ID != ballID && ball.ShortID() != ballID {
+				continue
+			}
+
+			// Skip states that are excluded from agent exports
+			// (complete, researched, on_hold are not shown to the agent)
+			switch ball.State {
+			case session.StateComplete, session.StateResearched, session.StateOnHold:
+				continue
+			case session.StatePending, session.StateInProgress:
+				workable++
+				total++
+			case session.StateBlocked:
+				blocked++
+				total++
+			}
+		}
+	}
+
+	return workable, blocked, total, nil
 }
 
 // checkBallsTerminal returns counts of balls in terminal states (complete or blocked) and total balls for session

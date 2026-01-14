@@ -61,11 +61,12 @@ func TestOutputFormatting_SingleIteration_Complete(t *testing.T) {
 	defer CleanupTestEnv(t, env)
 
 	env.CreateSession(t, "test-session", "Test session")
+	sessionStore := env.GetSessionStore(t)
 
-	// Create a complete ball so COMPLETE signal exits
+	// Create a pending ball so agent loop runs
 	ball := env.CreateBall(t, "Test ball", session.PriorityMedium)
 	ball.Tags = []string{"test-session"}
-	ball.State = session.StateComplete
+	ball.State = session.StatePending
 	store := env.GetStore(t)
 	if err := store.UpdateBall(ball); err != nil {
 		t.Fatalf("Failed to update ball: %v", err)
@@ -77,13 +78,18 @@ func TestOutputFormatting_SingleIteration_Complete(t *testing.T) {
 			Complete: true,
 		},
 	)
-	agent.SetRunner(mock)
+	// Use progress updating mock so COMPLETE signal is accepted
+	agent.SetRunner(&outputProgressUpdatingMockRunner{
+		mock:         mock,
+		sessionStore: sessionStore,
+		sessionID:    "test-session",
+	})
 	defer agent.ResetRunner()
 
 	config := cli.AgentLoopConfig{
 		SessionID:     "test-session",
 		ProjectDir:    env.ProjectDir,
-		MaxIterations: 5,
+		MaxIterations: 1, // Single iteration for this test
 		Trust:         false,
 		IterDelay:     0,
 	}
@@ -93,11 +99,11 @@ func TestOutputFormatting_SingleIteration_Complete(t *testing.T) {
 	})
 
 	// Verify iteration header appears
-	if !strings.Contains(output, "Iteration 1/5") {
-		t.Errorf("Expected iteration header 'Iteration 1/5' in output:\n%s", output)
+	if !strings.Contains(output, "Iteration 1/1") {
+		t.Errorf("Expected iteration header 'Iteration 1/1' in output:\n%s", output)
 	}
 
-	// Verify no separator before first iteration (separator only between iterations)
+	// Verify no separator for single iteration (separator only between iterations)
 	if strings.Contains(output, iterationSeparator) {
 		t.Errorf("Expected no separator for single iteration, but found one in output:\n%s", output)
 	}
@@ -164,14 +170,14 @@ func TestOutputFormatting_MultipleIterations_Continue(t *testing.T) {
 	env.CreateSession(t, "test-session", "Test session")
 	sessionStore := env.GetSessionStore(t)
 
-	// Create balls pre-marked as complete so COMPLETE signal will exit
-	// (The test focuses on output formatting, not state validation)
+	// Create pending balls so agent loop runs
+	// (The test focuses on output formatting)
 	ball1 := env.CreateBall(t, "First ball", session.PriorityMedium)
 	ball1.Tags = []string{"test-session"}
-	ball1.State = session.StateComplete
+	ball1.State = session.StatePending
 	ball2 := env.CreateBall(t, "Second ball", session.PriorityMedium)
 	ball2.Tags = []string{"test-session"}
-	ball2.State = session.StateComplete
+	ball2.State = session.StatePending
 	store := env.GetStore(t)
 	if err := store.UpdateBall(ball1); err != nil {
 		t.Fatalf("Failed to update ball1: %v", err)
@@ -203,7 +209,7 @@ func TestOutputFormatting_MultipleIterations_Continue(t *testing.T) {
 	config := cli.AgentLoopConfig{
 		SessionID:     "test-session",
 		ProjectDir:    env.ProjectDir,
-		MaxIterations: 5,
+		MaxIterations: 2, // Limit to 2 iterations for this test
 		Trust:         false,
 		IterDelay:     0,
 	}
@@ -213,11 +219,11 @@ func TestOutputFormatting_MultipleIterations_Continue(t *testing.T) {
 	})
 
 	// Verify both iteration headers appear
-	if !strings.Contains(output, "Iteration 1/5") {
-		t.Errorf("Expected 'Iteration 1/5' in output:\n%s", output)
+	if !strings.Contains(output, "Iteration 1/2") {
+		t.Errorf("Expected 'Iteration 1/2' in output:\n%s", output)
 	}
-	if !strings.Contains(output, "Iteration 2/5") {
-		t.Errorf("Expected 'Iteration 2/5' in output:\n%s", output)
+	if !strings.Contains(output, "Iteration 2/2") {
+		t.Errorf("Expected 'Iteration 2/2' in output:\n%s", output)
 	}
 
 	// Verify separator between iterations (exactly one separator for two iterations)
@@ -355,10 +361,11 @@ func TestOutputFormatting_RateLimit(t *testing.T) {
 	defer CleanupTestEnv(t, env)
 
 	env.CreateSession(t, "test-session", "Test session")
+	sessionStore := env.GetSessionStore(t)
 
 	ball := env.CreateBall(t, "Test ball", session.PriorityMedium)
 	ball.Tags = []string{"test-session"}
-	ball.State = session.StateComplete
+	ball.State = session.StatePending
 	store := env.GetStore(t)
 	if err := store.UpdateBall(ball); err != nil {
 		t.Fatalf("Failed to update ball: %v", err)
@@ -371,17 +378,21 @@ func TestOutputFormatting_RateLimit(t *testing.T) {
 			RetryAfter:  0, // Immediate retry for test
 		},
 		&agent.RunResult{
-			Output:   "Success\n<promise>COMPLETE</promise>",
-			Complete: true,
+			Output: "Success",
 		},
 	)
-	agent.SetRunner(mock)
+	// Use progress updating mock so loop continues correctly
+	agent.SetRunner(&outputProgressUpdatingMockRunner{
+		mock:         mock,
+		sessionStore: sessionStore,
+		sessionID:    "test-session",
+	})
 	defer agent.ResetRunner()
 
 	config := cli.AgentLoopConfig{
 		SessionID:     "test-session",
 		ProjectDir:    env.ProjectDir,
-		MaxIterations: 5,
+		MaxIterations: 1, // Single iteration for this test
 		Trust:         false,
 		IterDelay:     0,
 	}
@@ -396,9 +407,9 @@ func TestOutputFormatting_RateLimit(t *testing.T) {
 	}
 
 	// Verify only ONE iteration header (rate limit retries same iteration)
-	iterCount := strings.Count(output, "Iteration 1/5")
+	iterCount := strings.Count(output, "Iteration 1/1")
 	if iterCount != 1 {
-		t.Errorf("Expected exactly 1 'Iteration 1/5' header (rate limit retries same iteration), got %d", iterCount)
+		t.Errorf("Expected exactly 1 'Iteration 1/1' header (rate limit retries same iteration), got %d", iterCount)
 	}
 
 	// Verify no separator (still iteration 1 after retry)
@@ -505,7 +516,7 @@ func TestOutputFormatting_Iterations_3(t *testing.T) {
 
 	ball := env.CreateBall(t, "Test ball", session.PriorityMedium)
 	ball.Tags = []string{"test-session"}
-	ball.State = session.StateComplete // Pre-complete so COMPLETE signal exits
+	ball.State = session.StatePending // Pending so loop runs
 	store := env.GetStore(t)
 	if err := store.UpdateBall(ball); err != nil {
 		t.Fatalf("Failed to update ball: %v", err)
@@ -527,7 +538,7 @@ func TestOutputFormatting_Iterations_3(t *testing.T) {
 	config := cli.AgentLoopConfig{
 		SessionID:     "test-session",
 		ProjectDir:    env.ProjectDir,
-		MaxIterations: 5,
+		MaxIterations: 3, // Limit to 3 iterations for this test
 		Trust:         false,
 		IterDelay:     0,
 	}
@@ -537,14 +548,14 @@ func TestOutputFormatting_Iterations_3(t *testing.T) {
 	})
 
 	// Verify all 3 iteration headers
-	if !strings.Contains(output, "Iteration 1/5") {
-		t.Errorf("Expected 'Iteration 1/5'")
+	if !strings.Contains(output, "Iteration 1/3") {
+		t.Errorf("Expected 'Iteration 1/3'")
 	}
-	if !strings.Contains(output, "Iteration 2/5") {
-		t.Errorf("Expected 'Iteration 2/5'")
+	if !strings.Contains(output, "Iteration 2/3") {
+		t.Errorf("Expected 'Iteration 2/3'")
 	}
-	if !strings.Contains(output, "Iteration 3/5") {
-		t.Errorf("Expected 'Iteration 3/5'")
+	if !strings.Contains(output, "Iteration 3/3") {
+		t.Errorf("Expected 'Iteration 3/3'")
 	}
 
 	// Verify 2 separators (between iterations 1-2 and 2-3)
