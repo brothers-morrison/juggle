@@ -54,6 +54,20 @@ release:
   draft: false
   prerelease: auto
 
+brews:
+  - name: juggle
+    repository:
+      owner: ohare93
+      name: tap
+    directory: Formula
+    homepage: https://github.com/ohare93/juggle
+    description: Task management CLI for autonomous AI agent loops
+    license: MIT
+    install: |
+      bin.install "juggle"
+    test: |
+      system "#{bin}/juggle", "--version"
+
 scoops:
   - name: juggle
     repository:
