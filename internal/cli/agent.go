@@ -285,7 +285,8 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 
 	// Pre-loop check: is there any work the agent can do?
 	// Exit early if all balls are blocked (need human intervention) or no actionable balls exist
-	workable, blockedCount, totalCount, err := countWorkableBalls(config.ProjectDir, config.SessionID, config.BallID)
+	// Exception: --ball or --interactive means human IS intervening, so blocked balls are workable
+	workable, blockedCount, totalCount, err := countWorkableBalls(config.ProjectDir, config.SessionID, config.BallID, config.Interactive)
 	if err != nil {
 		return nil, fmt.Errorf("checking workable balls: %w", err)
 	}
@@ -1200,8 +1201,9 @@ func generateAgentPrompt(projectDir, sessionID string, debug bool, ballID string
 // This is used for pre-loop validation to exit early when there's no actionable work
 // Balls in complete/researched/on_hold states are excluded (same as agent export)
 // If ballID is specified, only counts that specific ball
+// If interactive is true, blocked balls are treated as workable (human is present to intervene)
 // "all" is a special meta-session that includes all balls in the repo without filtering by tag
-func countWorkableBalls(projectDir, sessionID, ballID string) (workable, blocked, total int, err error) {
+func countWorkableBalls(projectDir, sessionID, ballID string, interactive bool) (workable, blocked, total int, err error) {
 	// Load config
 	config, err := LoadConfigForCommand()
 	if err != nil {
@@ -1258,7 +1260,13 @@ func countWorkableBalls(projectDir, sessionID, ballID string) (workable, blocked
 				workable++
 				total++
 			case session.StateBlocked:
-				blocked++
+				// If user is running interactively or explicitly targeted this ball,
+				// treat it as workable (they ARE the human intervention)
+				if interactive || (ballID != "" && (ball.ID == ballID || ball.ShortID() == ballID)) {
+					workable++
+				} else {
+					blocked++
+				}
 				total++
 			}
 		}
