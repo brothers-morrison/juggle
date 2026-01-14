@@ -260,6 +260,7 @@ func TestCountBallsByModel(t *testing.T) {
 
 // TestModelSelectionInAgentLoop tests model selection is called during agent loop
 func TestModelSelectionInAgentLoop(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -319,6 +320,7 @@ func TestModelSelectionInAgentLoop(t *testing.T) {
 
 // TestModelSelectionWithActiveBalls tests model is selected based on active ball preferences
 func TestModelSelectionWithActiveBalls(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -392,6 +394,7 @@ func TestModelSelectionWithActiveBalls(t *testing.T) {
 
 // TestModelSelectionWithExplicitFlag tests that explicit --model flag takes precedence
 func TestModelSelectionWithExplicitFlag(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 

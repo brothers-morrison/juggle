@@ -57,6 +57,7 @@ const iterationSeparator = "═════════════════�
 
 // TestOutputFormatting_SingleIteration_Complete verifies output formatting for single iteration with COMPLETE signal
 func TestOutputFormatting_SingleIteration_Complete(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -111,6 +112,7 @@ func TestOutputFormatting_SingleIteration_Complete(t *testing.T) {
 
 // TestOutputFormatting_SingleIteration_Blocked verifies output formatting for single iteration with BLOCKED signal
 func TestOutputFormatting_SingleIteration_Blocked(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -164,6 +166,7 @@ func TestOutputFormatting_SingleIteration_Blocked(t *testing.T) {
 
 // TestOutputFormatting_MultipleIterations_Continue verifies output formatting for multiple iterations with CONTINUE signals
 func TestOutputFormatting_MultipleIterations_Continue(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -240,6 +243,7 @@ func TestOutputFormatting_MultipleIterations_Continue(t *testing.T) {
 
 // TestOutputFormatting_MultipleIterations_MaxReached verifies output formatting when max iterations is reached
 func TestOutputFormatting_MultipleIterations_MaxReached(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -294,6 +298,7 @@ func TestOutputFormatting_MultipleIterations_MaxReached(t *testing.T) {
 
 // TestOutputFormatting_PrematureComplete verifies output formatting when COMPLETE is signaled prematurely
 func TestOutputFormatting_PrematureComplete(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -357,6 +362,7 @@ func TestOutputFormatting_PrematureComplete(t *testing.T) {
 
 // TestOutputFormatting_RateLimit verifies output formatting during rate limiting
 func TestOutputFormatting_RateLimit(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -420,6 +426,7 @@ func TestOutputFormatting_RateLimit(t *testing.T) {
 
 // TestOutputFormatting_Timeout verifies output formatting when iteration times out
 func TestOutputFormatting_Timeout(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -465,6 +472,7 @@ func TestOutputFormatting_Timeout(t *testing.T) {
 
 // TestOutputFormatting_Iterations_1 verifies output formatting with MaxIterations=1
 func TestOutputFormatting_Iterations_1(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -508,6 +516,7 @@ func TestOutputFormatting_Iterations_1(t *testing.T) {
 
 // TestOutputFormatting_Iterations_3 verifies output formatting with 3 iterations using CONTINUE then COMPLETE
 func TestOutputFormatting_Iterations_3(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -573,6 +582,7 @@ func TestOutputFormatting_Iterations_3(t *testing.T) {
 
 // TestOutputFormatting_Iterations_10 verifies output formatting with 10 iterations
 func TestOutputFormatting_Iterations_10(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 

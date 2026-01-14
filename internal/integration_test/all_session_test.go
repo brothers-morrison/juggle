@@ -44,6 +44,7 @@ func (p *allSessionMockRunner) Run(opts agent.RunOptions) (*agent.RunResult, err
 // TestAllMetaSession_AgentRunSkipsSessionVerification tests that "all" meta-session
 // doesn't require a session file to exist
 func TestAllMetaSession_AgentRunSkipsSessionVerification(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -142,6 +143,7 @@ func TestAllMetaSession_GeneratePromptIncludesAllBalls(t *testing.T) {
 // TestAllMetaSession_OutputDirectory tests that "all" session uses "_all" directory
 // for output files
 func TestAllMetaSession_OutputDirectory(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 

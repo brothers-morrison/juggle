@@ -2,12 +2,23 @@ package integration_test
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
 	"github.com/ohare93/juggle/internal/cli"
 	"github.com/ohare93/juggle/internal/session"
 )
+
+// skipIfNoClaudeCLI skips the test if claude CLI binary is not available.
+// This allows tests that require the claude CLI to be skipped in CI environments
+// where it's not installed (e.g., release workflow).
+func skipIfNoClaudeCLI(t *testing.T) {
+	t.Helper()
+	if _, err := exec.LookPath("claude"); err != nil {
+		t.Skip("claude CLI not available, skipping test")
+	}
+}
 
 // TestEnv holds the test environment setup
 type TestEnv struct {

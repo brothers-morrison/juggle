@@ -45,6 +45,7 @@ func (env *TestEnv) GetSessionStore(t *testing.T) *session.SessionStore {
 }
 
 func TestAgentLoop_CompleteSignalExitsLoop(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -101,6 +102,7 @@ func TestAgentLoop_CompleteSignalExitsLoop(t *testing.T) {
 }
 
 func TestAgentLoop_BlockedSignalExitsWithReason(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -164,6 +166,7 @@ func TestAgentLoop_BlockedSignalExitsWithReason(t *testing.T) {
 }
 
 func TestAgentLoop_MaxIterationsReached(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -219,6 +222,7 @@ func TestAgentLoop_MaxIterationsReached(t *testing.T) {
 }
 
 func TestAgentLoop_PromptContainsRequiredSections(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -322,6 +326,7 @@ func TestAgentLoop_PromptContainsRequiredSections(t *testing.T) {
 }
 
 func TestAgentLoop_EmptySessionHandling(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -367,6 +372,7 @@ func TestAgentLoop_EmptySessionHandling(t *testing.T) {
 }
 
 func TestAgentLoop_AllBallsCompleteExitsLoop(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -418,6 +424,7 @@ func TestAgentLoop_AllBallsCompleteExitsLoop(t *testing.T) {
 }
 
 func TestAgentLoop_TrustFlagPassedToRunner(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -492,6 +499,7 @@ func TestAgentLoop_SessionNotFound(t *testing.T) {
 }
 
 func TestAgentLoop_PrematureCOMPLETE_Continues(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -556,6 +564,7 @@ func TestAgentLoop_PrematureCOMPLETE_Continues(t *testing.T) {
 }
 
 func TestAgentLoop_AllBlockedOrComplete_ExitsLoop(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -628,6 +637,7 @@ func TestAgentLoop_AllBlockedOrComplete_ExitsLoop(t *testing.T) {
 }
 
 func TestAgentLoop_TerminalStateExitsWithoutCOMPLETESignal(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -687,6 +697,7 @@ func TestAgentLoop_TerminalStateExitsWithoutCOMPLETESignal(t *testing.T) {
 }
 
 func TestAgentLoop_ContinueSignalContinuesLoop(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -761,6 +772,7 @@ func TestAgentLoop_ContinueSignalContinuesLoop(t *testing.T) {
 }
 
 func TestAgentLoop_TimeoutExitsLoop(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -826,6 +838,7 @@ func TestAgentLoop_TimeoutExitsLoop(t *testing.T) {
 }
 
 func TestAgentLoop_TimeoutLogsToProgress(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -883,6 +896,7 @@ func TestAgentLoop_TimeoutLogsToProgress(t *testing.T) {
 // Rate limit tests
 
 func TestAgentLoop_RateLimitRetries(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -943,6 +957,7 @@ func TestAgentLoop_RateLimitRetries(t *testing.T) {
 }
 
 func TestAgentLoop_RateLimitMaxWaitExceeded(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -1000,6 +1015,7 @@ func TestAgentLoop_RateLimitMaxWaitExceeded(t *testing.T) {
 }
 
 func TestAgentLoop_RateLimitLogsToProgress(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -1059,6 +1075,7 @@ func TestAgentLoop_RateLimitLogsToProgress(t *testing.T) {
 }
 
 func TestAgentLoop_RateLimitExponentialBackoff(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -1115,6 +1132,7 @@ func TestAgentLoop_RateLimitExponentialBackoff(t *testing.T) {
 }
 
 func TestAgentLoop_RateLimitMultipleRetries(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -1180,6 +1198,7 @@ func TestAgentLoop_RateLimitMultipleRetries(t *testing.T) {
 }
 
 func TestAgentLoop_RateLimitResetsRetryCountOnSuccess(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -1242,6 +1261,7 @@ func TestAgentLoop_RateLimitResetsRetryCountOnSuccess(t *testing.T) {
 // Progress validation tests
 
 func TestAgentLoop_CompleteSignalRejectedWithoutProgress(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -1298,6 +1318,7 @@ func TestAgentLoop_CompleteSignalRejectedWithoutProgress(t *testing.T) {
 }
 
 func TestAgentLoop_ContinueSignalRejectedWithoutProgress(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -1363,6 +1384,7 @@ func TestAgentLoop_ContinueSignalRejectedWithoutProgress(t *testing.T) {
 }
 
 func TestAgentLoop_BlockedSignalRejectedWithoutProgress(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -1418,6 +1440,7 @@ func TestAgentLoop_BlockedSignalRejectedWithoutProgress(t *testing.T) {
 }
 
 func TestAgentLoop_CompleteSignalAcceptedWithProgress(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -1494,6 +1517,7 @@ func TestAgentLoop_CompleteSignalAcceptedWithProgress(t *testing.T) {
 }
 
 func TestAgentLoop_BlockedSignalAcceptedWithProgress(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -1560,6 +1584,7 @@ func TestAgentLoop_BlockedSignalAcceptedWithProgress(t *testing.T) {
 }
 
 func TestAgentLoop_ContinueSignalAcceptedWithProgress(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -1796,6 +1821,7 @@ func TestAgentLoop_ConcurrentAgentBlocked(t *testing.T) {
 }
 
 func TestAgentLoop_LockReleasedOnCompletion(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -1932,6 +1958,7 @@ func TestAgentLoop_LockErrorMessageIncludesPID(t *testing.T) {
 // Iteration delay tests
 
 func TestAgentLoop_IterationDelayNotAppliedBeforeFirstRun(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -2043,6 +2070,7 @@ func TestAgentLoop_IterationDelayWithFuzziness(t *testing.T) {
 }
 
 func TestAgentLoop_NoDelayAfterLastIteration(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -2124,6 +2152,7 @@ func (t *timingMockRunner) Run(opts agent.RunOptions) (*agent.RunResult, error) 
 // 529 Overload Exhaustion Tests
 
 func TestAgentLoop_OverloadExhaustedRetries(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -2195,6 +2224,7 @@ func TestAgentLoop_OverloadExhaustedRetries(t *testing.T) {
 }
 
 func TestAgentLoop_OverloadExhaustedMaxWaitExceeded(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -2251,6 +2281,7 @@ func TestAgentLoop_OverloadExhaustedMaxWaitExceeded(t *testing.T) {
 }
 
 func TestAgentLoop_OverloadExhaustedLogsToProgress(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -2313,6 +2344,7 @@ func TestAgentLoop_OverloadExhaustedLogsToProgress(t *testing.T) {
 }
 
 func TestAgentLoop_OverloadExhaustedMultipleRetries(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -2393,6 +2425,7 @@ func TestAgentLoop_OverloadExhaustedMultipleRetries(t *testing.T) {
 }
 
 func TestAgentLoop_OverloadAndRateLimitCombined(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -2563,6 +2596,7 @@ func TestOverloadExhausted_Detection(t *testing.T) {
 // Pre-loop check tests - verify early exit when no actionable work exists
 
 func TestAgentLoop_AllBlockedExitsImmediately(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -2636,6 +2670,7 @@ func TestAgentLoop_AllBlockedExitsImmediately(t *testing.T) {
 }
 
 func TestAgentLoop_NoActionableBallsExitsImmediately(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -2706,6 +2741,7 @@ func TestAgentLoop_NoActionableBallsExitsImmediately(t *testing.T) {
 }
 
 func TestAgentLoop_MixedWithWorkableDoesRun(t *testing.T) {
+	skipIfNoClaudeCLI(t)
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
