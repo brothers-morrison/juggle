@@ -36,6 +36,10 @@ var (
 	agentDelay       int    // Delay between iterations in minutes (overrides config)
 	agentFuzz        int    // +/- variance in delay minutes (overrides config)
 	agentProvider    string // Agent provider (claude, opencode)
+
+	// Refine command flags
+	refineProvider string // Agent provider for refine command
+	refineModel    string // Model for refine command
 )
 
 // agentCmd is the parent command for agent operations
@@ -173,6 +177,10 @@ func init() {
 	agentRunCmd.Flags().IntVar(&agentDelay, "delay", 0, "Delay between iterations in minutes (overrides config, 0 = no delay)")
 	agentRunCmd.Flags().IntVar(&agentFuzz, "fuzz", 0, "Random +/- variance in delay minutes (overrides config)")
 	agentRunCmd.Flags().StringVar(&agentProvider, "provider", "", "Agent provider to use (claude, opencode). Default: from config or claude")
+
+	// Refine command flags
+	agentRefineCmd.Flags().StringVar(&refineProvider, "provider", "", "Agent provider to use (claude, opencode). Default: from config or claude")
+	agentRefineCmd.Flags().StringVarP(&refineModel, "model", "m", "", "Model to use (opus, sonnet, haiku). Default: sonnet")
 
 	agentCmd.AddCommand(agentRunCmd)
 	agentCmd.AddCommand(agentRefineCmd)
@@ -1483,11 +1491,45 @@ func runAgentRefine(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Println()
 
-	// Run Claude in interactive + plan mode
+	// Configure agent provider
+	globalProvider, err := session.GetGlobalAgentProviderWithOptions(GetConfigOptions())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to load global agent provider config: %v\n", err)
+	}
+	projectProvider, err := session.GetProjectAgentProvider(cwd)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to load project agent provider config: %v\n", err)
+	}
+	providerType := provider.Detect(refineProvider, projectProvider, globalProvider)
+
+	// Verify provider binary is available
+	if !provider.IsAvailable(providerType) {
+		return fmt.Errorf("agent provider %q is not available (binary %q not found in PATH)",
+			providerType, provider.BinaryName(providerType))
+	}
+
+	agentProv := provider.Get(providerType)
+	agent.SetProvider(agentProv)
+
+	// Configure model overrides
+	globalOverrides, err := session.GetGlobalModelOverridesWithOptions(GetConfigOptions())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to load global model overrides: %v\n", err)
+	}
+	projectOverrides, err := session.GetProjectModelOverrides(cwd)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to load project model overrides: %v\n", err)
+	}
+	modelOverrides := session.MergeModelOverrides(globalOverrides, projectOverrides)
+	agent.SetModelOverrides(modelOverrides)
+
+	// Run agent in interactive + plan mode
 	opts := agent.RunOptions{
 		Prompt:     prompt,
 		Mode:       agent.ModeInteractive,
 		Permission: agent.PermissionPlan,
+		Model:      refineModel, // Use model flag if provided
+		WorkingDir: cwd,
 	}
 
 	_, err = agent.DefaultRunner.Run(opts)

@@ -168,6 +168,11 @@ func (o *OpenCodeProvider) runInteractive(opts RunOptions) (*RunResult, error) {
 	flag, value := o.MapPermission(opts.Permission)
 	args = append(args, flag, value)
 
+	// Pass prompt via --prompt flag
+	if opts.Prompt != "" {
+		args = append(args, "--prompt", opts.Prompt)
+	}
+
 	// Create context with timeout if specified
 	var ctx context.Context
 	var cancel context.CancelFunc
