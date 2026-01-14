@@ -748,6 +748,13 @@ func (m Model) handleSplitViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.handleCopyBallID()
 		}
 		return m, nil
+
+	case "A":
+		// Create followup ball (depends on current ball)
+		if m.activePanel == BallsPanel {
+			return m.handleSplitAddFollowup()
+		}
+		return m, nil
 	}
 
 	return m, nil

@@ -1,0 +1,21 @@
+# Test: Followup ball creation with depends_on pre-filled
+# When creating a followup ball, the depends_on field should show the parent ball ID
+
+run
+----
+-- view:
+Create New Ball␤
+␤
+Context:␤
+┃ Background context for this task                          ␤
+Title: (empty)␤
+␤
+Acceptance Criteria: (none - consider adding criteria)␤
+  + (add criterion)␤
+␤
+Tags: (none)␤
+Session: (none)␤
+Model Size: (default) small medium large␤
+Depends On: parent-ball-1␤
+␤
+Navigation: ↑/↓ fields • Tab next • ←/→ options • Enter next/add AC • Ctrl+S save • Esc cancel␤

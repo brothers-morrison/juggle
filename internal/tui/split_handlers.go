@@ -982,6 +982,65 @@ func (m Model) handleSplitAddItem() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// handleSplitAddFollowup creates a new ball that depends on the currently selected ball
+func (m Model) handleSplitAddFollowup() (tea.Model, tea.Cmd) {
+	balls := m.filterBallsForSession()
+	if len(balls) == 0 || m.cursor >= len(balls) {
+		m.message = "No ball selected"
+		return m, nil
+	}
+
+	parentBall := balls[m.cursor]
+
+	m.inputAction = actionAdd
+	m.textInput.Reset()
+
+	// Use unified ball form - all fields in one view
+	m.pendingBallIntent = ""
+	m.pendingBallContext = ""
+	m.pendingBallPriority = 1 // Default to medium
+	m.pendingBallTags = ""
+	m.pendingAcceptanceCriteria = []string{}
+	m.pendingACEditIndex = -1
+	m.pendingNewAC = ""
+	m.pendingBallModelSize = 0
+
+	// Pre-fill depends_on with the current ball's ID
+	m.pendingBallDependsOn = []string{parentBall.ID}
+
+	// Initialize file autocomplete for @ mentions
+	if m.store != nil {
+		m.fileAutocomplete = NewAutocompleteState(m.store.ProjectDir())
+	}
+
+	// Default session to currently selected one (if a real session is selected)
+	m.pendingBallSession = 0 // Start with (none)
+	if m.selectedSession != nil && m.selectedSession.ID != PseudoSessionAll && m.selectedSession.ID != PseudoSessionUntagged {
+		// Find the index of the selected session in real sessions
+		realSessionIdx := 0
+		for _, sess := range m.sessions {
+			if sess.ID == PseudoSessionAll || sess.ID == PseudoSessionUntagged {
+				continue
+			}
+			realSessionIdx++
+			if sess.ID == m.selectedSession.ID {
+				m.pendingBallSession = realSessionIdx
+				break
+			}
+		}
+	}
+
+	m.pendingBallFormField = 0 // Start at context field
+	m.contextInput.SetValue("")
+	m.contextInput.Focus()
+	m.textInput.Blur()
+	m.textInput.Placeholder = "Background context for this task"
+	m.mode = unifiedBallFormView
+	m.addActivity("Creating followup ball (depends on: " + parentBall.ID + ")...")
+
+	return m, nil
+}
+
 // handleSplitEditItem handles editing the selected item
 func (m Model) handleSplitEditItem() (tea.Model, tea.Cmd) {
 	m.inputAction = actionEdit

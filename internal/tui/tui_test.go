@@ -9852,3 +9852,153 @@ func TestTitlePlaceholderShownWhenContextHasContent(t *testing.T) {
 		t.Errorf("Expected view to contain placeholder '%s', got:\n%s", expectedPlaceholder, view)
 	}
 }
+
+// =============================================================================
+// Followup Ball Creation Tests (A key)
+// =============================================================================
+
+// TestAddFollowupBallPreFillsDependsOn tests that 'A' key creates followup with depends_on pre-filled
+func TestAddFollowupBallPreFillsDependsOn(t *testing.T) {
+	ti := textinput.New()
+	ti.CharLimit = 256
+	ti.Width = 40
+
+	parentBall := &session.Ball{
+		ID:    "parent-ball-1",
+		Title: "Parent Task",
+		State: session.StateInProgress,
+	}
+
+	model := Model{
+		mode:        splitView,
+		activePanel: BallsPanel,
+		textInput:   ti,
+		contextInput: newContextTextarea(),
+		sessions:    []*session.JuggleSession{},
+		balls: []*session.Ball{parentBall},
+		filteredBalls: []*session.Ball{parentBall},
+		cursor:      0,
+		activityLog: make([]ActivityEntry, 0),
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    false,
+		},
+	}
+
+	newModel, _ := model.handleSplitAddFollowup()
+	m := newModel.(Model)
+
+	// Should be in unified ball form view
+	if m.mode != unifiedBallFormView {
+		t.Errorf("Expected mode to be unifiedBallFormView, got %v", m.mode)
+	}
+
+	// Should have depends_on pre-filled with parent ball ID
+	if len(m.pendingBallDependsOn) != 1 {
+		t.Errorf("Expected 1 dependency, got %d", len(m.pendingBallDependsOn))
+	}
+
+	if m.pendingBallDependsOn[0] != "parent-ball-1" {
+		t.Errorf("Expected depends_on to contain 'parent-ball-1', got '%s'", m.pendingBallDependsOn[0])
+	}
+
+	// Other fields should be empty/default
+	if m.pendingBallIntent != "" {
+		t.Errorf("Expected empty intent, got '%s'", m.pendingBallIntent)
+	}
+
+	if m.pendingBallContext != "" {
+		t.Errorf("Expected empty context, got '%s'", m.pendingBallContext)
+	}
+
+	// Priority should be medium (1)
+	if m.pendingBallPriority != 1 {
+		t.Errorf("Expected priority to be 1 (medium), got %d", m.pendingBallPriority)
+	}
+
+	// Form should start at context field (0)
+	if m.pendingBallFormField != 0 {
+		t.Errorf("Expected to start at field 0 (context), got %d", m.pendingBallFormField)
+	}
+}
+
+// TestAddFollowupBallInheritsSession tests that followup inherits selected session
+func TestAddFollowupBallInheritsSession(t *testing.T) {
+	ti := textinput.New()
+	ti.CharLimit = 256
+	ti.Width = 40
+
+	selectedSess := &session.JuggleSession{ID: "my-session", Description: "My Session"}
+	parentBall := &session.Ball{
+		ID:    "parent-ball-1",
+		Title: "Parent Task",
+		State: session.StateInProgress,
+		Tags:  []string{"my-session"},
+	}
+
+	model := Model{
+		mode:        splitView,
+		activePanel: BallsPanel,
+		textInput:   ti,
+		contextInput: newContextTextarea(),
+		sessions:    []*session.JuggleSession{selectedSess},
+		selectedSession: selectedSess,
+		balls: []*session.Ball{parentBall},
+		filteredBalls: []*session.Ball{parentBall},
+		cursor:      0,
+		activityLog: make([]ActivityEntry, 0),
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    false,
+		},
+	}
+
+	newModel, _ := model.handleSplitAddFollowup()
+	m := newModel.(Model)
+
+	// Session should be inherited (index 1 = first real session)
+	if m.pendingBallSession != 1 {
+		t.Errorf("Expected session index 1 (my-session), got %d", m.pendingBallSession)
+	}
+}
+
+// TestAddFollowupBallNoBallSelected tests error when no ball is selected
+func TestAddFollowupBallNoBallSelected(t *testing.T) {
+	ti := textinput.New()
+	ti.CharLimit = 256
+	ti.Width = 40
+
+	model := Model{
+		mode:        splitView,
+		activePanel: BallsPanel,
+		textInput:   ti,
+		contextInput: newContextTextarea(),
+		sessions:    []*session.JuggleSession{},
+		balls:       []*session.Ball{},
+		filteredBalls: []*session.Ball{},
+		cursor:      0,
+		activityLog: make([]ActivityEntry, 0),
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    false,
+		},
+	}
+
+	newModel, _ := model.handleSplitAddFollowup()
+	m := newModel.(Model)
+
+	// Should stay in split view with error message
+	if m.mode != splitView {
+		t.Errorf("Expected mode to stay splitView when no ball selected, got %v", m.mode)
+	}
+
+	if m.message != "No ball selected" {
+		t.Errorf("Expected message 'No ball selected', got '%s'", m.message)
+	}
+}

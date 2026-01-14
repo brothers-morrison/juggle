@@ -701,6 +701,7 @@ func (m Model) renderSplitHelpView() string {
 			items: []helpItem{
 				{"j/k", "Navigate balls"},
 				{"a", "Add new ball (tagged to current session)"},
+				{"A", "Add followup ball (depends on selected ball)"},
 				{"e", "Edit ball in $EDITOR (YAML format)"},
 				{"d", "Delete ball (with confirmation)"},
 				{"[ / ]", "Switch session (previous / next)"},

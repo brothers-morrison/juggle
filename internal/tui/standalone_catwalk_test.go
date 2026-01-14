@@ -1706,6 +1706,46 @@ func TestBallFormDependencySelection(t *testing.T) {
 	catwalk.RunModel(t, "testdata/ball_form_dependency_selection", model)
 }
 
+// TestFollowupBallCreation tests creating a followup ball with depends_on pre-filled.
+func TestFollowupBallCreation(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "juggle-tui-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	t.Cleanup(func() { os.RemoveAll(tmpDir) })
+
+	store, err := session.NewStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+
+	ti := textinput.New()
+	ti.CharLimit = 256
+	ti.Width = 60
+	ti.Placeholder = "What is this ball about? (50 char recommended)"
+	ti.Blur()
+
+	ta := textarea.New()
+	ta.Placeholder = "Background context for this task"
+	ta.CharLimit = 2000
+	ta.SetWidth(60)
+	ta.SetHeight(1)
+	ta.ShowLineNumbers = false
+	ta.Focus()
+
+	model := StandaloneBallModel{
+		store:                  store,
+		textInput:              ti,
+		contextInput:           ta,
+		pendingBallPriority:    1, // medium
+		pendingBallDependsOn:   []string{"parent-ball-1"}, // Pre-filled dependency
+		fileAutocomplete:       NewAutocompleteState(store.ProjectDir()),
+		width:                  80,
+		height:                 24,
+	}
+	catwalk.RunModel(t, "testdata/followup_ball_creation", model)
+}
+
 // =============================================================================
 // EDGE CASE TESTS
 // =============================================================================
