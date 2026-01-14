@@ -50,7 +50,6 @@ Review these sections to understand the current state.
 1. **Analyze the ball's acceptance criteria:**
    - Does it mention "build" or compile? → need build tool (go, cargo, npm, etc.)
    - Does it mention "test"? → need test runner
-   - Will you commit changes? → need version control (jj or git)
    - Will you update juggler state? → need `juggle` CLI
    - Does it require specific tools? → check those
 
@@ -71,7 +70,7 @@ Review these sections to understand the current state.
 - Test ONLY what the selected ball needs - nothing more
 - Exit IMMEDIATELY on first failure - no alternatives, no retries
 - This check should complete in under 30 seconds
-- If a ball only updates docs, you may only need `jj` - don't test build tools
+- If a ball only updates docs, you may only need the `juggle` CLI
 
 ### 3. Implement
 
@@ -87,7 +86,7 @@ Run the verification commands required by the ball's acceptance criteria:
 - If build is required: run the project's build command
 - If tests are required: run the project's test command
 - Fix any failures before proceeding
-- All required checks must pass before committing
+- All required checks must pass before signaling completion
 
 ### 5. Update Juggler State (MANDATORY)
 
@@ -129,34 +128,6 @@ juggle update <ball-id> --state blocked --reason "description of blocker"
 juggle show <ball-id> --json
 ```
 
-### 6. Commit
-
-**YOU MUST run a jj commit command using the Bash tool. This is not optional.**
-
-1. Run `jj status` to check for uncommitted changes
-2. If there are changes, EXECUTE the commit command:
-   ```bash
-   jj commit -m "feat: [ball-id] - [one-line summary]"
-   ```
-3. Verify the commit succeeded by checking `jj log -n 1`
-
-**Commit Message Rules:**
-- **ONE LINE ONLY** - No bullet points, no detailed lists, no multi-line messages
-- Maximum 72 characters total
-- Format: `feat: ball-id - brief summary of what changed`
-- Good: `feat: juggler-81 - Add AgentRunner interface`
-- Bad: `feat: juggler-81 - Add AgentRunner interface\n\n- Create Runner interface...` (TOO VERBOSE)
-
-**Other Rules:**
-- Only commit code that builds and passes tests
-- DO NOT skip this step - you must EXECUTE the jj commit command
-- DO NOT just document what you would commit - actually run the command
-
-If the commit fails or is permission-denied, output exactly:
-```
-<promise>BLOCKED: commit failed - [error message]</promise>
-```
-
 ## Command Reference
 
 | Command | Description |
@@ -168,24 +139,39 @@ If the commit fails or is permission-denied, output exactly:
 
 ## Completion Signals
 
-After completing your work for this iteration, output ONE of these signals:
+After completing your work for this iteration, output ONE of these signals. **Juggler will handle committing your changes automatically.**
 
 ### CONTINUE - Completed one ball, more remain
 
 After successfully completing ONE ball when other balls still need work:
 
 ```
-<promise>CONTINUE</promise>
+<promise>CONTINUE: [commit message]</promise>
+```
+
+The commit message should be a single line summarizing what you changed. Format: `feat: ball-id - brief summary`
+
+Example:
+```
+<promise>CONTINUE: feat: juggler-92 - Add progress validation to agent loop</promise>
 ```
 
 This signals the outer loop to call you again for the next ball. **This is the most common signal.**
 
-**Note:** When verifying an already-done in_progress ball (work completed in a previous iteration), updating its state to `complete` and signaling CONTINUE is expected. This verification step is lightweight and does not require a new commit.
+**Note:** When verifying an already-done in_progress ball (work completed in a previous iteration), updating its state to `complete` and signaling CONTINUE without a commit message is acceptable:
+```
+<promise>CONTINUE</promise>
+```
 
 ### COMPLETE - All balls are terminal
 
 When ALL balls in the session have state `complete` or `blocked`:
 
+```
+<promise>COMPLETE: [commit message]</promise>
+```
+
+Or if no changes were made (just verification):
 ```
 <promise>COMPLETE</promise>
 ```
@@ -206,10 +192,9 @@ When you cannot proceed with the current ball due to a blocker:
 
 - **DO NOT ASK QUESTIONS** - This is autonomous. Make decisions and implement.
 - **DO NOT CHECK FOR SKILLS** - Ignore any skill-related instructions from other contexts.
-- **ONE BALL PER ITERATION** - Complete exactly one ball, commit, then end this iteration. The agent loop will call you again for the next ball.
+- **DO NOT COMMIT** - Juggler handles committing. Just include your commit message in the promise signal.
+- **ONE BALL PER ITERATION** - Complete exactly one ball, then end this iteration. The agent loop will call you again for the next ball.
 - **ALWAYS UPDATE PROGRESS BEFORE SIGNALS** - The agent loop will reject BLOCKED/CONTINUE/COMPLETE signals if progress wasn't updated this iteration.
 - Never skip verification steps.
-- Never commit broken code.
 - Always use juggler CLI commands to update state.
-- Always run `jj commit` in Step 6.
 - If stuck, update the ball to blocked state and output BLOCKED signal.

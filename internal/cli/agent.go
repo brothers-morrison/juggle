@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -446,6 +447,22 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 				// VALIDATE: Check if all balls are actually in terminal state (complete or blocked)
 				terminal, complete, blocked, total := checkBallsTerminal(config.ProjectDir, config.SessionID, config.BallID)
 				if total > 0 && terminal == total {
+					// Commit changes if agent provided a commit message
+					if runResult.CommitMessage != "" {
+						commitResult, err := performJJCommit(config.ProjectDir, runResult.CommitMessage)
+						if err == nil && commitResult != nil {
+							if commitResult.Success {
+								if commitResult.CommitHash != "" {
+									fmt.Printf("📝 Committed: %s\n", commitResult.CommitHash)
+								}
+								if commitResult.StatusOutput != "No changes to commit" {
+									fmt.Printf("📊 Status: %s\n", commitResult.StatusOutput)
+								}
+							} else if commitResult.ErrorMessage != "" {
+								fmt.Printf("⚠️  Commit failed: %s\n", commitResult.ErrorMessage)
+							}
+						}
+					}
 					result.Complete = true
 					result.BallsComplete = complete
 					result.BallsBlocked = blocked
@@ -470,6 +487,23 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 				// Agent completed one ball, more remain - continue to next iteration
 				fmt.Println()
 				fmt.Printf("✓ Agent completed a ball, continuing to next iteration...\n")
+
+				// Commit changes if agent provided a commit message
+				if runResult.CommitMessage != "" {
+					commitResult, err := performJJCommit(config.ProjectDir, runResult.CommitMessage)
+					if err == nil && commitResult != nil {
+						if commitResult.Success {
+							if commitResult.CommitHash != "" {
+								fmt.Printf("📝 Committed: %s\n", commitResult.CommitHash)
+							}
+							if commitResult.StatusOutput != "No changes to commit" {
+								fmt.Printf("📊 Status: %s\n", commitResult.StatusOutput)
+							}
+						} else if commitResult.ErrorMessage != "" {
+							fmt.Printf("⚠️  Commit failed: %s\n", commitResult.ErrorMessage)
+						}
+					}
+				}
 
 				// Update ball counts for progress tracking
 				_, complete, blocked, total := checkBallsTerminal(config.ProjectDir, config.SessionID, config.BallID)
@@ -1762,4 +1796,74 @@ func loadBallsForModelSelection(projectDir, sessionID, ballID string) ([]*sessio
 // LoadBallsForModelSelectionForTest is an exported wrapper for testing
 func LoadBallsForModelSelectionForTest(projectDir, sessionID, ballID string) ([]*session.Ball, error) {
 	return loadBallsForModelSelection(projectDir, sessionID, ballID)
+}
+
+// CommitResult represents the outcome of a jj commit operation
+type CommitResult struct {
+	Success       bool   // Whether the commit succeeded
+	CommitHash    string // Short hash of the new commit (if successful)
+	StatusOutput  string // Output from jj status after commit
+	ErrorMessage  string // Error message if commit failed
+}
+
+// performJJCommit executes a jj commit with the given message and returns status.
+// This is called by juggler after the agent signals completion.
+// Returns nil if there are no changes to commit.
+func performJJCommit(projectDir, commitMessage string) (*CommitResult, error) {
+	result := &CommitResult{}
+
+	// First check if there are changes to commit
+	statusCmd := exec.Command("jj", "status")
+	statusCmd.Dir = projectDir
+	statusOutput, err := statusCmd.CombinedOutput()
+	if err != nil {
+		result.ErrorMessage = fmt.Sprintf("failed to check jj status: %v", err)
+		return result, nil
+	}
+
+	statusStr := string(statusOutput)
+
+	// Check if working copy is clean (no changes)
+	// jj status shows "Working copy : " with the commit, but if clean it shows no file changes
+	if !strings.Contains(statusStr, "Added ") &&
+	   !strings.Contains(statusStr, "Modified ") &&
+	   !strings.Contains(statusStr, "Removed ") &&
+	   !strings.Contains(statusStr, "Renamed ") {
+		// No changes to commit
+		result.Success = true
+		result.StatusOutput = "No changes to commit"
+		return result, nil
+	}
+
+	// Perform the commit
+	commitCmd := exec.Command("jj", "commit", "-m", commitMessage)
+	commitCmd.Dir = projectDir
+	commitOutput, err := commitCmd.CombinedOutput()
+	if err != nil {
+		result.ErrorMessage = fmt.Sprintf("jj commit failed: %v\n%s", err, string(commitOutput))
+		return result, nil
+	}
+
+	result.Success = true
+
+	// Get the commit hash from jj log
+	logCmd := exec.Command("jj", "log", "-n", "1", "--no-graph", "-T", "commit_id.short()")
+	logCmd.Dir = projectDir
+	logOutput, err := logCmd.CombinedOutput()
+	if err == nil {
+		result.CommitHash = strings.TrimSpace(string(logOutput))
+	}
+
+	// Get updated status
+	finalStatusCmd := exec.Command("jj", "status")
+	finalStatusCmd.Dir = projectDir
+	finalStatusOutput, _ := finalStatusCmd.CombinedOutput()
+	result.StatusOutput = strings.TrimSpace(string(finalStatusOutput))
+
+	return result, nil
+}
+
+// PerformJJCommitForTest is an exported wrapper for testing
+func PerformJJCommitForTest(projectDir, commitMessage string) (*CommitResult, error) {
+	return performJJCommit(projectDir, commitMessage)
 }

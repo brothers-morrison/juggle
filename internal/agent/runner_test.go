@@ -267,6 +267,69 @@ func TestClaudeRunner_parseSignals(t *testing.T) {
 			t.Error("expected Blocked=false")
 		}
 	})
+
+	t.Run("detects CONTINUE signal", func(t *testing.T) {
+		result := &RunResult{
+			Output: "Some output...\n<promise>CONTINUE</promise>\nMore output...",
+		}
+
+		runner.parseSignals(result)
+
+		if !result.Continue {
+			t.Error("expected Continue=true")
+		}
+		if result.Complete {
+			t.Error("expected Complete=false")
+		}
+		if result.CommitMessage != "" {
+			t.Errorf("expected empty CommitMessage, got '%s'", result.CommitMessage)
+		}
+	})
+
+	t.Run("detects CONTINUE signal with commit message", func(t *testing.T) {
+		result := &RunResult{
+			Output: "Some output...\n<promise>CONTINUE: feat: juggler-92 - Add feature</promise>\nMore output...",
+		}
+
+		runner.parseSignals(result)
+
+		if !result.Continue {
+			t.Error("expected Continue=true")
+		}
+		if result.CommitMessage != "feat: juggler-92 - Add feature" {
+			t.Errorf("expected CommitMessage 'feat: juggler-92 - Add feature', got '%s'", result.CommitMessage)
+		}
+	})
+
+	t.Run("detects COMPLETE signal with commit message", func(t *testing.T) {
+		result := &RunResult{
+			Output: "Some output...\n<promise>COMPLETE: feat: juggler-93 - Final changes</promise>\nMore output...",
+		}
+
+		runner.parseSignals(result)
+
+		if !result.Complete {
+			t.Error("expected Complete=true")
+		}
+		if result.CommitMessage != "feat: juggler-93 - Final changes" {
+			t.Errorf("expected CommitMessage 'feat: juggler-93 - Final changes', got '%s'", result.CommitMessage)
+		}
+	})
+
+	t.Run("COMPLETE without commit message", func(t *testing.T) {
+		result := &RunResult{
+			Output: "Some output...\n<promise>COMPLETE</promise>\nMore output...",
+		}
+
+		runner.parseSignals(result)
+
+		if !result.Complete {
+			t.Error("expected Complete=true")
+		}
+		if result.CommitMessage != "" {
+			t.Errorf("expected empty CommitMessage, got '%s'", result.CommitMessage)
+		}
+	})
 }
 
 func TestDefaultRunner(t *testing.T) {

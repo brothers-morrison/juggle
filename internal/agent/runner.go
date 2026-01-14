@@ -50,7 +50,8 @@ type RunResult struct {
 	Output            string
 	ExitCode          int
 	Complete          bool
-	Continue          bool // Agent completed one ball, more remain - signals loop to continue to next iteration
+	Continue          bool   // Agent completed one ball, more remain - signals loop to continue to next iteration
+	CommitMessage     string // Commit message provided by agent in promise signal (e.g., "feat: juggler-92 - Add feature")
 	Blocked           bool
 	BlockedReason     string
 	TimedOut          bool
@@ -266,14 +267,34 @@ func (r *ClaudeRunner) runInteractive(opts RunOptions) (*RunResult, error) {
 
 // parseSignals checks the output for COMPLETE/CONTINUE/BLOCKED signals and rate limits
 func (r *ClaudeRunner) parseSignals(result *RunResult) {
-	if strings.Contains(result.Output, "<promise>COMPLETE</promise>") {
-		result.Complete = true
+	// Check for COMPLETE signal (with optional commit message)
+	// Format: <promise>COMPLETE</promise> or <promise>COMPLETE: commit message</promise>
+	if idx := strings.Index(result.Output, "<promise>COMPLETE"); idx != -1 {
+		endIdx := strings.Index(result.Output[idx:], "</promise>")
+		if endIdx != -1 {
+			result.Complete = true
+			content := result.Output[idx+len("<promise>COMPLETE"):idx+endIdx]
+			if strings.HasPrefix(content, ":") {
+				result.CommitMessage = strings.TrimSpace(content[1:])
+			}
+		}
 	}
 
-	if strings.Contains(result.Output, "<promise>CONTINUE</promise>") {
-		result.Continue = true
+	// Check for CONTINUE signal (with optional commit message)
+	// Format: <promise>CONTINUE</promise> or <promise>CONTINUE: commit message</promise>
+	if idx := strings.Index(result.Output, "<promise>CONTINUE"); idx != -1 {
+		endIdx := strings.Index(result.Output[idx:], "</promise>")
+		if endIdx != -1 {
+			result.Continue = true
+			content := result.Output[idx+len("<promise>CONTINUE"):idx+endIdx]
+			if strings.HasPrefix(content, ":") {
+				result.CommitMessage = strings.TrimSpace(content[1:])
+			}
+		}
 	}
 
+	// Check for BLOCKED signal
+	// Format: <promise>BLOCKED: reason</promise>
 	if idx := strings.Index(result.Output, "<promise>BLOCKED:"); idx != -1 {
 		endIdx := strings.Index(result.Output[idx:], "</promise>")
 		if endIdx != -1 {
