@@ -9653,3 +9653,126 @@ func TestContextFieldEnterAddsNewline(t *testing.T) {
 		t.Errorf("Expected to stay on field 0 after Enter in context, got %d", m.pendingBallFormField)
 	}
 }
+
+// TestCopyBallID_SplitView tests that 'y' key triggers copy in split view balls panel
+func TestCopyBallID_SplitView(t *testing.T) {
+	balls := []*session.Ball{
+		{ID: "test-ball-123", Title: "Test Ball", State: session.StatePending},
+	}
+
+	model := Model{
+		mode:          splitView,
+		activePanel:   BallsPanel,
+		balls:         balls,
+		filteredBalls: balls, // Need to set filteredBalls for getBallsForSession
+		cursor:        0,
+		activityLog:   make([]ActivityEntry, 0),
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+	}
+
+	// Press 'y' to copy ball ID
+	newModel, _ := model.handleSplitViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m := newModel.(Model)
+
+	// The message should either be "Copied: test-ball-123" or "Clipboard unavailable: ..."
+	// depending on whether clipboard tools are available
+	if !strings.HasPrefix(m.message, "Copied:") && !strings.HasPrefix(m.message, "Clipboard unavailable:") {
+		t.Errorf("Expected copy result message, got '%s'", m.message)
+	}
+}
+
+// TestCopyBallID_SplitView_NoBall tests that 'y' shows error when no ball selected
+func TestCopyBallID_SplitView_NoBall(t *testing.T) {
+	model := Model{
+		mode:        splitView,
+		activePanel: BallsPanel,
+		balls:       []*session.Ball{},
+		cursor:      0,
+		activityLog: make([]ActivityEntry, 0),
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    true,
+		},
+	}
+
+	// Press 'y' when no balls exist
+	newModel, _ := model.handleSplitViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m := newModel.(Model)
+
+	if m.message != "No ball selected" {
+		t.Errorf("Expected 'No ball selected' message, got '%s'", m.message)
+	}
+}
+
+// TestCopyBallID_SplitView_WrongPanel tests that 'y' does nothing in non-balls panel
+func TestCopyBallID_SplitView_WrongPanel(t *testing.T) {
+	balls := []*session.Ball{
+		{ID: "test-ball-123", Title: "Test Ball", State: session.StatePending},
+	}
+
+	model := Model{
+		mode:        splitView,
+		activePanel: SessionsPanel, // Not in balls panel
+		balls:       balls,
+		cursor:      0,
+		activityLog: make([]ActivityEntry, 0),
+	}
+
+	// Press 'y' in sessions panel
+	newModel, _ := model.handleSplitViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m := newModel.(Model)
+
+	// Should not set any message since we're not in the balls panel
+	if m.message != "" {
+		t.Errorf("Expected no message in SessionsPanel, got '%s'", m.message)
+	}
+}
+
+// TestCopyBallID_ListView tests that 'y' key triggers copy in list view
+func TestCopyBallID_ListView(t *testing.T) {
+	balls := []*session.Ball{
+		{ID: "test-ball-456", Title: "Test Ball", State: session.StatePending},
+	}
+
+	model := Model{
+		mode:          listView,
+		balls:         balls,
+		filteredBalls: balls,
+		cursor:        0,
+	}
+
+	// Press 'y' to copy ball ID
+	newModel, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m := newModel.(Model)
+
+	// The message should either be "Copied: test-ball-456" or "Clipboard unavailable: ..."
+	if !strings.HasPrefix(m.message, "Copied:") && !strings.HasPrefix(m.message, "Clipboard unavailable:") {
+		t.Errorf("Expected copy result message, got '%s'", m.message)
+	}
+}
+
+// TestCopyBallID_DetailView tests that 'y' key triggers copy in detail view
+func TestCopyBallID_DetailView(t *testing.T) {
+	ball := &session.Ball{ID: "test-ball-789", Title: "Test Ball", State: session.StatePending}
+
+	model := Model{
+		mode:         detailView,
+		selectedBall: ball,
+	}
+
+	// Press 'y' to copy ball ID
+	newModel, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m := newModel.(Model)
+
+	// The message should either be "Copied: test-ball-789" or "Clipboard unavailable: ..."
+	if !strings.HasPrefix(m.message, "Copied:") && !strings.HasPrefix(m.message, "Clipboard unavailable:") {
+		t.Errorf("Expected copy result message, got '%s'", m.message)
+	}
+}
