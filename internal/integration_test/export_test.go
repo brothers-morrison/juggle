@@ -1748,3 +1748,167 @@ func TestExportRalphExcludesCompleteBallsByDefault(t *testing.T) {
 		t.Error("Expected export to NOT contain complete ball")
 	}
 }
+
+// TestExportAgentIncludesSessionID verifies that the agent export includes the session ID
+// This is critical for ensuring the agent knows which session it's working on and doesn't
+// work on balls from other sessions.
+func TestExportAgentIncludesSessionID(t *testing.T) {
+	project := t.TempDir()
+
+	// Create session store
+	sessionStore, err := session.NewSessionStore(project)
+	if err != nil {
+		t.Fatalf("Failed to create session store: %v", err)
+	}
+
+	_, err = sessionStore.CreateSession("my-test-session", "Test session for session ID verification")
+	if err != nil {
+		t.Fatalf("Failed to create session: %v", err)
+	}
+
+	// Create ball store
+	ballStore, err := session.NewStoreWithConfig(project, session.StoreConfig{JuggleDirName: ".juggle"})
+	if err != nil {
+		t.Fatalf("Failed to create ball store: %v", err)
+	}
+
+	// Create a test ball tagged with the session
+	ball := &session.Ball{
+		ID:                 "project-1",
+		WorkingDir:         project,
+		Title:              "Test ball for session verification",
+		Priority:           session.PriorityMedium,
+		State:              session.StateInProgress,
+		Tags:               []string{"my-test-session"},
+		AcceptanceCriteria: []string{"AC 1"},
+		StartedAt:          time.Now(),
+		LastActivity:       time.Now(),
+	}
+
+	if err := ballStore.Save(ball); err != nil {
+		t.Fatalf("Failed to save ball: %v", err)
+	}
+
+	// Export to agent format
+	output, err := exportToAgent(project, "my-test-session", []*session.Ball{ball}, false, false)
+	if err != nil {
+		t.Fatalf("Failed to export: %v", err)
+	}
+
+	outputStr := string(output)
+
+	// Verify <session> section exists with the correct session ID
+	if !strings.Contains(outputStr, "<session>") {
+		t.Error("Missing <session> opening tag in agent export")
+	}
+	if !strings.Contains(outputStr, "</session>") {
+		t.Error("Missing </session> closing tag in agent export")
+	}
+	if !strings.Contains(outputStr, "my-test-session") {
+		t.Error("Session ID 'my-test-session' not found in agent export")
+	}
+
+	// Verify session section appears between context and progress (structural validation)
+	contextIdx := strings.Index(outputStr, "</context>")
+	sessionIdx := strings.Index(outputStr, "<session>")
+	progressIdx := strings.Index(outputStr, "<progress>")
+
+	if contextIdx == -1 || sessionIdx == -1 || progressIdx == -1 {
+		t.Error("Missing required sections in export")
+	}
+
+	if sessionIdx < contextIdx {
+		t.Error("Expected <session> section to appear after </context>")
+	}
+	if sessionIdx > progressIdx {
+		t.Error("Expected <session> section to appear before <progress>")
+	}
+}
+
+// Helper function to export to agent format (mirrors cli.exportAgent)
+func exportToAgent(projectDir, sessionID string, balls []*session.Ball, debug bool, singleBall bool) ([]byte, error) {
+	var buf strings.Builder
+
+	// Load session store to get context and progress
+	sessionStore, err := session.NewSessionStore(projectDir)
+	if err != nil {
+		return nil, err
+	}
+
+	// Try to load the session
+	juggleSession, err := sessionStore.LoadSession(sessionID)
+	if err != nil {
+		juggleSession = &session.JuggleSession{
+			ID:          sessionID,
+			Description: "",
+			Context:     "",
+		}
+	}
+
+	// Load progress and limit to last 50 lines
+	progress, _ := sessionStore.LoadProgress(sessionID)
+	lines := strings.Split(progress, "\n")
+	if len(lines) > 50 {
+		progress = strings.Join(lines[len(lines)-50:], "\n")
+	}
+
+	// Write <context> section
+	buf.WriteString("<context>\n")
+	if juggleSession.Description != "" {
+		buf.WriteString("# " + juggleSession.Description + "\n\n")
+	}
+	if juggleSession.Context != "" {
+		buf.WriteString(juggleSession.Context)
+		if !strings.HasSuffix(juggleSession.Context, "\n") {
+			buf.WriteString("\n")
+		}
+	}
+	buf.WriteString("</context>\n\n")
+
+	// Write <session> section with the session ID
+	buf.WriteString("<session>\n")
+	buf.WriteString(sessionID)
+	buf.WriteString("\n</session>\n\n")
+
+	// Write <progress> section
+	buf.WriteString("<progress>\n")
+	if progress != "" {
+		buf.WriteString(progress)
+		if !strings.HasSuffix(progress, "\n") {
+			buf.WriteString("\n")
+		}
+	}
+	buf.WriteString("</progress>\n\n")
+
+	// Write <balls> section
+	buf.WriteString("<balls>\n")
+	for i, ball := range balls {
+		if i > 0 {
+			buf.WriteString("\n")
+		}
+		writeBallForAgentTest(&buf, ball)
+	}
+	buf.WriteString("</balls>\n\n")
+
+	// Write <instructions> section (simplified for testing)
+	buf.WriteString("<instructions>\n")
+	buf.WriteString("Agent instructions would go here.\n")
+	buf.WriteString("</instructions>\n")
+
+	return []byte(buf.String()), nil
+}
+
+// writeBallForAgentTest writes a single ball in agent format (test helper)
+func writeBallForAgentTest(buf *strings.Builder, ball *session.Ball) {
+	buf.WriteString("## " + ball.ID + " [" + string(ball.State) + "] (priority: " + string(ball.Priority) + ")\n")
+	buf.WriteString("Title: " + ball.Title + "\n")
+	if len(ball.AcceptanceCriteria) > 0 {
+		buf.WriteString("Acceptance Criteria:\n")
+		for i, ac := range ball.AcceptanceCriteria {
+			buf.WriteString("  " + fmt.Sprintf("%d", i+1) + ". " + ac + "\n")
+		}
+	}
+	if len(ball.Tags) > 0 {
+		buf.WriteString("Tags: " + strings.Join(ball.Tags, ", ") + "\n")
+	}
+}

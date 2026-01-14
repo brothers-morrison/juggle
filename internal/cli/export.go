@@ -633,6 +633,12 @@ func exportAgent(projectDir, sessionID string, balls []*session.Ball, debug bool
 	}
 	buf.WriteString("</context>\n\n")
 
+	// Write <session> section with the session ID
+	// This tells the agent which session it's working on for progress commands
+	buf.WriteString("<session>\n")
+	buf.WriteString(sessionID)
+	buf.WriteString("\n</session>\n\n")
+
 	// Write <progress> section
 	buf.WriteString("<progress>\n")
 	if progress != "" {

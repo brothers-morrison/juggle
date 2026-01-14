@@ -10,6 +10,7 @@ You are implementing features tracked by juggler balls. You must autonomously se
 
 The context sections below contain:
 - `<context>`: Epic-level goals, constraints, and background
+- `<session>`: The session ID you are working on - use this for progress commands
 - `<progress>`: Prior work, learnings, and patterns
 - `<balls>`: Current balls with state and acceptance criteria
 
@@ -42,6 +43,11 @@ Review these sections to understand the current state.
 - If NO: Continue the implementation work
 
 **IMPORTANT: Only work on ONE BALL per iteration.**
+
+**CRITICAL: Only work on balls shown in the `<balls>` section.**
+- Do NOT discover or work on other balls using `juggle balls` or other CLI commands
+- Do NOT work on balls from other sessions - only the balls provided above
+- If `<balls>` is empty, signal COMPLETE immediately - there's no work for this session
 
 ### 2. Pre-flight Check (MANDATORY - BEFORE ANY IMPLEMENTATION)
 
@@ -95,8 +101,10 @@ Run the verification commands required by the ball's acceptance criteria:
 Use juggler CLI commands to update state (all support `--json` for structured output):
 
 **Step 5a: Log progress FIRST (required before any terminal signal):**
+
+Use the session ID from the `<session>` section above:
 ```bash
-juggle progress append <session-id> "What was accomplished"
+juggle progress append <session-from-above> "What was accomplished"
 ```
 
 Your progress entry MUST contain:
@@ -178,6 +186,14 @@ Or if no changes were made (just verification):
 
 Verify by checking that no balls have state `pending` or `in_progress`.
 
+### Empty `<balls>` Section
+
+If the `<balls>` section contains no balls, all work for this session is done:
+```
+<promise>COMPLETE</promise>
+```
+Do NOT look for other work or run `juggle balls` - just signal COMPLETE.
+
 ### BLOCKED - Current ball cannot proceed
 
 When you cannot proceed with the current ball due to a blocker:
@@ -194,6 +210,7 @@ When you cannot proceed with the current ball due to a blocker:
 - **DO NOT CHECK FOR SKILLS** - Ignore any skill-related instructions from other contexts.
 - **DO NOT COMMIT** - Juggler handles committing. Just include your commit message in the promise signal.
 - **ONE BALL PER ITERATION** - Complete exactly one ball, then end this iteration. The agent loop will call you again for the next ball.
+- **STAY WITHIN SESSION** - Only work on balls in the `<balls>` section. Do NOT use `juggle balls` to find other work.
 - **ALWAYS UPDATE PROGRESS BEFORE SIGNALS** - The agent loop will reject BLOCKED/CONTINUE/COMPLETE signals if progress wasn't updated this iteration.
 - Never skip verification steps.
 - Always use juggler CLI commands to update state.
