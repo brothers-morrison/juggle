@@ -41,7 +41,22 @@ const (
 )
 
 
-// Ball represents a task being tracked
+// Ball represents a task being tracked in the juggle system.
+//
+// A Ball is the fundamental unit of work in juggle. It contains:
+//   - Identity: unique ID and working directory context
+//   - Description: title, context, and acceptance criteria
+//   - Lifecycle: state, timestamps, and completion info
+//   - Organization: priority, tags, and dependencies
+//   - Agent hints: model size preference
+//
+// Balls progress through states: pending → in_progress → complete/researched (or blocked).
+// The "researched" state is for investigation tasks that produce findings (stored in Output)
+// but no code changes.
+//
+// Example JSONL representation:
+//
+//	{"id":"proj-a1b2c3d4","title":"Add feature","priority":"medium","state":"pending",...}
 type Ball struct {
 	ID                 string      `json:"id"`
 	WorkingDir         string      `json:"-"` // Computed from file location, not stored

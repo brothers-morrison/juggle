@@ -17,14 +17,13 @@ const (
 	DefaultOverloadRetryMinutes  = 10 // Wait 10 minutes before retrying after 529 overload exhaustion
 )
 
-// Config holds global juggle configuration
-// ConfigOptions holds configurable options for global config
+// ConfigOptions holds configurable options for loading global config.
 type ConfigOptions struct {
 	ConfigHome    string // Override for ~/.juggle directory
 	JuggleDirName string // Name of the juggle directory (default: ".juggle")
 }
 
-// DefaultConfigOptions returns the default config options
+// DefaultConfigOptions returns the default config options.
 func DefaultConfigOptions() ConfigOptions {
 	home, _ := os.UserHomeDir()
 	return ConfigOptions{
@@ -33,6 +32,18 @@ func DefaultConfigOptions() ConfigOptions {
 	}
 }
 
+// Config holds global juggle configuration stored at ~/.juggle/config.json.
+//
+// Global configuration includes:
+//   - SearchPaths: directories to scan for juggle projects
+//   - IterationDelayMinutes/IterationDelayFuzz: pacing between agent runs
+//   - OverloadRetryMinutes: wait time after rate limit exhaustion
+//   - VCS: preferred version control system (git/jj)
+//
+// Unknown fields in the config file are preserved to prevent data loss
+// when older juggle versions read configs written by newer versions.
+//
+// Use LoadConfig() to read the config, and config.Save() to write changes.
 type Config struct {
 	SearchPaths []string `json:"search_paths"`
 	// Agent iteration delay settings
@@ -303,7 +314,13 @@ func EnsureProjectInSearchPaths(projectDir string) error {
 	return nil
 }
 
-// ProjectConfig holds per-project configuration stored in .juggle/config.json
+// ProjectConfig holds per-project configuration stored in .juggle/config.json.
+//
+// Project configuration includes:
+//   - DefaultAcceptanceCriteria: repo-level ACs applied to all balls
+//   - VCS: project-specific VCS preference (overrides global)
+//
+// These settings apply to all balls and sessions within the project.
 type ProjectConfig struct {
 	DefaultAcceptanceCriteria []string `json:"default_acceptance_criteria,omitempty"` // Repo-level ACs applied to all sessions
 	VCS                       string   `json:"vcs,omitempty"`                         // Version control system: "git" or "jj"

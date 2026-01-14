@@ -18,19 +18,35 @@ const (
 	archiveBallsFile = "balls.jsonl"
 )
 
-// Store handles persistence of sessions in a project directory
-// StoreConfig holds configurable options for Store
+// StoreConfig holds configurable options for Store.
 type StoreConfig struct {
 	JuggleDirName string // Name of the juggle directory (default: ".juggle")
 }
 
-// DefaultStoreConfig returns the default store configuration
+// DefaultStoreConfig returns the default store configuration.
 func DefaultStoreConfig() StoreConfig {
 	return StoreConfig{
 		JuggleDirName: projectStorePath,
 	}
 }
 
+// Store handles persistence of balls in a project directory.
+//
+// Store manages balls stored in JSONL format at .juggle/balls.jsonl (active)
+// and .juggle/archive/balls.jsonl (completed). It provides thread-safe
+// CRUD operations using file locking.
+//
+// Key features:
+//   - JSONL format for append-friendly version control
+//   - File locking for concurrent access safety
+//   - Atomic writes via temp file + rename pattern
+//   - Ball resolution by full ID, short ID, or prefix
+//   - Worktree-aware: resolves to main repo when in a git worktree
+//
+// Create a Store with NewStore or NewStoreWithConfig:
+//
+//	store, err := session.NewStore("/path/to/project")
+//	balls, err := store.LoadBalls()
 type Store struct {
 	projectDir  string
 	ballsPath   string
