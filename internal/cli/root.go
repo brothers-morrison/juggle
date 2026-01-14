@@ -114,10 +114,28 @@ func Execute() error {
 	return rootCmd.Execute()
 }
 
+// BallsListOptions holds options for the balls list command
+type BallsListOptions struct {
+	ShowAll       bool // Show all balls including completed
+	ShowCompleted bool // Show only completed balls
+}
+
+// BallsListOpts holds the parsed balls list flags
+var BallsListOpts BallsListOptions
+
 // ballsCmd lists all balls
 var ballsCmd = &cobra.Command{
 	Use:   "balls",
-	Short: "List all balls regardless of state",
+	Short: "List all balls (hides completed by default)",
+	Long: `List all balls in the current project.
+
+By default, only shows pending, in_progress, and blocked balls.
+Use --all to include completed balls, or --completed to show only completed ones.
+
+Examples:
+  juggle balls              # Show active balls (pending, in_progress, blocked)
+  juggle balls --all        # Show all balls including completed
+  juggle balls --completed  # Show only completed balls`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return listAllBalls(cmd)
 	},
@@ -190,6 +208,10 @@ func init() {
 	defaultHelpFunc = rootCmd.HelpFunc()
 	rootCmd.SetHelpFunc(customHelpFunc)
 	
+	// Add flags for ballsCmd
+	ballsCmd.Flags().BoolVar(&BallsListOpts.ShowAll, "all", false, "Show all balls including completed ones")
+	ballsCmd.Flags().BoolVar(&BallsListOpts.ShowCompleted, "completed", false, "Show only completed balls")
+
 	// Add commands
 	rootCmd.AddCommand(ballsCmd)
 	rootCmd.AddCommand(checkCmd)

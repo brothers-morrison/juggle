@@ -173,7 +173,8 @@ func listJugglingBalls(cmd *cobra.Command) error {
 	return nil
 }
 
-// listAllBalls lists all balls regardless of state
+// listAllBalls lists balls based on filter flags
+// By default hides completed balls; use --all to show all or --completed to show only completed
 func listAllBalls(cmd *cobra.Command) error {
 	// Get current directory
 	cwd, err := GetWorkingDir()
@@ -206,8 +207,34 @@ func listAllBalls(cmd *cobra.Command) error {
 		return fmt.Errorf("failed to load balls: %w", err)
 	}
 
+	// Filter balls based on flags
+	var filteredBalls []*session.Ball
+	for _, ball := range allBalls {
+		if BallsListOpts.ShowCompleted {
+			// Show only completed balls
+			if ball.State == session.StateComplete {
+				filteredBalls = append(filteredBalls, ball)
+			}
+		} else if BallsListOpts.ShowAll {
+			// Show all balls
+			filteredBalls = append(filteredBalls, ball)
+		} else {
+			// Default: hide completed balls
+			if ball.State != session.StateComplete {
+				filteredBalls = append(filteredBalls, ball)
+			}
+		}
+	}
+	allBalls = filteredBalls
+
 	if len(allBalls) == 0 {
-		fmt.Println("No balls found")
+		if BallsListOpts.ShowCompleted {
+			fmt.Println("No completed balls found")
+		} else if BallsListOpts.ShowAll {
+			fmt.Println("No balls found")
+		} else {
+			fmt.Println("No active balls found (use --all to include completed)")
+		}
 		return nil
 	}
 
