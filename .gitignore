@@ -10,6 +10,19 @@
 
 # Claude Code (local overrides)
 .claude/settings.local.json
+.claude/agents
+.claude/commands
+
+# Claude Code sandbox phantom files (bwrap bug)
+.bash_profile
+.bashrc
+.gitconfig
+.gitmodules
+.mcp.json
+.profile
+.ripgreprc
+.zprofile
+.zshrc
 
 # IDE
 .idea/
