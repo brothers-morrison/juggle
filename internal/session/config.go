@@ -15,6 +15,11 @@ const (
 	DefaultIterationDelayMinutes = 0  // No delay between agent iterations by default
 	DefaultIterationDelayFuzz    = 0  // No variance in delay by default
 	DefaultOverloadRetryMinutes  = 10 // Wait 10 minutes before retrying after 529 overload exhaustion
+
+	// EnvConfigHome is the environment variable that overrides the config home directory.
+	// When set, all config operations will use this path instead of ~/.juggle.
+	// This is primarily used for testing to prevent polluting the user's real config.
+	EnvConfigHome = "JUGGLER_CONFIG_HOME"
 )
 
 // ConfigOptions holds configurable options for loading global config.
@@ -24,10 +29,14 @@ type ConfigOptions struct {
 }
 
 // DefaultConfigOptions returns the default config options.
+// If JUGGLER_CONFIG_HOME is set, it will be used instead of the user's home directory.
 func DefaultConfigOptions() ConfigOptions {
-	home, _ := os.UserHomeDir()
+	configHome := os.Getenv(EnvConfigHome)
+	if configHome == "" {
+		configHome, _ = os.UserHomeDir()
+	}
 	return ConfigOptions{
-		ConfigHome:    home,
+		ConfigHome:    configHome,
 		JuggleDirName: ".juggle",
 	}
 }

@@ -245,6 +245,124 @@ func init() {
 	configTemplatesCmd.AddCommand(configTemplatesClearCmd)
 
 	configCmd.AddCommand(configTemplatesCmd)
+
+	// Paths commands
+	configPathsPruneCmd.Flags().BoolVarP(&configPathsPruneYesFlag, "yes", "y", false, "Skip confirmation prompt")
+	configPathsCmd.AddCommand(configPathsListCmd)
+	configPathsCmd.AddCommand(configPathsPruneCmd)
+
+	configCmd.AddCommand(configPathsCmd)
+}
+
+var configPathsPruneYesFlag bool
+
+var configPathsCmd = &cobra.Command{
+	Use:   "paths",
+	Short: "Manage search paths for project discovery",
+	Long: `Manage the search paths used to discover juggle projects.
+
+Commands:
+  config paths list           List current search paths
+  config paths prune          Remove non-existent paths from config`,
+	RunE: runConfigPathsList,
+}
+
+var configPathsListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List search paths",
+	RunE:  runConfigPathsList,
+}
+
+var configPathsPruneCmd = &cobra.Command{
+	Use:   "prune",
+	Short: "Remove non-existent paths from search_paths",
+	Long: `Remove non-existent directories from the global search_paths config.
+
+This is useful for cleaning up stale paths (e.g., from deleted projects or
+old test directories that were accidentally added).
+
+Use --yes (-y) to skip the confirmation prompt.`,
+	RunE: runConfigPathsPrune,
+}
+
+func runConfigPathsList(cmd *cobra.Command, args []string) error {
+	config, err := session.LoadConfigWithOptions(GetConfigOptions())
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
+	fmt.Println(labelStyle.Render("Search Paths:"))
+	fmt.Println()
+
+	if len(config.SearchPaths) == 0 {
+		fmt.Println("  (none)")
+		return nil
+	}
+
+	existStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
+	missingStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+
+	for _, path := range config.SearchPaths {
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			fmt.Printf("  %s %s\n", missingStyle.Render("✗"), path)
+		} else {
+			fmt.Printf("  %s %s\n", existStyle.Render("✓"), path)
+		}
+	}
+
+	return nil
+}
+
+func runConfigPathsPrune(cmd *cobra.Command, args []string) error {
+	config, err := session.LoadConfigWithOptions(GetConfigOptions())
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Find paths to remove
+	var toRemove []string
+	var toKeep []string
+	for _, path := range config.SearchPaths {
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			toRemove = append(toRemove, path)
+		} else {
+			toKeep = append(toKeep, path)
+		}
+	}
+
+	if len(toRemove) == 0 {
+		fmt.Println("No non-existent paths to remove.")
+		return nil
+	}
+
+	// Show what will be removed
+	fmt.Printf("Found %d non-existent path(s) to remove:\n", len(toRemove))
+	for _, path := range toRemove {
+		fmt.Printf("  - %s\n", path)
+	}
+	fmt.Println()
+
+	// Confirm unless --yes flag is set
+	if !configPathsPruneYesFlag {
+		confirmed, err := ConfirmSingleKey(fmt.Sprintf("Remove %d path(s)?", len(toRemove)))
+		if err != nil {
+			return err
+		}
+		if !confirmed {
+			fmt.Println("Cancelled.")
+			return nil
+		}
+	}
+
+	// Update config
+	config.SearchPaths = toKeep
+	if err := config.SaveWithOptions(GetConfigOptions()); err != nil {
+		return fmt.Errorf("failed to save config: %w", err)
+	}
+
+	fmt.Printf("Removed %d path(s). %d path(s) remaining.\n", len(toRemove), len(toKeep))
+	return nil
 }
 
 func runConfigACList(cmd *cobra.Command, args []string) error {

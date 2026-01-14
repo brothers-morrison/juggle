@@ -48,6 +48,11 @@ func SetupTestEnv(t *testing.T) *TestEnv {
 		OriginalFlags: cli.GlobalOpts,
 	}
 
+	// Set JUGGLER_CONFIG_HOME environment variable to prevent test data from
+	// polluting the user's real config. This affects session.DefaultConfigOptions()
+	// and all code paths that use it (including EnsureProjectInSearchPaths).
+	env.SetEnvVar(t, session.EnvConfigHome, configHome)
+
 	// Set global options for the test
 	cli.GlobalOpts = cli.GlobalOptions{
 		ConfigHome: configHome,
