@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ohare93/juggle/internal/agent"
+	"github.com/ohare93/juggle/internal/agent/provider"
 	"github.com/ohare93/juggle/internal/session"
 	"github.com/ohare93/juggle/internal/vcs"
 	"github.com/spf13/cobra"
@@ -32,8 +33,9 @@ var (
 	agentBallID      string
 	agentInteractive bool
 	agentModel       string
-	agentDelay       int // Delay between iterations in minutes (overrides config)
-	agentFuzz        int // +/- variance in delay minutes (overrides config)
+	agentDelay       int    // Delay between iterations in minutes (overrides config)
+	agentFuzz        int    // +/- variance in delay minutes (overrides config)
+	agentProvider    string // Agent provider (claude, opencode)
 )
 
 // agentCmd is the parent command for agent operations
@@ -170,6 +172,7 @@ func init() {
 	agentRunCmd.Flags().StringVarP(&agentModel, "model", "m", "", "Model to use (opus, sonnet, haiku). Default: opus for large balls, sonnet for others")
 	agentRunCmd.Flags().IntVar(&agentDelay, "delay", 0, "Delay between iterations in minutes (overrides config, 0 = no delay)")
 	agentRunCmd.Flags().IntVar(&agentFuzz, "fuzz", 0, "Random +/- variance in delay minutes (overrides config)")
+	agentRunCmd.Flags().StringVar(&agentProvider, "provider", "", "Agent provider to use (claude, opencode). Default: from config or claude")
 
 	agentCmd.AddCommand(agentRunCmd)
 	agentCmd.AddCommand(agentRefineCmd)
@@ -209,6 +212,7 @@ type AgentLoopConfig struct {
 	Interactive          bool          // Run in interactive mode (full Claude TUI)
 	Model                string        // Model to use (opus, sonnet, haiku). Empty = auto-select based on ball model_size
 	OverloadRetryMinutes int           // Minutes to wait before retrying after 529 overload exhaustion (-1 = use config default, 0 = no wait)
+	Provider             string        // Agent provider to use (claude, opencode). Empty = from config or claude
 }
 
 // sessionStorageID returns the session ID used for storage (progress, output, lock)
@@ -282,6 +286,19 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 	if overloadRetryMinutes < 0 {
 		overloadRetryMinutes, _ = session.GetGlobalOverloadRetryMinutesWithOptions(GetConfigOptions())
 	}
+
+	// Configure agent provider based on CLI flag, project config, and global config
+	globalProvider, _ := session.GetGlobalAgentProviderWithOptions(GetConfigOptions())
+	projectProvider, _ := session.GetProjectAgentProvider(config.ProjectDir)
+	providerType := provider.Detect(config.Provider, projectProvider, globalProvider)
+	agentProv := provider.Get(providerType)
+	agent.SetProvider(agentProv)
+
+	// Configure model overrides
+	globalOverrides, _ := session.GetGlobalModelOverridesWithOptions(GetConfigOptions())
+	projectOverrides, _ := session.GetProjectModelOverrides(config.ProjectDir)
+	modelOverrides := session.MergeModelOverrides(globalOverrides, projectOverrides)
+	agent.SetModelOverrides(modelOverrides)
 
 	// Pre-loop check: is there any work the agent can do?
 	// Exit early if all balls are blocked (need human intervention) or no actionable balls exist
@@ -970,6 +987,9 @@ func runAgentRun(cmd *cobra.Command, args []string) error {
 		if agentModel != "" {
 			fmt.Printf("Model: %s\n", agentModel)
 		}
+		if agentProvider != "" {
+			fmt.Printf("Provider: %s\n", agentProvider)
+		}
 		if agentTimeout > 0 {
 			fmt.Printf("Timeout per iteration: %v\n", agentTimeout)
 		}
@@ -1064,7 +1084,8 @@ func runAgentRun(cmd *cobra.Command, args []string) error {
 		BallID:               agentBallID,
 		Interactive:          interactive,
 		Model:                agentModel,
-		OverloadRetryMinutes: -1, // Use config default
+		OverloadRetryMinutes: -1,           // Use config default
+		Provider:             agentProvider, // Use CLI flag (empty = auto-detect from config)
 	}
 
 	result, err := RunAgentLoop(loopConfig)

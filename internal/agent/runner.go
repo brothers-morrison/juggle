@@ -3,64 +3,39 @@
 package agent
 
 import (
-	"bufio"
-	"context"
-	"fmt"
-	"io"
-	"os"
-	"os/exec"
-	"strings"
-	"sync"
-	"time"
+	"github.com/ohare93/juggle/internal/agent/provider"
 )
 
-// RunMode defines how Claude should be executed
-type RunMode string
+// RunMode defines how the agent should be executed
+type RunMode = provider.RunMode
 
 const (
-	// ModeHeadless runs with -p flag, autonomous system prompt, captures output
-	ModeHeadless RunMode = "headless"
-	// ModeInteractive runs without -p flag, inherits terminal for full TUI
-	ModeInteractive RunMode = "interactive"
+	// ModeHeadless runs with captured output, no terminal interaction
+	ModeHeadless = provider.ModeHeadless
+	// ModeInteractive runs with terminal TUI, inherits stdin/stdout/stderr
+	ModeInteractive = provider.ModeInteractive
 )
 
-// PermissionMode defines Claude's permission level
-type PermissionMode string
+// PermissionMode defines the agent's permission level
+type PermissionMode = provider.PermissionMode
 
 const (
-	// PermissionAcceptEdits allows Claude to edit files with confirmation
-	PermissionAcceptEdits PermissionMode = "acceptEdits"
-	// PermissionPlan starts Claude in plan mode for review/planning
-	PermissionPlan PermissionMode = "plan"
+	// PermissionAcceptEdits allows file edits with confirmation
+	PermissionAcceptEdits = provider.PermissionAcceptEdits
+	// PermissionPlan starts in plan/read-only mode
+	PermissionPlan = provider.PermissionPlan
 	// PermissionBypass bypasses all permission checks (dangerous)
-	PermissionBypass PermissionMode = "bypassPermissions"
+	PermissionBypass = provider.PermissionBypass
 )
 
-// RunOptions configures how Claude is executed
-type RunOptions struct {
-	Prompt       string         // The prompt to send to Claude
-	Mode         RunMode        // headless vs interactive
-	Permission   PermissionMode // acceptEdits, plan, bypassPermissions
-	Timeout      time.Duration  // timeout per invocation (0 = no timeout)
-	SystemPrompt string         // optional additional system prompt to append
-	Model        string         // optional model to use (e.g., "opus", "sonnet", "haiku")
-}
+// RunOptions configures how the agent is executed
+type RunOptions = provider.RunOptions
 
 // RunResult represents the outcome of a single agent run
-type RunResult struct {
-	Output            string
-	ExitCode          int
-	Complete          bool
-	Continue          bool   // Agent completed one ball, more remain - signals loop to continue to next iteration
-	CommitMessage     string // Commit message provided by agent in promise signal (e.g., "feat: juggle-92 - Add feature")
-	Blocked           bool
-	BlockedReason     string
-	TimedOut          bool
-	RateLimited       bool          // Claude returned a rate limit error
-	RetryAfter        time.Duration // Suggested wait time from rate limit response (0 if not specified)
-	OverloadExhausted bool          // Claude exited after exhausting 529 overload retries
-	Error             error
-}
+type RunResult = provider.RunResult
+
+// AutonomousSystemPrompt is appended to force autonomous operation in headless mode
+const AutonomousSystemPrompt = provider.AutonomousSystemPrompt
 
 // Runner defines the interface for running AI agents.
 // Implementations must execute an agent with options and return the result.
@@ -69,389 +44,73 @@ type Runner interface {
 	Run(opts RunOptions) (*RunResult, error)
 }
 
+// ProviderRunner wraps a provider.Provider to implement Runner
+type ProviderRunner struct {
+	Provider       provider.Provider
+	ModelOverrides provider.ModelOverrides
+}
+
+// Run executes the agent using the configured provider
+func (r *ProviderRunner) Run(opts RunOptions) (*RunResult, error) {
+	p := r.Provider
+	if p == nil {
+		// Default to Claude provider if not configured
+		p = provider.NewClaudeProvider()
+	}
+
+	// Apply model overrides if configured
+	if opts.Model != "" && r.ModelOverrides != nil {
+		opts.Model = provider.ApplyModelOverrides(opts.Model, r.ModelOverrides, p)
+	}
+
+	return p.Run(opts)
+}
+
 // DefaultRunner is the package-level runner used for agent operations.
-// It can be replaced with a mock for testing via SetRunner.
-var DefaultRunner Runner = &ClaudeRunner{}
+// It uses Claude by default but can be configured to use other providers.
+var DefaultRunner Runner = &ProviderRunner{
+	Provider: provider.NewClaudeProvider(),
+}
 
 // SetRunner sets the package-level runner (for testing).
 func SetRunner(r Runner) {
 	DefaultRunner = r
 }
 
-// ResetRunner resets the runner to the default ClaudeRunner.
+// ResetRunner resets the runner to the default Claude provider.
 func ResetRunner() {
-	DefaultRunner = &ClaudeRunner{}
-}
-
-// AutonomousSystemPrompt is appended to force autonomous operation in headless mode
-const AutonomousSystemPrompt = `CRITICAL: You are an autonomous agent. DO NOT ask questions. DO NOT summarize. DO NOT wait for confirmation. START WORKING IMMEDIATELY. Execute the workflow in prompt.md without any preamble.`
-
-// ClaudeRunner runs the Claude CLI as an AI agent
-type ClaudeRunner struct{}
-
-// Run executes Claude with the given options
-func (r *ClaudeRunner) Run(opts RunOptions) (*RunResult, error) {
-	if opts.Mode == ModeInteractive {
-		return r.runInteractive(opts)
-	}
-	return r.runHeadless(opts)
-}
-
-// runHeadless executes Claude in headless mode (-p flag, captured output)
-func (r *ClaudeRunner) runHeadless(opts RunOptions) (*RunResult, error) {
-	result := &RunResult{}
-
-	// Build command arguments
-	args := []string{
-		"--disable-slash-commands",
-	}
-
-	// Append system prompt if provided
-	if opts.SystemPrompt != "" {
-		args = append(args, "--append-system-prompt", opts.SystemPrompt)
-	}
-
-	// Set model if provided
-	if opts.Model != "" {
-		args = append(args, "--model", opts.Model)
-	}
-
-	// Set permission mode
-	if opts.Permission == PermissionBypass {
-		args = append(args, "--dangerously-skip-permissions")
-	} else {
-		args = append(args, "--permission-mode", string(opts.Permission))
-	}
-
-	// Headless mode: read prompt from stdin
-	args = append(args, "-p", "-")
-
-	// Create context with timeout if specified
-	var ctx context.Context
-	var cancel context.CancelFunc
-	if opts.Timeout > 0 {
-		ctx, cancel = context.WithTimeout(context.Background(), opts.Timeout)
-		defer cancel()
-	} else {
-		ctx = context.Background()
-	}
-
-	cmd := exec.CommandContext(ctx, "claude", args...)
-
-	var outputBuf strings.Builder
-
-	// Pipe prompt through stdin
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create stdin pipe: %w", err)
-	}
-
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
-	}
-
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create stderr pipe: %w", err)
-	}
-
-	// Start command
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("failed to start claude: %w", err)
-	}
-
-	// Write prompt to stdin
-	go func() {
-		defer stdin.Close()
-		io.WriteString(stdin, opts.Prompt)
-	}()
-
-	// Stream output to console and capture
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		streamOutput(stdout, &outputBuf, os.Stdout)
-	}()
-	go func() {
-		defer wg.Done()
-		streamOutput(stderr, &outputBuf, os.Stderr)
-	}()
-
-	// Wait for command to complete
-	err = cmd.Wait()
-	// Wait for output streaming to finish before reading buffer
-	wg.Wait()
-	result.Output = outputBuf.String()
-
-	if err != nil {
-		// Check if this was a timeout
-		if ctx.Err() == context.DeadlineExceeded {
-			result.TimedOut = true
-			result.Error = fmt.Errorf("iteration timed out after %v", opts.Timeout)
-			return result, nil
-		}
-
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			result.ExitCode = exitErr.ExitCode()
-		}
-		result.Error = fmt.Errorf("claude exited with error: %w", err)
-	}
-
-	// Parse completion signals from output
-	r.parseSignals(result)
-
-	return result, nil
-}
-
-// runInteractive executes Claude in interactive mode (terminal TUI)
-func (r *ClaudeRunner) runInteractive(opts RunOptions) (*RunResult, error) {
-	result := &RunResult{}
-
-	// Build command arguments
-	args := []string{
-		"--disable-slash-commands",
-	}
-
-	// Append system prompt if provided
-	if opts.SystemPrompt != "" {
-		args = append(args, "--append-system-prompt", opts.SystemPrompt)
-	}
-
-	// Set model if provided
-	if opts.Model != "" {
-		args = append(args, "--model", opts.Model)
-	}
-
-	// Set permission mode
-	if opts.Permission == PermissionBypass {
-		args = append(args, "--dangerously-skip-permissions")
-	} else {
-		args = append(args, "--permission-mode", string(opts.Permission))
-	}
-
-	// Interactive mode: pass prompt as argument
-	args = append(args, opts.Prompt)
-
-	// Create context with timeout if specified
-	var ctx context.Context
-	var cancel context.CancelFunc
-	if opts.Timeout > 0 {
-		ctx, cancel = context.WithTimeout(context.Background(), opts.Timeout)
-		defer cancel()
-	} else {
-		ctx = context.Background()
-	}
-
-	cmd := exec.CommandContext(ctx, "claude", args...)
-
-	// Inherit terminal for full TUI
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	// Start command
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("failed to start claude: %w", err)
-	}
-
-	// Wait for command to complete
-	err := cmd.Wait()
-
-	if err != nil {
-		// Check if this was a timeout
-		if ctx.Err() == context.DeadlineExceeded {
-			result.TimedOut = true
-			result.Error = fmt.Errorf("session timed out after %v", opts.Timeout)
-			return result, nil
-		}
-
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			result.ExitCode = exitErr.ExitCode()
-		}
-		result.Error = fmt.Errorf("claude exited with error: %w", err)
-	}
-
-	return result, nil
-}
-
-// parseSignals checks the output for COMPLETE/CONTINUE/BLOCKED signals and rate limits
-func (r *ClaudeRunner) parseSignals(result *RunResult) {
-	// Check for COMPLETE signal (with optional commit message)
-	// Format: <promise>COMPLETE</promise> or <promise>COMPLETE: commit message</promise>
-	if idx := strings.Index(result.Output, "<promise>COMPLETE"); idx != -1 {
-		endIdx := strings.Index(result.Output[idx:], "</promise>")
-		if endIdx != -1 {
-			result.Complete = true
-			content := result.Output[idx+len("<promise>COMPLETE"):idx+endIdx]
-			if strings.HasPrefix(content, ":") {
-				result.CommitMessage = strings.TrimSpace(content[1:])
-			}
-		}
-	}
-
-	// Check for CONTINUE signal (with optional commit message)
-	// Format: <promise>CONTINUE</promise> or <promise>CONTINUE: commit message</promise>
-	if idx := strings.Index(result.Output, "<promise>CONTINUE"); idx != -1 {
-		endIdx := strings.Index(result.Output[idx:], "</promise>")
-		if endIdx != -1 {
-			result.Continue = true
-			content := result.Output[idx+len("<promise>CONTINUE"):idx+endIdx]
-			if strings.HasPrefix(content, ":") {
-				result.CommitMessage = strings.TrimSpace(content[1:])
-			}
-		}
-	}
-
-	// Check for BLOCKED signal
-	// Format: <promise>BLOCKED: reason</promise>
-	if idx := strings.Index(result.Output, "<promise>BLOCKED:"); idx != -1 {
-		endIdx := strings.Index(result.Output[idx:], "</promise>")
-		if endIdx != -1 {
-			reason := strings.TrimSpace(result.Output[idx+len("<promise>BLOCKED:") : idx+endIdx])
-			result.Blocked = true
-			result.BlockedReason = reason
-		}
-	}
-
-	// Check for rate limit indicators in output
-	r.parseRateLimit(result)
-}
-
-// parseRateLimit detects rate limit errors and extracts retry-after time if available
-func (r *ClaudeRunner) parseRateLimit(result *RunResult) {
-	output := strings.ToLower(result.Output)
-
-	// Common rate limit patterns from Claude API
-	rateLimitPatterns := []string{
-		"rate limit",
-		"rate_limit",
-		"too many requests",
-		"429",
-		"overloaded",
-		"capacity",
-		"try again",
-		"throttl",
-	}
-
-	for _, pattern := range rateLimitPatterns {
-		if strings.Contains(output, pattern) {
-			result.RateLimited = true
-			break
-		}
-	}
-
-	// Also check error message if present
-	if result.Error != nil {
-		errStr := strings.ToLower(result.Error.Error())
-		for _, pattern := range rateLimitPatterns {
-			if strings.Contains(errStr, pattern) {
-				result.RateLimited = true
-				break
-			}
-		}
-	}
-
-	// Extract retry-after time if specified
-	if result.RateLimited {
-		result.RetryAfter = parseRetryAfter(result.Output)
-	}
-
-	// Check for 529 overload exhaustion (Claude Code exited after its built-in retries)
-	// This is different from a transient rate limit - it means Claude gave up
-	r.parseOverloadExhausted(result)
-}
-
-// parseOverloadExhausted detects when Claude Code has exited after exhausting
-// its built-in 529 retry mechanism. This indicates the API is overloaded and
-// we should wait longer before attempting again.
-func (r *ClaudeRunner) parseOverloadExhausted(result *RunResult) {
-	output := strings.ToLower(result.Output)
-
-	// Patterns that indicate 529/overload exhaustion after Claude's retries
-	exhaustionPatterns := []string{
-		"529",                   // HTTP 529 status code
-		"overloaded_error",     // API error type
-		"api is overloaded",    // Common message
-		"exhausted.*retry",     // Retry exhaustion message
-		"maximum.*retries.*overload",
-	}
-
-	// Only flag as exhausted if the process exited with an error
-	if result.Error == nil && result.ExitCode == 0 {
-		return
-	}
-
-	for _, pattern := range exhaustionPatterns {
-		if strings.Contains(output, pattern) {
-			result.OverloadExhausted = true
-			return
-		}
-	}
-
-	// Also check for exit code 1 combined with overload indicators
-	// Claude Code typically exits with code 1 when rate limits are exhausted
-	if result.ExitCode != 0 && strings.Contains(output, "overloaded") {
-		result.OverloadExhausted = true
+	DefaultRunner = &ProviderRunner{
+		Provider: provider.NewClaudeProvider(),
 	}
 }
 
-// parseRetryAfter extracts wait time from rate limit messages
-// Looks for patterns like "try again in 30 seconds", "retry after 1 minute", etc.
-func parseRetryAfter(output string) time.Duration {
-	output = strings.ToLower(output)
-
-	// Pattern: "X seconds" or "X minutes" or "X hours"
-	patterns := []struct {
-		unit       string
-		multiplier time.Duration
-	}{
-		{"second", time.Second},
-		{"minute", time.Minute},
-		{"hour", time.Hour},
-	}
-
-	for _, p := range patterns {
-		// Look for number followed by unit
-		idx := strings.Index(output, p.unit)
-		if idx > 0 {
-			// Search backwards for a number
-			numStr := ""
-			for i := idx - 1; i >= 0 && i >= idx-5; i-- {
-				c := output[i]
-				if c >= '0' && c <= '9' {
-					numStr = string(c) + numStr
-				} else if len(numStr) > 0 {
-					break
-				}
-			}
-			if len(numStr) > 0 {
-				var num int
-				fmt.Sscanf(numStr, "%d", &num)
-				if num > 0 {
-					return time.Duration(num) * p.multiplier
-				}
-			}
-		}
-	}
-
-	return 0
-}
-
-// streamOutput reads from reader and writes to both buffer and writer
-func streamOutput(reader io.Reader, buf *strings.Builder, writer io.Writer) {
-	scanner := bufio.NewScanner(reader)
-	// Increase scanner buffer for long lines
-	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		buf.WriteString(line)
-		buf.WriteString("\n")
-		fmt.Fprintln(writer, line)
+// SetProvider sets the provider for the default runner.
+// This is used to switch between Claude and OpenCode at runtime.
+func SetProvider(p provider.Provider) {
+	if pr, ok := DefaultRunner.(*ProviderRunner); ok {
+		pr.Provider = p
 	}
 }
+
+// SetModelOverrides sets the model overrides for the default runner.
+func SetModelOverrides(overrides map[string]string) {
+	if pr, ok := DefaultRunner.(*ProviderRunner); ok {
+		pr.ModelOverrides = overrides
+	}
+}
+
+// GetProvider returns the current provider from the default runner.
+// Returns nil if the default runner is not a ProviderRunner.
+func GetProvider() provider.Provider {
+	if pr, ok := DefaultRunner.(*ProviderRunner); ok {
+		return pr.Provider
+	}
+	return nil
+}
+
+// ClaudeRunner is an alias for backward compatibility.
+// Use ProviderRunner with provider.NewClaudeProvider() instead.
+type ClaudeRunner = ProviderRunner
 
 // MockRunner is a test implementation of Runner
 type MockRunner struct {

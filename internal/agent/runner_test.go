@@ -3,6 +3,8 @@ package agent
 import (
 	"testing"
 	"time"
+
+	"github.com/ohare93/juggle/internal/agent/provider"
 )
 
 func TestMockRunner_Run(t *testing.T) {
@@ -202,142 +204,12 @@ func TestMockRunner_Run(t *testing.T) {
 	})
 }
 
-func TestClaudeRunner_parseSignals(t *testing.T) {
-	runner := &ClaudeRunner{}
-
-	t.Run("detects COMPLETE signal", func(t *testing.T) {
-		result := &RunResult{
-			Output: "Some output...\n<promise>COMPLETE</promise>\nMore output...",
-		}
-
-		runner.parseSignals(result)
-
-		if !result.Complete {
-			t.Error("expected Complete=true")
-		}
-		if result.Blocked {
-			t.Error("expected Blocked=false")
-		}
-	})
-
-	t.Run("detects BLOCKED signal with reason", func(t *testing.T) {
-		result := &RunResult{
-			Output: "Some output...\n<promise>BLOCKED: tools not available</promise>\nMore output...",
-		}
-
-		runner.parseSignals(result)
-
-		if result.Complete {
-			t.Error("expected Complete=false")
-		}
-		if !result.Blocked {
-			t.Error("expected Blocked=true")
-		}
-		if result.BlockedReason != "tools not available" {
-			t.Errorf("expected BlockedReason 'tools not available', got '%s'", result.BlockedReason)
-		}
-	})
-
-	t.Run("no signals detected in normal output", func(t *testing.T) {
-		result := &RunResult{
-			Output: "Just some normal output without any signals",
-		}
-
-		runner.parseSignals(result)
-
-		if result.Complete {
-			t.Error("expected Complete=false")
-		}
-		if result.Blocked {
-			t.Error("expected Blocked=false")
-		}
-	})
-
-	t.Run("handles empty output", func(t *testing.T) {
-		result := &RunResult{
-			Output: "",
-		}
-
-		runner.parseSignals(result)
-
-		if result.Complete {
-			t.Error("expected Complete=false")
-		}
-		if result.Blocked {
-			t.Error("expected Blocked=false")
-		}
-	})
-
-	t.Run("detects CONTINUE signal", func(t *testing.T) {
-		result := &RunResult{
-			Output: "Some output...\n<promise>CONTINUE</promise>\nMore output...",
-		}
-
-		runner.parseSignals(result)
-
-		if !result.Continue {
-			t.Error("expected Continue=true")
-		}
-		if result.Complete {
-			t.Error("expected Complete=false")
-		}
-		if result.CommitMessage != "" {
-			t.Errorf("expected empty CommitMessage, got '%s'", result.CommitMessage)
-		}
-	})
-
-	t.Run("detects CONTINUE signal with commit message", func(t *testing.T) {
-		result := &RunResult{
-			Output: "Some output...\n<promise>CONTINUE: feat: juggle-92 - Add feature</promise>\nMore output...",
-		}
-
-		runner.parseSignals(result)
-
-		if !result.Continue {
-			t.Error("expected Continue=true")
-		}
-		if result.CommitMessage != "feat: juggle-92 - Add feature" {
-			t.Errorf("expected CommitMessage 'feat: juggle-92 - Add feature', got '%s'", result.CommitMessage)
-		}
-	})
-
-	t.Run("detects COMPLETE signal with commit message", func(t *testing.T) {
-		result := &RunResult{
-			Output: "Some output...\n<promise>COMPLETE: feat: juggle-93 - Final changes</promise>\nMore output...",
-		}
-
-		runner.parseSignals(result)
-
-		if !result.Complete {
-			t.Error("expected Complete=true")
-		}
-		if result.CommitMessage != "feat: juggle-93 - Final changes" {
-			t.Errorf("expected CommitMessage 'feat: juggle-93 - Final changes', got '%s'", result.CommitMessage)
-		}
-	})
-
-	t.Run("COMPLETE without commit message", func(t *testing.T) {
-		result := &RunResult{
-			Output: "Some output...\n<promise>COMPLETE</promise>\nMore output...",
-		}
-
-		runner.parseSignals(result)
-
-		if !result.Complete {
-			t.Error("expected Complete=true")
-		}
-		if result.CommitMessage != "" {
-			t.Errorf("expected empty CommitMessage, got '%s'", result.CommitMessage)
-		}
-	})
-}
-
 func TestDefaultRunner(t *testing.T) {
-	t.Run("DefaultRunner is ClaudeRunner by default", func(t *testing.T) {
+	t.Run("DefaultRunner is ProviderRunner by default", func(t *testing.T) {
 		ResetRunner()
-		_, ok := DefaultRunner.(*ClaudeRunner)
+		_, ok := DefaultRunner.(*ProviderRunner)
 		if !ok {
-			t.Error("expected DefaultRunner to be *ClaudeRunner")
+			t.Error("expected DefaultRunner to be *ProviderRunner")
 		}
 	})
 
@@ -354,167 +226,32 @@ func TestDefaultRunner(t *testing.T) {
 		ResetRunner()
 	})
 
-	t.Run("ResetRunner restores ClaudeRunner", func(t *testing.T) {
+	t.Run("ResetRunner restores ProviderRunner", func(t *testing.T) {
 		mock := NewMockRunner(&RunResult{Output: "mock"})
 		SetRunner(mock)
 		ResetRunner()
 
-		_, ok := DefaultRunner.(*ClaudeRunner)
+		_, ok := DefaultRunner.(*ProviderRunner)
 		if !ok {
-			t.Error("expected DefaultRunner to be *ClaudeRunner after ResetRunner")
+			t.Error("expected DefaultRunner to be *ProviderRunner after ResetRunner")
 		}
 	})
-}
 
-func TestClaudeRunner_parseRateLimit(t *testing.T) {
-	runner := &ClaudeRunner{}
+	t.Run("SetProvider changes provider", func(t *testing.T) {
+		ResetRunner()
+		openCodeProvider := provider.NewOpenCodeProvider()
+		SetProvider(openCodeProvider)
 
-	testCases := []struct {
-		name        string
-		output      string
-		wantLimited bool
-	}{
-		{
-			name:        "rate limit in output",
-			output:      "Error: rate limit exceeded",
-			wantLimited: true,
-		},
-		{
-			name:        "rate_limit underscore variant",
-			output:      "Error: rate_limit_error",
-			wantLimited: true,
-		},
-		{
-			name:        "too many requests",
-			output:      "Error: too many requests",
-			wantLimited: true,
-		},
-		{
-			name:        "429 status code",
-			output:      "HTTP 429 error returned",
-			wantLimited: true,
-		},
-		{
-			name:        "overloaded message",
-			output:      "Claude is currently overloaded",
-			wantLimited: true,
-		},
-		{
-			name:        "capacity message",
-			output:      "No capacity available",
-			wantLimited: true,
-		},
-		{
-			name:        "try again message",
-			output:      "Please try again later",
-			wantLimited: true,
-		},
-		{
-			name:        "throttled message",
-			output:      "Request throttled",
-			wantLimited: true,
-		},
-		{
-			name:        "normal output",
-			output:      "Task completed successfully",
-			wantLimited: false,
-		},
-		{
-			name:        "empty output",
-			output:      "",
-			wantLimited: false,
-		},
-		{
-			name:        "case insensitive",
-			output:      "RATE LIMIT EXCEEDED",
-			wantLimited: true,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			result := &RunResult{Output: tc.output}
-			runner.parseRateLimit(result)
-
-			if result.RateLimited != tc.wantLimited {
-				t.Errorf("expected RateLimited=%v, got %v", tc.wantLimited, result.RateLimited)
-			}
-		})
-	}
-}
-
-func TestParseRetryAfter(t *testing.T) {
-	testCases := []struct {
-		name     string
-		output   string
-		wantWait time.Duration
-	}{
-		{
-			name:     "30 seconds",
-			output:   "Rate limited. Try again in 30 seconds.",
-			wantWait: 30 * time.Second,
-		},
-		{
-			name:     "2 minutes",
-			output:   "Please retry after 2 minutes",
-			wantWait: 2 * time.Minute,
-		},
-		{
-			name:     "1 hour",
-			output:   "Wait 1 hour before retrying",
-			wantWait: 1 * time.Hour,
-		},
-		{
-			name:     "5 minute singular",
-			output:   "Retry in 5 minute",
-			wantWait: 5 * time.Minute,
-		},
-		{
-			name:     "no time specified",
-			output:   "Rate limit exceeded",
-			wantWait: 0,
-		},
-		{
-			name:     "empty output",
-			output:   "",
-			wantWait: 0,
-		},
-		{
-			name:     "60 seconds",
-			output:   "Wait 60 seconds",
-			wantWait: 60 * time.Second,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := parseRetryAfter(tc.output)
-			if got != tc.wantWait {
-				t.Errorf("expected %v, got %v", tc.wantWait, got)
-			}
-		})
-	}
-}
-
-func TestMockRunner_RateLimited(t *testing.T) {
-	t.Run("returns rate limited result", func(t *testing.T) {
-		mock := NewMockRunner(&RunResult{
-			Output:      "Rate limit exceeded",
-			RateLimited: true,
-			RetryAfter:  30 * time.Second,
-		})
-
-		result, err := mock.Run(RunOptions{Prompt: "prompt"})
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+		p := GetProvider()
+		if p == nil {
+			t.Fatal("expected provider to be set")
+		}
+		if p.Type() != provider.TypeOpenCode {
+			t.Errorf("expected provider type OpenCode, got %s", p.Type())
 		}
 
-		if !result.RateLimited {
-			t.Error("expected RateLimited=true")
-		}
-		if result.RetryAfter != 30*time.Second {
-			t.Errorf("expected RetryAfter=30s, got %v", result.RetryAfter)
-		}
+		// Clean up
+		ResetRunner()
 	})
 }
 
@@ -545,6 +282,28 @@ func TestRunOptions_Modes(t *testing.T) {
 		opts := RunOptions{Prompt: "test", Permission: PermissionBypass}
 		if opts.Permission != PermissionBypass {
 			t.Errorf("expected Permission=PermissionBypass, got %s", opts.Permission)
+		}
+	})
+}
+
+func TestMockRunner_RateLimited(t *testing.T) {
+	t.Run("returns rate limited result", func(t *testing.T) {
+		mock := NewMockRunner(&RunResult{
+			Output:      "Rate limit exceeded",
+			RateLimited: true,
+			RetryAfter:  30 * time.Second,
+		})
+
+		result, err := mock.Run(RunOptions{Prompt: "prompt"})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !result.RateLimited {
+			t.Error("expected RateLimited=true")
+		}
+		if result.RetryAfter != 30*time.Second {
+			t.Errorf("expected RetryAfter=30s, got %v", result.RetryAfter)
 		}
 	})
 }

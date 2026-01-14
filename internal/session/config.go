@@ -63,6 +63,10 @@ type Config struct {
 	// VCS settings
 	VCS string `json:"vcs,omitempty"` // Version control system: "git" or "jj"
 
+	// Agent provider settings
+	AgentProvider  string            `json:"agent_provider,omitempty"`  // Agent CLI: "claude" or "opencode"
+	ModelOverrides map[string]string `json:"model_overrides,omitempty"` // Custom model mappings (e.g., "opus": "anthropic/claude-opus-5")
+
 	// UnknownFields stores any fields from the config file that aren't recognized.
 	// These are preserved when saving to avoid data loss.
 	UnknownFields map[string]interface{} `json:"-"`
@@ -75,6 +79,8 @@ var knownConfigFields = map[string]bool{
 	"iteration_delay_fuzz":    true,
 	"overload_retry_minutes":  true,
 	"vcs":                     true,
+	"agent_provider":          true,
+	"model_overrides":         true,
 }
 
 // UnmarshalJSON implements custom JSON unmarshaling to capture unknown fields
@@ -98,6 +104,8 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 	c.IterationDelayFuzz = alias.IterationDelayFuzz
 	c.OverloadRetryMinutes = alias.OverloadRetryMinutes
 	c.VCS = alias.VCS
+	c.AgentProvider = alias.AgentProvider
+	c.ModelOverrides = alias.ModelOverrides
 
 	// Extract unknown fields
 	c.UnknownFields = make(map[string]interface{})
@@ -131,6 +139,12 @@ func (c *Config) MarshalJSON() ([]byte, error) {
 	}
 	if c.VCS != "" {
 		result["vcs"] = c.VCS
+	}
+	if c.AgentProvider != "" {
+		result["agent_provider"] = c.AgentProvider
+	}
+	if len(c.ModelOverrides) > 0 {
+		result["model_overrides"] = c.ModelOverrides
 	}
 
 	return json.Marshal(result)
@@ -329,12 +343,16 @@ func EnsureProjectInSearchPaths(projectDir string) error {
 //   - DefaultAcceptanceCriteria: repo-level ACs applied to all balls
 //   - ACTemplates: optional AC suggestions shown during ball creation
 //   - VCS: project-specific VCS preference (overrides global)
+//   - AgentProvider: project-specific agent CLI (overrides global)
+//   - ModelOverrides: project-specific model mappings (merged with global)
 //
 // These settings apply to all balls and sessions within the project.
 type ProjectConfig struct {
-	DefaultAcceptanceCriteria []string `json:"default_acceptance_criteria,omitempty"` // Repo-level ACs applied to all sessions
-	ACTemplates               []string `json:"ac_templates,omitempty"`                // Optional AC templates shown during ball creation
-	VCS                       string   `json:"vcs,omitempty"`                         // Version control system: "git" or "jj"
+	DefaultAcceptanceCriteria []string          `json:"default_acceptance_criteria,omitempty"` // Repo-level ACs applied to all sessions
+	ACTemplates               []string          `json:"ac_templates,omitempty"`                // Optional AC templates shown during ball creation
+	VCS                       string            `json:"vcs,omitempty"`                         // Version control system: "git" or "jj"
+	AgentProvider             string            `json:"agent_provider,omitempty"`              // Agent CLI: "claude" or "opencode"
+	ModelOverrides            map[string]string `json:"model_overrides,omitempty"`             // Custom model mappings
 }
 
 // DefaultProjectConfig returns a new project config with initial values
@@ -648,4 +666,197 @@ func ClearProjectVCS(projectDir string) error {
 
 	config.ClearVCS()
 	return SaveProjectConfig(projectDir, config)
+}
+
+// SetAgentProvider sets the global agent provider preference.
+// Valid values are "claude", "opencode", or "" (empty for default).
+func (c *Config) SetAgentProvider(provider string) error {
+	if provider != "" && provider != "claude" && provider != "opencode" {
+		return fmt.Errorf("invalid agent provider: %s (must be 'claude' or 'opencode')", provider)
+	}
+	c.AgentProvider = provider
+	return nil
+}
+
+// GetAgentProvider returns the global agent provider preference.
+func (c *Config) GetAgentProvider() string {
+	return c.AgentProvider
+}
+
+// ClearAgentProvider removes the agent provider preference, enabling default (claude).
+func (c *Config) ClearAgentProvider() {
+	c.AgentProvider = ""
+}
+
+// SetModelOverride sets a model override mapping.
+func (c *Config) SetModelOverride(canonical, override string) {
+	if c.ModelOverrides == nil {
+		c.ModelOverrides = make(map[string]string)
+	}
+	c.ModelOverrides[canonical] = override
+}
+
+// GetModelOverride returns the override for a canonical model name, or empty if not set.
+func (c *Config) GetModelOverride(canonical string) string {
+	if c.ModelOverrides == nil {
+		return ""
+	}
+	return c.ModelOverrides[canonical]
+}
+
+// GetModelOverrides returns all model overrides.
+func (c *Config) GetModelOverrides() map[string]string {
+	return c.ModelOverrides
+}
+
+// ClearModelOverrides removes all model overrides.
+func (c *Config) ClearModelOverrides() {
+	c.ModelOverrides = nil
+}
+
+// GetGlobalAgentProvider returns the agent provider from global config
+func GetGlobalAgentProvider() (string, error) {
+	return GetGlobalAgentProviderWithOptions(DefaultConfigOptions())
+}
+
+// GetGlobalAgentProviderWithOptions returns the agent provider with custom options
+func GetGlobalAgentProviderWithOptions(opts ConfigOptions) (string, error) {
+	config, err := LoadConfigWithOptions(opts)
+	if err != nil {
+		return "", err
+	}
+	return config.GetAgentProvider(), nil
+}
+
+// UpdateGlobalAgentProvider updates the agent provider in global config
+func UpdateGlobalAgentProvider(provider string) error {
+	return UpdateGlobalAgentProviderWithOptions(DefaultConfigOptions(), provider)
+}
+
+// UpdateGlobalAgentProviderWithOptions updates the agent provider with custom options
+func UpdateGlobalAgentProviderWithOptions(opts ConfigOptions, provider string) error {
+	config, err := LoadConfigWithOptions(opts)
+	if err != nil {
+		return err
+	}
+
+	if err := config.SetAgentProvider(provider); err != nil {
+		return err
+	}
+	return config.SaveWithOptions(opts)
+}
+
+// ClearGlobalAgentProvider clears the agent provider from global config
+func ClearGlobalAgentProvider() error {
+	return ClearGlobalAgentProviderWithOptions(DefaultConfigOptions())
+}
+
+// ClearGlobalAgentProviderWithOptions clears the agent provider with custom options
+func ClearGlobalAgentProviderWithOptions(opts ConfigOptions) error {
+	config, err := LoadConfigWithOptions(opts)
+	if err != nil {
+		return err
+	}
+
+	config.ClearAgentProvider()
+	return config.SaveWithOptions(opts)
+}
+
+// GetGlobalModelOverrides returns the model overrides from global config
+func GetGlobalModelOverrides() (map[string]string, error) {
+	return GetGlobalModelOverridesWithOptions(DefaultConfigOptions())
+}
+
+// GetGlobalModelOverridesWithOptions returns the model overrides with custom options
+func GetGlobalModelOverridesWithOptions(opts ConfigOptions) (map[string]string, error) {
+	config, err := LoadConfigWithOptions(opts)
+	if err != nil {
+		return nil, err
+	}
+	return config.GetModelOverrides(), nil
+}
+
+// SetAgentProvider for ProjectConfig sets the project agent provider preference.
+func (c *ProjectConfig) SetAgentProvider(provider string) error {
+	if provider != "" && provider != "claude" && provider != "opencode" {
+		return fmt.Errorf("invalid agent provider: %s (must be 'claude' or 'opencode')", provider)
+	}
+	c.AgentProvider = provider
+	return nil
+}
+
+// GetAgentProvider returns the project agent provider preference.
+func (c *ProjectConfig) GetAgentProvider() string {
+	return c.AgentProvider
+}
+
+// ClearAgentProvider removes the project agent provider preference.
+func (c *ProjectConfig) ClearAgentProvider() {
+	c.AgentProvider = ""
+}
+
+// SetModelOverride for ProjectConfig sets a project model override mapping.
+func (c *ProjectConfig) SetModelOverride(canonical, override string) {
+	if c.ModelOverrides == nil {
+		c.ModelOverrides = make(map[string]string)
+	}
+	c.ModelOverrides[canonical] = override
+}
+
+// GetModelOverrides returns the project model overrides.
+func (c *ProjectConfig) GetModelOverrides() map[string]string {
+	return c.ModelOverrides
+}
+
+// GetProjectAgentProvider returns the agent provider from project config
+func GetProjectAgentProvider(projectDir string) (string, error) {
+	config, err := LoadProjectConfig(projectDir)
+	if err != nil {
+		return "", err
+	}
+	return config.GetAgentProvider(), nil
+}
+
+// UpdateProjectAgentProvider updates the agent provider in project config
+func UpdateProjectAgentProvider(projectDir, provider string) error {
+	config, err := LoadProjectConfig(projectDir)
+	if err != nil {
+		return err
+	}
+
+	if err := config.SetAgentProvider(provider); err != nil {
+		return err
+	}
+	return SaveProjectConfig(projectDir, config)
+}
+
+// GetProjectModelOverrides returns the model overrides from project config
+func GetProjectModelOverrides(projectDir string) (map[string]string, error) {
+	config, err := LoadProjectConfig(projectDir)
+	if err != nil {
+		return nil, err
+	}
+	return config.GetModelOverrides(), nil
+}
+
+// MergeModelOverrides merges project overrides with global overrides.
+// Project overrides take precedence over global.
+func MergeModelOverrides(global, project map[string]string) map[string]string {
+	if global == nil && project == nil {
+		return nil
+	}
+
+	result := make(map[string]string)
+
+	// Copy global overrides
+	for k, v := range global {
+		result[k] = v
+	}
+
+	// Project overrides take precedence
+	for k, v := range project {
+		result[k] = v
+	}
+
+	return result
 }

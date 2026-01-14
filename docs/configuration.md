@@ -19,7 +19,11 @@ Location: `~/.juggle/config.json`
   "iteration_delay_minutes": 5,
   "iteration_delay_fuzz": 2,
   "overload_retry_minutes": 10,
-  "vcs": "jj"
+  "vcs": "jj",
+  "agent_provider": "claude",
+  "model_overrides": {
+    "opus": "anthropic/claude-opus-4-5"
+  }
 }
 ```
 
@@ -30,8 +34,10 @@ Location: `~/.juggle/config.json`
 | `search_paths` | string[] | `[]` | Directories to scan for `.juggle/` projects. Added automatically when creating balls. |
 | `iteration_delay_minutes` | int | `0` | Base delay between agent iterations in minutes. 0 = no delay. |
 | `iteration_delay_fuzz` | int | `0` | Random variance (+/-) in delay minutes. Example: 5 ± 2 means 3-7 minutes. |
-| `overload_retry_minutes` | int | `10` | Minutes to wait before retrying after Claude's rate limit retries are exhausted (529 errors). |
+| `overload_retry_minutes` | int | `10` | Minutes to wait before retrying after rate limit retries are exhausted (529 errors). |
 | `vcs` | string | `""` | Global VCS preference: `"git"`, `"jj"`, or `""` (auto-detect). |
+| `agent_provider` | string | `""` | Global agent provider: `"claude"`, `"opencode"`, or `""` (defaults to claude). |
+| `model_overrides` | object | `{}` | Custom model mappings. Keys: `small`, `medium`, `large`, `haiku`, `sonnet`, `opus`. Values: provider-specific model IDs. |
 
 ### Managing Global Config via CLI
 
@@ -81,7 +87,11 @@ Location: `.juggle/config.json` (in project root)
     "All tests pass",
     "No linting errors"
   ],
-  "vcs": "jj"
+  "vcs": "jj",
+  "agent_provider": "opencode",
+  "model_overrides": {
+    "large": "anthropic/claude-opus-4-5"
+  }
 }
 ```
 
@@ -91,6 +101,8 @@ Location: `.juggle/config.json` (in project root)
 |-------|------|---------|-------------|
 | `default_acceptance_criteria` | string[] | `[]` | Repository-level ACs applied to all balls and sessions in this project. |
 | `vcs` | string | `""` | Project VCS preference: `"git"`, `"jj"`, or `""` (inherit from global/auto-detect). |
+| `agent_provider` | string | `""` | Project agent provider: `"claude"`, `"opencode"`, or `""` (inherit from global). |
+| `model_overrides` | object | `{}` | Project-specific model mappings. Merged with global overrides (project takes precedence). |
 
 ### Managing Project Config via CLI
 
@@ -194,6 +206,52 @@ When determining which VCS to use:
 1. **Project config** (`.juggle/config.json` → `vcs`)
 2. **Global config** (`~/.juggle/config.json` → `vcs`)
 3. **Auto-detection**: Check for `.jj` directory, then `.git`
+
+## Agent Provider Resolution Order
+
+When determining which agent provider to use:
+
+1. **CLI flag** (`--provider claude` or `--provider opencode`)
+2. **Project config** (`.juggle/config.json` → `agent_provider`)
+3. **Global config** (`~/.juggle/config.json` → `agent_provider`)
+4. **Default**: `claude`
+
+### Supported Providers
+
+| Provider | Binary | Description |
+|----------|--------|-------------|
+| `claude` | `claude` | Claude Code CLI (default) |
+| `opencode` | `opencode` | OpenCode CLI |
+
+### Model Mapping
+
+Models are mapped from canonical names to provider-specific identifiers:
+
+| Canonical | Claude Code | OpenCode |
+|-----------|-------------|----------|
+| `small` / `haiku` | `haiku` | `anthropic/claude-3-5-haiku-latest` |
+| `medium` / `sonnet` | `sonnet` | `anthropic/claude-sonnet-4-5` |
+| `large` / `opus` | `opus` | `anthropic/claude-opus-4-5` |
+
+Use `model_overrides` to customize these mappings when new models are released:
+
+```json
+{
+  "model_overrides": {
+    "opus": "anthropic/claude-opus-5"
+  }
+}
+```
+
+### Using the --provider Flag
+
+```bash
+# Use OpenCode for this run
+juggle agent run --session my-session --provider opencode
+
+# Use Claude (explicit)
+juggle agent run --session my-session --provider claude
+```
 
 ## Rate Limit Handling
 
