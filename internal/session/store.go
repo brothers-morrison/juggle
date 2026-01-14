@@ -282,7 +282,7 @@ func (s *Store) UpdateBall(updated *Ball) error {
 	}
 
 	if !found {
-		return fmt.Errorf("ball %s not found", updated.ID)
+		return NewBallNotFoundError(updated.ID)
 	}
 
 	// Rewrite entire file
@@ -348,7 +348,7 @@ func (s *Store) ArchiveBall(ball *Ball) error {
 	}
 
 	if !found {
-		return fmt.Errorf("ball %s not found in active balls", ball.ID)
+		return NewBallNotFoundError(ball.ID)
 	}
 
 	// Add ball to archive
@@ -424,7 +424,7 @@ func (s *Store) GetBallByID(id string) (*Ball, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("ball %s not found", id)
+	return nil, NewBallNotFoundError(id)
 }
 
 
@@ -444,7 +444,7 @@ func (s *Store) GetBallByShortID(shortID string) (*Ball, error) {
 	}
 
 	if len(matches) == 0 {
-		return nil, fmt.Errorf("ball with short ID %s not found", shortID)
+		return nil, NewBallNotFoundShortError(shortID)
 	}
 
 	// If multiple matches, return most recently active
@@ -477,7 +477,7 @@ func (s *Store) ResolveBallID(id string) (*Ball, error) {
 	matches := ResolveBallByPrefix(balls, id)
 
 	if len(matches) == 0 {
-		return nil, fmt.Errorf("ball %s not found", id)
+		return nil, NewBallNotFoundError(id)
 	}
 
 	if len(matches) == 1 {
@@ -510,7 +510,7 @@ func (s *Store) ResolveBallIDStrict(id string) (*Ball, error) {
 	matches := ResolveBallByPrefix(balls, id)
 
 	if len(matches) == 0 {
-		return nil, fmt.Errorf("ball %s not found", id)
+		return nil, NewBallNotFoundError(id)
 	}
 
 	if len(matches) > 1 {
@@ -519,7 +519,7 @@ func (s *Store) ResolveBallIDStrict(id string) (*Ball, error) {
 		for i, m := range matches {
 			matchingIDs[i] = m.ID
 		}
-		return nil, fmt.Errorf("ambiguous ID '%s' matches %d balls: %s", id, len(matches), strings.Join(matchingIDs, ", "))
+		return nil, NewAmbiguousIDError(id, matchingIDs)
 	}
 
 	return matches[0], nil
@@ -616,7 +616,7 @@ func (s *Store) UnarchiveBall(ballID string) (*Ball, error) {
 		}
 	}
 	if ball == nil {
-		return nil, fmt.Errorf("ball not found in archive: %s", ballID)
+		return nil, NewBallNotFoundError(ballID)
 	}
 
 	// Change state to pending using new state model
@@ -716,7 +716,11 @@ func (s *Store) writeArchivedBallsUnlocked(balls []*Ball) error {
 	return nil
 }
 
-// Save is an alias for UpdateBall for backwards compatibility
+// Save is an alias for UpdateBall for backwards compatibility.
+//
+// Deprecated: Use UpdateBall for existing balls or AppendBall for new balls instead.
+// Save auto-detects whether a ball exists and calls the appropriate method,
+// but explicit calls to UpdateBall or AppendBall are clearer.
 func (s *Store) Save(ball *Ball) error {
 	// Check if ball already exists
 	existing, err := s.GetBallByID(ball.ID)

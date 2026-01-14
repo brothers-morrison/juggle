@@ -19,14 +19,29 @@ const (
 	PriorityUrgent Priority = "urgent"
 )
 
-// ModelSize specifies preferred LLM model size for cost optimization
+// ModelSize specifies preferred LLM model size for cost optimization.
+// When a ball specifies a model size, the agent loop can use this hint to
+// select an appropriately-sized model (trading off capability vs cost/speed).
 type ModelSize string
 
 const (
-	ModelSizeBlank  ModelSize = ""       // Default - use large or session default
-	ModelSizeSmall  ModelSize = "small"  // Maps to haiku or equivalent fast model
-	ModelSizeMedium ModelSize = "medium" // Maps to sonnet or equivalent balanced model
-	ModelSizeLarge  ModelSize = "large"  // Maps to opus or equivalent capable model
+	// ModelSizeBlank indicates no preference - the agent should use the session's
+	// default model or fall back to the largest available model. This is the
+	// implicit value when model_size is omitted from JSON. Balls with blank
+	// model size can be processed by any agent regardless of model.
+	ModelSizeBlank ModelSize = ""
+
+	// ModelSizeSmall maps to fast, cost-effective models (e.g., Claude Haiku).
+	// Use for simple tasks: documentation, straightforward fixes, formatting.
+	ModelSizeSmall ModelSize = "small"
+
+	// ModelSizeMedium maps to balanced models (e.g., Claude Sonnet).
+	// Use for standard features, moderate complexity, typical development tasks.
+	ModelSizeMedium ModelSize = "medium"
+
+	// ModelSizeLarge maps to most capable models (e.g., Claude Opus).
+	// Use for complex refactoring, architectural changes, multi-file coordination.
+	ModelSizeLarge ModelSize = "large"
 )
 
 // BallState represents the lifecycle state of a ball
@@ -168,7 +183,7 @@ func ValidStateTransition(from, to BallState) bool {
 // Returns an error if the transition is invalid.
 func (b *Ball) SetState(state BallState) error {
 	if !ValidStateTransition(b.State, state) {
-		return fmt.Errorf("invalid state transition from %s to %s", b.State, state)
+		return NewInvalidStateTransitionError(string(b.State), string(state))
 	}
 	b.State = state
 	if state != StateBlocked {
@@ -193,7 +208,7 @@ func (b *Ball) ForceSetState(state BallState) {
 // Returns an error if the transition from the current state is not valid.
 func (b *Ball) SetBlocked(reason string) error {
 	if !ValidStateTransition(b.State, StateBlocked) {
-		return fmt.Errorf("invalid state transition: cannot block from %s", b.State)
+		return NewInvalidStateTransitionError(string(b.State), string(StateBlocked))
 	}
 	b.State = StateBlocked
 	b.BlockedReason = reason
@@ -540,6 +555,13 @@ func (b *Ball) SetDependencies(deps []string) {
 
 // DetectCircularDependencies checks for circular dependencies in a set of balls.
 // Returns an error describing the cycle if one is found, nil otherwise.
+//
+// Behavior notes:
+//   - Missing dependencies (dependencies referencing non-existent ball IDs) are
+//     silently ignored and do NOT constitute a cycle. This allows balls to reference
+//     dependencies that may be resolved later or exist in other projects.
+//   - Self-references (a ball depending on itself) ARE detected as cycles.
+//   - The algorithm uses DFS with a recursion stack to detect back edges.
 func DetectCircularDependencies(balls []*Ball) error {
 	// Build a map for quick lookup
 	ballMap := make(map[string]*Ball)

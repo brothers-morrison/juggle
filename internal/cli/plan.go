@@ -88,6 +88,8 @@ func runPlan(cmd *cobra.Command, args []string) error {
 	// Build acceptance criteria list from flags (merge --ac and --criteria)
 	acceptanceCriteria := append(acceptanceCriteriaFlag, criteriaAliasFlag...)
 	if descriptionFlag != "" && len(acceptanceCriteria) == 0 {
+		// Deprecated: --description flag should be replaced with --ac/-c
+		fmt.Fprintln(os.Stderr, "Warning: --description/-d is deprecated for 'plan'. Use -c/--ac for acceptance criteria.")
 		acceptanceCriteria = []string{descriptionFlag}
 	}
 

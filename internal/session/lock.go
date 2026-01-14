@@ -58,12 +58,8 @@ func (s *SessionStore) AcquireSessionLock(sessionID string) (*SessionLock, error
 	if err != nil {
 		file.Close()
 		// Lock is held by another process - read lock info
-		info, readErr := readLockInfo(lockPath)
-		if readErr == nil && info != nil {
-			return nil, fmt.Errorf("session %s is already locked by PID %d (started %s ago on %s)",
-				sessionID, info.PID, time.Since(info.StartedAt).Round(time.Second), info.Hostname)
-		}
-		return nil, fmt.Errorf("session %s is already locked by another agent", sessionID)
+		info, _ := readLockInfo(lockPath)
+		return nil, NewSessionLockedError(sessionID, info)
 	}
 
 	// Write lock info
