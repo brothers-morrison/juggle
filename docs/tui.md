@@ -1,8 +1,8 @@
-# Juggler TUI (Terminal User Interface)
+# Juggle TUI (Terminal User Interface)
 
 ## Overview
 
-The Juggler TUI provides an interactive, full-screen terminal interface for managing balls (work sessions) across all your projects. It's built with the [Charm Bubbletea](https://github.com/charmbracelet/bubbletea) framework and offers a more visual, interactive experience compared to the CLI commands.
+The Juggle TUI provides an interactive, full-screen terminal interface for managing balls (work sessions) across all your projects. It's built with the [Charm Bubbletea](https://github.com/charmbracelet/bubbletea) framework and offers a more visual, interactive experience compared to the CLI commands.
 
 ## Features
 
@@ -22,14 +22,14 @@ The Juggler TUI provides an interactive, full-screen terminal interface for mana
 The default view showing all balls:
 
 ```
-🎯 Juggler - Task Manager
+🎯 Juggle - Task Manager
 
 Total: 42 | Ready: 15 | Juggling: 8 | Dropped: 3 | Filter: all
 
 ID              Intent                                   State                  Priority   Tags
 ────────────────────────────────────────────────────────────────────────────────────────────────
-juggler-27      Interactive menu for all these items     juggling:in-air        medium     ui,tui
-juggler-26      Move ball to another project             juggling:needs-caught  medium     cli
+juggle-27      Interactive menu for all these items     juggling:in-air        medium     ui,tui
+juggle-26      Move ball to another project             juggling:needs-caught  medium     cli
 myapp-5         Fix authentication bug                   ready                  high       backend,bug
 ...
 ```
@@ -46,12 +46,12 @@ Features:
 Press Enter on a ball to see full details:
 
 ```
-🎯 Ball: juggler-27
+🎯 Ball: juggle-27
 
 Intent: Interactive menu for all these items
 Priority: medium
 State: juggling:in-air
-Working Dir: /home/jmo/Development/juggler
+Working Dir: /home/jmo/Development/juggle
 Started: 2 hours ago
 Last Activity: 5 minutes ago
 Tags: ui, tui
@@ -71,7 +71,7 @@ Press 'b' to go back, 'q' to quit
 Press `?` to see all keyboard shortcuts:
 
 ```
-🎯 Juggler TUI - Help
+🎯 Juggle TUI - Help
 
 Navigation
   ↑ / k      Move up
@@ -390,17 +390,17 @@ var myNewStyle = lipgloss.NewStyle().
 
 **Issue**: "No balls to display" when balls exist
 - **Cause**: Discovery or loading error
-- **Solution**: Check `~/.juggler/config.json` search paths are correct
+- **Solution**: Check `~/.juggle/config.json` search paths are correct
 
 ### Updates Not Persisting
 
 **Issue**: State changes don't save
 - **Cause**: Store update failing
-- **Solution**: Check `.juggler/` directory is writable
+- **Solution**: Check `.juggle/` directory is writable
 
 ## References
 
 - [Bubbletea Documentation](https://github.com/charmbracelet/bubbletea)
 - [Lipgloss Styling](https://github.com/charmbracelet/lipgloss)
 - [Bubbles Components](https://github.com/charmbracelet/bubbles)
-- [Juggler Architecture](../README.md#architecture-overview)
+- [Juggle Architecture](../README.md#architecture-overview)

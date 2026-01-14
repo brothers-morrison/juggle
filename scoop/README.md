@@ -5,12 +5,12 @@
 Install directly from the manifest URL:
 
 ```powershell
-scoop install https://raw.githubusercontent.com/ohare93/juggler/main/scoop/juggle.json
+scoop install https://raw.githubusercontent.com/ohare93/juggle/main/scoop/juggle.json
 ```
 
 ## Manual Installation
 
-1. Download the latest release from [GitHub Releases](https://github.com/ohare93/juggler/releases)
+1. Download the latest release from [GitHub Releases](https://github.com/ohare93/juggle/releases)
 2. Extract `juggle_X.Y.Z_windows_amd64.zip`
 3. Add the extracted directory to your PATH
 

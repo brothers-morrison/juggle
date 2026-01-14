@@ -374,7 +374,7 @@ func TestAgentRefine_AllMetaSession(t *testing.T) {
 	}
 }
 
-// TestAgentRefine_PromptContainsSkillDirective tests that the prompt instructs use of the juggler skill
+// TestAgentRefine_PromptContainsSkillDirective tests that the prompt instructs use of the juggle skill
 func TestAgentRefine_PromptContainsSkillDirective(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
@@ -392,12 +392,12 @@ func TestAgentRefine_PromptContainsSkillDirective(t *testing.T) {
 		t.Fatalf("Failed to generate prompt: %v", err)
 	}
 
-	// Verify prompt contains directive to use Skill tool with juggler
+	// Verify prompt contains directive to use Skill tool with juggle
 	if !strings.Contains(prompt, "Skill tool") {
 		t.Error("Prompt missing 'Skill tool' reference")
 	}
-	if !strings.Contains(prompt, `skill="juggler"`) {
-		t.Error("Prompt missing 'skill=\"juggler\"' directive")
+	if !strings.Contains(prompt, `skill="juggle"`) {
+		t.Error("Prompt missing 'skill=\"juggle\"' directive")
 	}
 	// Verify the instructions mention juggle CLI commands (not raw JSON editing)
 	if !strings.Contains(prompt, "juggle update") {

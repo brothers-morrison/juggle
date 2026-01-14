@@ -5,7 +5,7 @@ This test plan validates the new Ralph loop integration, covering session creati
 ## Prerequisites
 
 - Juggler binary built and in PATH: `go install ./cmd/juggle`
-- An existing repo **without** `.juggler/` directory
+- An existing repo **without** `.juggle/` directory
 - Claude CLI installed and authenticated (`claude --version`)
 
 ---
@@ -16,8 +16,8 @@ This test plan validates the new Ralph loop integration, covering session creati
 # 1.1 Navigate to test repo
 cd ~/path/to/your-test-repo
 
-# 1.2 Verify no juggler state exists
-ls -la .juggler/  # Should fail or not exist
+# 1.2 Verify no juggle state exists
+ls -la .juggle/  # Should fail or not exist
 
 # 1.3 Create a session for agent work
 juggle sessions create test-agent -m "Test the Ralph loop integration"
@@ -31,7 +31,7 @@ juggle sessions show test-agent
 ```
 
 **Checkpoints:**
-- [ ] `.juggler/` directory created
+- [ ] `.juggle/` directory created
 - [ ] `sessions/test-agent/` directory exists
 
 ---
@@ -134,7 +134,7 @@ juggle agent run test-agent --iterations 5 --trust
 juggle balls
 # Expected: Balls should be in complete state
 
-cat .juggler/sessions/test-agent/progress.txt
+cat .juggle/sessions/test-agent/progress.txt
 # Expected: Timestamped entries from agent
 ```
 

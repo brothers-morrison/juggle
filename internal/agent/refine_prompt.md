@@ -4,10 +4,10 @@ You are reviewing and improving work item (ball) definitions for the juggle task
 
 ## CRITICAL: Use the Juggler Skill First
 
-**Before making ANY changes to balls, you MUST invoke the juggler skill:**
+**Before making ANY changes to balls, you MUST invoke the juggle skill:**
 
 ```
-Use the Skill tool with skill="juggler"
+Use the Skill tool with skill="juggle"
 ```
 
 This skill provides:

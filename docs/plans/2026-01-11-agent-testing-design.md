@@ -405,7 +405,7 @@ func TestAgentRun_PromptContainsRequiredSections(t *testing.T) {
 
     store := env.GetStore(t)
     ball := &session.Session{
-        ID:                 "juggler-test-1",
+        ID:                 "juggle-test-1",
         Intent:             "Build feature X",
         AcceptanceCriteria: []string{"Criterion A", "Criterion B"},
         Priority:           session.PriorityHigh,
@@ -539,4 +539,4 @@ This design provides:
 5. **Observable** - Captured calls enable prompt verification
 6. **Safe defaults** - Mock signals COMPLETE if responses exhausted
 
-Implementation balls: `juggler-81` (interface refactor) and `juggler-82` (integration tests).
+Implementation balls: `juggle-81` (interface refactor) and `juggle-82` (integration tests).

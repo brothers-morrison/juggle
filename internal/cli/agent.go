@@ -1910,7 +1910,7 @@ type CommitResult struct {
 }
 
 // performJJCommit executes a jj commit with the given message and returns status.
-// This is called by juggler after the agent signals completion.
+// This is called by juggle after the agent signals completion.
 // Returns nil if there are no changes to commit.
 func performJJCommit(projectDir, commitMessage string) (*CommitResult, error) {
 	result := &CommitResult{}

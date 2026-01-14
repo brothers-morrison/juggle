@@ -51,7 +51,7 @@ type RunResult struct {
 	ExitCode          int
 	Complete          bool
 	Continue          bool   // Agent completed one ball, more remain - signals loop to continue to next iteration
-	CommitMessage     string // Commit message provided by agent in promise signal (e.g., "feat: juggler-92 - Add feature")
+	CommitMessage     string // Commit message provided by agent in promise signal (e.g., "feat: juggle-92 - Add feature")
 	Blocked           bool
 	BlockedReason     string
 	TimedOut          bool

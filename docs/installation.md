@@ -10,16 +10,16 @@
 
 ### Method 1: Install Script (Recommended)
 
-The quickest way to install Juggler:
+The quickest way to install Juggle:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/jmoiron/juggler/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/ohare93/juggle/main/install.sh | bash
 ```
 
 Or download and inspect first:
 
 ```bash
-curl -O https://raw.githubusercontent.com/jmoiron/juggler/main/install.sh
+curl -O https://raw.githubusercontent.com/ohare93/juggle/main/install.sh
 chmod +x install.sh
 ./install.sh
 ```
@@ -33,8 +33,8 @@ The script will:
 
 ```bash
 # Clone the repository
-git clone https://github.com/jmoiron/juggler.git
-cd juggler
+git clone https://github.com/ohare93/juggle.git
+cd juggle
 
 # Build the binary
 go build -o juggle ./cmd/juggle
@@ -50,20 +50,20 @@ mv juggle ~/.local/bin/
 If you have Go installed:
 
 ```bash
-go install github.com/jmoiron/juggler/cmd/juggle@latest
+go install github.com/ohare93/juggle/cmd/juggle@latest
 ```
 
 Make sure `$GOPATH/bin` (usually `~/go/bin`) is in your PATH.
 
 ### Method 4: Download Pre-built Binary
 
-1. Go to the [Releases page](https://github.com/jmoiron/juggler/releases)
+1. Go to the [Releases page](https://github.com/ohare93/juggle/releases)
 2. Download the binary for your platform
 3. Extract and move to a directory in your PATH:
 
 ```bash
 # Linux/macOS
-tar -xzf juggler-linux-amd64.tar.gz
+tar -xzf juggle-linux-amd64.tar.gz
 sudo mv juggle /usr/local/bin/
 
 # Or install to user directory
@@ -81,7 +81,7 @@ juggle --version
 
 ### 2. Configure Search Paths
 
-Tell Juggler where to look for projects:
+Tell Juggle where to look for projects:
 
 ```bash
 # Add your development directory
@@ -92,7 +92,7 @@ juggle projects add ~/work
 juggle projects add ~/personal-projects
 ```
 
-Juggler will search these directories for any project containing a `.juggler` folder.
+Juggle will search these directories for any project containing a `.juggle` folder.
 
 ### 3. Start Your First Session
 
@@ -101,7 +101,7 @@ cd your-project
 juggle start "My first work session"
 ```
 
-This creates `.juggler/balls.jsonl` in your project directory.
+This creates `.juggle/balls.jsonl` in your project directory.
 
 ## Claude Code Integration (Optional)
 
@@ -174,14 +174,14 @@ cargo install zellij
 
 ### 2. Configure Zellij
 
-Juggler automatically detects Zellij sessions. Start Zellij in your project:
+Juggle automatically detects Zellij sessions. Start Zellij in your project:
 
 ```bash
 cd your-project
 zellij
 ```
 
-Now Juggler commands will track which Zellij tab you're in and can automatically switch tabs:
+Now Juggle commands will track which Zellij tab you're in and can automatically switch tabs:
 
 ```bash
 juggle jump <ball-id>  # Switches to the ball's tab
@@ -193,13 +193,13 @@ juggle next            # Jumps to highest priority ball
 ### Using Install Script
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/jmoiron/juggler/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/ohare93/juggle/main/install.sh | bash
 ```
 
 ### Using Go
 
 ```bash
-go install github.com/jmoiron/juggler/cmd/juggle@latest
+go install github.com/ohare93/juggle/cmd/juggle@latest
 ```
 
 ### Manual Update
@@ -208,7 +208,7 @@ Download the latest release and replace the binary.
 
 ## Configuration
 
-Juggler stores configuration in `~/.config/juggler/config.json`:
+Juggle stores configuration in `~/.config/juggle/config.json`:
 
 ```json
 {
@@ -235,10 +235,10 @@ rm ~/.local/bin/juggle
 sudo rm /usr/local/bin/juggle
 
 # Remove configuration
-rm -rf ~/.config/juggler
+rm -rf ~/.config/juggle
 
 # Remove project data (optional - only if you want to delete all tracked sessions)
-find ~/Development -name ".juggler" -type d -exec rm -rf {} +
+find ~/Development -name ".juggle" -type d -exec rm -rf {} +
 ```
 
 ## Troubleshooting
@@ -263,7 +263,7 @@ Add search paths:
 juggle projects add ~/Development
 ```
 
-Or start a session in a specific directory to create `.juggler`:
+Or start a session in a specific directory to create `.juggle`:
 
 ```bash
 cd your-project
@@ -302,8 +302,8 @@ mv juggle ~/.local/bin/
 ## Getting Help
 
 - Documentation: See `docs/` directory
-- Issues: https://github.com/jmoiron/juggler/issues
-- Commands: `juggle --help` or `juggler <command> --help`
+- Issues: https://github.com/ohare93/juggle/issues
+- Commands: `juggle --help` or `juggle <command> --help`
 
 ## Next Steps
 

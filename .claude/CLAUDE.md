@@ -20,8 +20,11 @@ go install ./cmd/juggle
 ### Testing
 
 ```bash
-# Run integration tests
-devbox run test
+# Run integration tests (quiet - shows pass/fail summary only)
+devbox run test-quiet
+
+# Run integration tests (verbose - full output)
+devbox run test-verbose
 # or: go test -v ./internal/integration_test/...
 
 # Run all tests
@@ -54,7 +57,7 @@ go fmt ./...
 
 ### Core Concepts
 
-**Juggler** runs autonomous AI agent loops with good UX. Define tasks ("balls") with acceptance criteria via TUI or CLI, start the agent loop (`juggle agent run`), and add or modify tasks while it runs. No JSON editing - the TUI and CLI handle all task management.
+**Juggle** runs autonomous AI agent loops with good UX. Define tasks ("balls") with acceptance criteria via TUI or CLI, start the agent loop (`juggle agent run`), and add or modify tasks while it runs. No JSON editing - the TUI and CLI handle all task management.
 
 ### State Machine
 
@@ -86,20 +89,20 @@ State transitions:
 
 **`store.go`** - Persistent storage:
 
-- JSONL format: `.juggler/balls.jsonl` (active), `.juggler/archive/balls.jsonl` (completed)
+- JSONL format: `.juggle/balls.jsonl` (active), `.juggle/archive/balls.jsonl` (completed)
 - `Store` type handles CRUD operations for balls
 - Methods: `AppendBall()`, `LoadBalls()`, `UpdateBall()`, `ArchiveBall()`
 - Ball resolution by ID or short ID
 
 **`config.go`** - Global configuration:
 
-- Location: `~/.juggler/config.json`
-- Manages search paths for discovering projects with `.juggler/` directories
+- Location: `~/.juggle/config.json`
+- Manages search paths for discovering projects with `.juggle/` directories
 - Default paths: `~/Development`, `~/projects`, `~/work`
 
 **`discovery.go`** - Cross-project discovery:
 
-- `DiscoverProjects()`: Scans search paths for `.juggler/` directories
+- `DiscoverProjects()`: Scans search paths for `.juggle/` directories
 - `LoadAllBalls()`, `LoadInProgressBalls()`: Load balls across all discovered projects
 - Enables global views like `juggle status` and `juggle next`
 
@@ -107,6 +110,13 @@ State transitions:
 
 - `ArchiveBall()`: Moves completed balls to archive
 - `LoadArchive()`: Query historical completed work
+
+**`juggle_session.go`** - JuggleSession entity:
+
+- `JuggleSession` struct: Groups balls by tag with context and acceptance criteria
+- Fields: ID, Description, Context, DefaultModel, AcceptanceCriteria, CreatedAt, UpdatedAt
+- `SessionStore` handles CRUD: `CreateSession()`, `LoadSession()`, `ListSessions()`, `DeleteSession()`
+- Progress tracking: `AppendProgress()`, `LoadProgress()`
 
 #### 2. CLI Package (`internal/cli/`)
 
@@ -122,23 +132,66 @@ State transitions:
 - Cross-project commands: Load config → discover projects → load balls → operate
 - Ball-specific commands: Find ball by ID across all projects → create store for that ball's directory → operate
 
+**Session commands (`sessions.go`):**
+
+- `juggle sessions list` - List all sessions
+- `juggle sessions create <id> [-m description]` - Create new session
+- `juggle sessions delete <id>` - Delete session
+- `juggle sessions show <id>` - Show session details
+- `juggle sessions context <id> [--edit]` - View/edit session context
+- `juggle sessions progress <id>` - View progress log
+- `juggle sessions edit <id>` - Edit session properties
+
+**Agent commands (`agent.go`):**
+
+- `juggle agent run` - Run autonomous agent loop
+  - `--session <id>` or `--all` for meta-session
+  - `--iterations N` (default: 10)
+  - `--model <opus|sonnet|haiku>`
+  - `--headless` for non-interactive mode
+  - `--dry-run` for testing without execution
+- `juggle agent refine` - Interactive ball refinement
+
+**Export command (`export.go`):**
+
+- `juggle export --session <id> --format <json|csv|ralph|agent>`
+- Ralph format outputs `<context>`, `<progress>`, `<tasks>` sections
+
 #### 3. TUI Package (`internal/tui/`)
 
 **Bubble Tea-based terminal UI:**
 
-- List view: Shows balls with state indicators
-- Detail view: Shows ball details, todos, and actions
-- State-based styling: Different colors for pending/in_progress/complete/blocked
+**Split View (Default)** - Three-panel layout:
+- Left Panel (25%): Sessions list with ball counts
+- Right Panel (75%): Balls list with expandable todos
+- Bottom Panel: Activity log
+
+Navigation: `Tab` cycles panels, `j/k` navigates, `Enter` selects, `Esc` goes back
+
+CRUD: `a` add, `e` edit, `x` delete, `s` start, `c` complete, `b` block, `Space` toggle todo
+
+Flags: `--legacy` for single-panel mode, `--session <id>` pre-select session
+
+**Legacy View** (`--legacy`): Single-panel ball list with detail view
+
+#### 4. Watcher Package (`internal/watcher/`)
+
+**File system watcher for live updates:**
+
+- Uses `fsnotify` to monitor `.juggle/` directory
+- Watches `balls.jsonl`, `session.json`, `progress.txt`
+- Sends events to TUI for real-time updates
+- Event types: `BallsChanged`, `ProgressChanged`, `SessionChanged`
 
 ## Storage Format
 
 ### JSONL Structure
 
-Each ball is one line of JSON in `.juggler/balls.jsonl`:
+Each ball is one line of JSON in `.juggle/balls.jsonl`:
 
 ```json
 {
-  "id": "juggler-5",
+  "id": "juggle-5",
   "intent": "Add search feature",
   "priority": "high",
   "state": "in_progress",
@@ -156,8 +209,14 @@ Each ball is one line of JSON in `.juggler/balls.jsonl`:
 
 ### File Locations
 
-- Per-project: `.juggler/balls.jsonl` (active), `.juggler/archive/balls.jsonl` (complete)
-- Global config: `~/.juggler/config.json`
+- Per-project balls: `.juggle/balls.jsonl` (active), `.juggle/archive/balls.jsonl` (complete)
+- Global config: `~/.juggle/config.json`
+
+### Session Storage
+
+Sessions use directory structure:
+- `.juggle/sessions/<id>/session.json` - Session data
+- `.juggle/sessions/<id>/progress.txt` - Progress log
 
 ## Important Patterns
 
@@ -202,7 +261,7 @@ Integration tests use `testutil_test.go`:
 When multiple agents/users work simultaneously, set `JUGGLER_CURRENT_BALL` environment variable to explicitly target a ball:
 
 ```bash
-export JUGGLER_CURRENT_BALL="juggler-5"
+export JUGGLER_CURRENT_BALL="juggle-5"
 ```
 
 This ensures operations go to the correct ball when:
@@ -211,18 +270,9 @@ This ensures operations go to the correct ball when:
 - Multiple terminal sessions are active
 - You want explicit control over which ball is targeted
 
-## Future: Sessions
-
-*Note: Session support is planned for future development.*
-
-Sessions will group balls by tag, providing:
-- Context files per session
-- Progress tracking across related balls
-- Ralph-style agent loop integration
-
 ## Code Style Notes
 
 - Use `lipgloss` for terminal styling (colors, formatting)
 - Commands return `error`, not `fmt.Errorf()` directly - wrap with context
 - JSONL append-only writes for better version control diffs
-- Ball IDs format: `<directory-name>-<counter>` (e.g., `juggler-5`)
+- Ball IDs format: `<directory-name>-<counter>` (e.g., `juggle-5`)

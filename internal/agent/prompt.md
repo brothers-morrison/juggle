@@ -2,7 +2,7 @@
 
 **CRITICAL: This is an autonomous agent loop. DO NOT ask questions. DO NOT check for skills. DO NOT wait for user input. START WORKING IMMEDIATELY.**
 
-You are implementing features tracked by juggler balls. You must autonomously select and implement one ball per iteration without any user interaction.
+You are implementing features tracked by juggle balls. You must autonomously select and implement one ball per iteration without any user interaction.
 
 ## Workflow
 
@@ -56,7 +56,7 @@ Review these sections to understand the current state.
 1. **Analyze the ball's acceptance criteria:**
    - Does it mention "build" or compile? → need build tool (go, cargo, npm, etc.)
    - Does it mention "test"? → need test runner
-   - Will you update juggler state? → need `juggle` CLI
+   - Will you update juggle state? → need `juggle` CLI
    - Does it require specific tools? → check those
 
 2. **Test each required command** by running its version command:
@@ -98,7 +98,7 @@ Run the verification commands required by the ball's acceptance criteria:
 
 **CRITICAL: You MUST update progress BEFORE emitting any BLOCKED, CONTINUE, or COMPLETE signal.**
 
-Use juggler CLI commands to update state (all support `--json` for structured output):
+Use juggle CLI commands to update state (all support `--json` for structured output):
 
 **Step 5a: Log progress FIRST (required before any terminal signal):**
 
@@ -115,13 +115,13 @@ Your progress entry MUST contain:
 Example progress entries:
 ```bash
 # For a completed ball:
-juggle progress append mysession "Completed juggler-92: AC 1-4 satisfied. Added progress validation to prompt.md, agent loop enforcement, and tests."
+juggle progress append mysession "Completed juggle-92: AC 1-4 satisfied. Added progress validation to prompt.md, agent loop enforcement, and tests."
 
 # For a blocked ball:
-juggle progress append mysession "Blocked on juggler-92: AC 1-2 done (prompt.md updated). Blocker: Cannot access database. Next: Resolve DB credentials."
+juggle progress append mysession "Blocked on juggle-92: AC 1-2 done (prompt.md updated). Blocker: Cannot access database. Next: Resolve DB credentials."
 
 # For CONTINUE signal:
-juggle progress append mysession "Completed juggler-92: All ACs satisfied, tests pass. Continuing to next ball."
+juggle progress append mysession "Completed juggle-92: All ACs satisfied, tests pass. Continuing to next ball."
 ```
 
 **Step 5b: Update ball state:**
@@ -161,7 +161,7 @@ The commit message should be a single line summarizing what you changed. Format:
 
 Example:
 ```
-<promise>CONTINUE: feat: juggler-92 - Add progress validation to agent loop</promise>
+<promise>CONTINUE: feat: juggle-92 - Add progress validation to agent loop</promise>
 ```
 
 This signals the outer loop to call you again for the next ball. **This is the most common signal.**
@@ -213,5 +213,5 @@ When you cannot proceed with the current ball due to a blocker:
 - **STAY WITHIN SESSION** - Only work on balls in the `<balls>` section. Do NOT use `juggle balls` to find other work.
 - **ALWAYS UPDATE PROGRESS BEFORE SIGNALS** - The agent loop will reject BLOCKED/CONTINUE/COMPLETE signals if progress wasn't updated this iteration.
 - Never skip verification steps.
-- Always use juggler CLI commands to update state.
+- Always use juggle CLI commands to update state.
 - If stuck, update the ball to blocked state and output BLOCKED signal.

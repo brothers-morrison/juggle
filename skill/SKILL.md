@@ -1,6 +1,6 @@
 ---
-name: juggler
-description: Manage tasks via CLI commands during agent loops. Use when working on a project with a .juggler/ directory, when user mentions juggler balls/tasks, or when you need to update task state or log progress.
+name: juggle
+description: Manage tasks via CLI commands during agent loops. Use when working on a project with a .juggle/ directory, when user mentions juggle balls/tasks, or when you need to update task state or log progress.
 ---
 
 # Juggler
@@ -259,7 +259,7 @@ If a ball has dependencies that are not yet complete, the agent should complete 
 
 ## Headless/Non-Interactive Mode
 
-For automated agents and scripts, juggler commands support non-interactive modes:
+For automated agents and scripts, juggle commands support non-interactive modes:
 
 ### Creating Balls (Non-Interactive)
 
@@ -348,6 +348,6 @@ The agent run command will error gracefully if no session is provided and stdin 
 
 ## File Locations
 
-- Balls: `.juggler/balls.jsonl`
-- Sessions: `.juggler/sessions/<id>/session.json`
-- Progress: `.juggler/sessions/<id>/progress.txt`
+- Balls: `.juggle/balls.jsonl`
+- Sessions: `.juggle/sessions/<id>/session.json`
+- Progress: `.juggle/sessions/<id>/progress.txt`

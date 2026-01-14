@@ -65,7 +65,7 @@ Juggler is designed to work seamlessly with Claude Code, allowing you to:
 
 ## Workflow Enforcement Features
 
-When installed with `--install-hooks`, juggler maintains workflow discipline:
+When installed with `--install-hooks`, juggle maintains workflow discipline:
 
 ### The Check → Start → Complete Cycle
 
@@ -100,7 +100,7 @@ Run 'juggle check' to verify current state
 
 **Reminder Logic:**
 - Shows if >5 minutes since last check
-- Only in projects with `.juggler` directories
+- Only in projects with `.juggle` directories
 - Non-intrusive (doesn't block work)
 - <50ms performance overhead
 
@@ -412,7 +412,7 @@ This keeps your active list clean and builds a searchable history.
 
 This happens when:
 - No balls are active in the current project
-- You're in a project without `.juggler` directory
+- You're in a project without `.juggle` directory
 
 Solution:
 ```bash

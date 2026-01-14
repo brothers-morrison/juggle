@@ -23,6 +23,8 @@
 .ripgreprc
 .zprofile
 .zshrc
+.idea
+.vscode
 
 # IDE
 .idea/

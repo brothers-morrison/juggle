@@ -6,7 +6,7 @@
 set -e
 
 # Configuration
-REPO="ohare93/juggler"
+REPO="ohare93/juggle"
 INSTALL_DIR="${HOME}/.local/bin"
 BINARY_NAME="juggle"
 

@@ -1,6 +1,6 @@
 # Claude Code Workflow Examples
 
-This document provides realistic examples of how Claude Code agents use juggler in practice.
+This document provides realistic examples of how Claude Code agents use juggle in practice.
 
 ## Example 1: Starting a New Feature
 
@@ -443,7 +443,7 @@ Examples show adding multiple todos at once for better planning.
 Examples include relevant tags (bug, authentication, payment, etc.).
 
 ### 6. Explicit Communication
-Agents clearly explain what they're doing with juggler and why.
+Agents clearly explain what they're doing with juggle and why.
 
 ### 7. Priority Management
 Higher priority (urgent, high) for bugs and critical features.
@@ -485,4 +485,4 @@ juggle search <keyword>             # Search existing
 # If not found: juggle start
 ```
 
-These examples show how juggler integrates naturally into Claude Code workflows, providing structure and context across conversations while keeping the user informed of progress.
+These examples show how juggle integrates naturally into Claude Code workflows, providing structure and context across conversations while keeping the user informed of progress.

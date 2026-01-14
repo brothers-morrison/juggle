@@ -1,6 +1,6 @@
 # Workflow Enforcement Guide
 
-This guide explains juggler's workflow enforcement system for Claude Code, designed to maintain task discipline and prevent workflow violations.
+This guide explains juggle's workflow enforcement system for Claude Code, designed to maintain task discipline and prevent workflow violations.
 
 ## Overview
 
@@ -59,7 +59,7 @@ Added to `.claude/hooks.json`:
   "hooks": [
     {
       "name": "juggle-reminder",
-      "description": "Remind to check juggler workflow state",
+      "description": "Remind to check juggle workflow state",
       "command": "juggle reminder",
       "when": "pre-interaction",
       "shell": "bash"
@@ -112,7 +112,7 @@ juggle check
 ```
 
 **What It Does:**
-1. Discovers all projects with `.juggler` directories
+1. Discovers all projects with `.juggle` directories
 2. Loads juggling and ready balls
 3. Analyzes state and provides guidance
 4. Offers interactive options for next steps
@@ -122,11 +122,11 @@ juggle check
 #### Scenario 1: No Juggler Directory
 ```bash
 $ juggle check
-✅ No juggler directory found
+✅ No juggle directory found
 
 Ready to start new work.
 
-Initialize juggler:
+Initialize juggle:
   juggle plan    - Plan work for later
   juggle start   - Create and start juggling immediately
 ```
@@ -416,7 +416,7 @@ find /tmp -name "juggle-check-*" -mtime +7 -delete
 
 ### Custom Reminder Threshold
 
-Edit `/home/jmo/Development/juggler/internal/session/reminder.go`:
+Edit `/home/jmo/Development/juggle/internal/session/reminder.go`:
 
 ```go
 // ReminderThreshold is how long before showing reminder again
@@ -430,7 +430,7 @@ go build -o ~/.local/bin/juggle ./cmd/juggle
 
 ### Custom Instructions Template
 
-Edit `/home/jmo/Development/juggler/internal/claude/instructions.go`:
+Edit `/home/jmo/Development/juggle/internal/claude/instructions.go`:
 
 ```go
 const InstructionsTemplate = `
@@ -490,7 +490,7 @@ juggle setup-claude --install-hooks
 cd myapp
 git init
 
-# Install juggler integration
+# Install juggle integration
 juggle setup-claude --install-hooks
 
 # Verify installation
@@ -507,7 +507,7 @@ juggle start "Initial project setup"
 # Already has .claude/CLAUDE.md with other instructions
 cd existing-project
 
-# Update to add juggler (preserves existing content)
+# Update to add juggle (preserves existing content)
 juggle setup-claude --install-hooks
 
 # Instructions are added at top (critical position)
@@ -517,9 +517,9 @@ head -20 .claude/CLAUDE.md
 ### Example 3: Team Workflow
 
 ```bash
-# Commit juggler config to repo
+# Commit juggle config to repo
 git add .claude/
-git commit -m "Add juggler workflow enforcement"
+git commit -m "Add juggle workflow enforcement"
 
 # Team members clone repo
 git clone ...
@@ -576,7 +576,7 @@ juggle audit --tags bug
 ### 5. Keep Instructions Updated
 
 ```bash
-# After juggler updates
+# After juggle updates
 juggle setup-claude --install-hooks --update
 
 # Restarts Claude Code after update

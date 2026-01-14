@@ -1,10 +1,10 @@
-# Juggler
+# Juggle
 
 A task runner for AI agents. Define tasks with acceptance criteria, let agents execute them autonomously.
 
 ## What It Does
 
-Juggler is the "ralph loop" with nice tooling:
+Juggle is the "ralph loop" with nice tooling:
 
 1. **Define tasks** ("balls") with clear acceptance criteria via TUI or CLI
 2. **Run `juggle agent run`** to start an autonomous agent loop
@@ -38,7 +38,7 @@ Juggler is the "ralph loop" with nice tooling:
 ### Quick Install
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/ohare93/juggler/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/ohare93/juggle/main/install.sh | bash
 ```
 
 ### Build from Source
@@ -211,7 +211,7 @@ juggle tui
 
 ```
 your-project/
-├── .juggler/
+├── .juggle/
 │   ├── balls.jsonl           # Active balls
 │   ├── config.json           # Project config
 │   ├── archive/
@@ -222,7 +222,7 @@ your-project/
 │           ├── progress.txt  # Agent progress log
 │           └── last_output.txt
 
-~/.juggler/
+~/.juggle/
 ├── config.json               # Global config (search paths)
 ```
 
@@ -232,7 +232,7 @@ your-project/
 juggle agent run my-feature \
   --iterations 5            # Max iterations (default: 10)
   --model sonnet           # Model: opus, sonnet, haiku
-  --ball juggler-123       # Work on specific ball only
+  --ball juggle-123       # Work on specific ball only
   --interactive            # Full Claude TUI (not headless)
   --timeout 5m             # Per-iteration timeout
   --trust                  # Skip permission prompts (dangerous)
@@ -243,7 +243,7 @@ juggle agent run my-feature \
 ## Documentation
 
 - [TUI Guide](docs/tui.md) - Full TUI documentation
-- [Agent Integration](docs/agent-integration.md) - How agents use juggler
+- [Agent Integration](docs/agent-integration.md) - How agents use juggle
 - [Installation](docs/installation.md) - Detailed setup instructions
 
 ## License

@@ -1,7 +1,7 @@
 #!/bin/bash
-# Juggler: Track activity on each user message
+# Juggle: Track activity on each user message
 
-JUGGLER_BIN="${JUGGLER_BIN:-juggler}"
+JUGGLE_BIN="${JUGGLE_BIN:-juggle}"
 
 # Silently update activity (errors are ignored)
-$JUGGLER_BIN track-activity 2>/dev/null || true
+$JUGGLE_BIN track-activity 2>/dev/null || true
