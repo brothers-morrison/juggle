@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -167,11 +168,21 @@ func (r *ClaudeRunner) runHeadless(opts RunOptions) (*RunResult, error) {
 	}()
 
 	// Stream output to console and capture
-	go streamOutput(stdout, &outputBuf, os.Stdout)
-	go streamOutput(stderr, &outputBuf, os.Stderr)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		streamOutput(stdout, &outputBuf, os.Stdout)
+	}()
+	go func() {
+		defer wg.Done()
+		streamOutput(stderr, &outputBuf, os.Stderr)
+	}()
 
 	// Wait for command to complete
 	err = cmd.Wait()
+	// Wait for output streaming to finish before reading buffer
+	wg.Wait()
 	result.Output = outputBuf.String()
 
 	if err != nil {
