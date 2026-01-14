@@ -147,17 +147,6 @@ func (m Model) handleViewColumnKeySequence(key string) (tea.Model, tea.Cmd) {
 			m.message = "Tags column: hidden"
 		}
 		return m, nil
-	case "s":
-		// vs = Toggle tests state column visibility
-		m.showTestsColumn = !m.showTestsColumn
-		if m.showTestsColumn {
-			m.addActivity("Showing tests column")
-			m.message = "Tests column: visible"
-		} else {
-			m.addActivity("Hiding tests column")
-			m.message = "Tests column: hidden"
-		}
-		return m, nil
 	case "m":
 		// vm = Toggle model size column visibility
 		m.showModelSizeColumn = !m.showModelSizeColumn
@@ -171,12 +160,11 @@ func (m Model) handleViewColumnKeySequence(key string) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "a":
 		// va = Toggle all columns visibility
-		allVisible := m.showPriorityColumn && m.showTagsColumn && m.showTestsColumn && m.showModelSizeColumn
+		allVisible := m.showPriorityColumn && m.showTagsColumn && m.showModelSizeColumn
 		if allVisible {
 			// Hide all
 			m.showPriorityColumn = false
 			m.showTagsColumn = false
-			m.showTestsColumn = false
 			m.showModelSizeColumn = false
 			m.addActivity("Hiding all optional columns")
 			m.message = "All columns: hidden"
@@ -184,7 +172,6 @@ func (m Model) handleViewColumnKeySequence(key string) (tea.Model, tea.Cmd) {
 			// Show all
 			m.showPriorityColumn = true
 			m.showTagsColumn = true
-			m.showTestsColumn = true
 			m.showModelSizeColumn = true
 			m.addActivity("Showing all optional columns")
 			m.message = "All columns: visible"
@@ -195,7 +182,7 @@ func (m Model) handleViewColumnKeySequence(key string) (tea.Model, tea.Cmd) {
 		m.message = ""
 		return m, nil
 	default:
-		m.message = "Unknown view column: " + key + " (use p/t/s/m/a)"
+		m.message = "Unknown view column: " + key + " (use p/t/m/a)"
 		return m, nil
 	}
 }
@@ -208,7 +195,10 @@ func (m Model) handleSplitSetPending() (tea.Model, tea.Cmd) {
 	}
 
 	ball := balls[m.cursor]
-	ball.SetState(session.StatePending)
+	if err := ball.SetState(session.StatePending); err != nil {
+		m.message = "Error: " + err.Error()
+		return m, nil
+	}
 	m.addActivity("Set pending: " + ball.ID)
 
 	store, err := session.NewStore(ball.WorkingDir)
@@ -663,12 +653,8 @@ func (m Model) handleSplitViewEnter() (tea.Model, tea.Cmd) {
 			m.addActivity("Selected session: " + m.selectedSession.ID)
 		}
 	case BallsPanel:
-		// Select ball
-		balls := m.filterBallsForSession()
-		if len(balls) > 0 && m.cursor < len(balls) {
-			m.selectedBall = balls[m.cursor]
-			m.addActivity("Selected ball: " + m.selectedBall.ID)
-		}
+		// Open ball in edit mode (same as 'e' key)
+		return m.handleSplitEditItem()
 	}
 	return m, nil
 }
@@ -681,7 +667,10 @@ func (m Model) handleSplitStartBall() (tea.Model, tea.Cmd) {
 	}
 
 	ball := balls[m.cursor]
-	ball.SetState(session.StateInProgress)
+	if err := ball.SetState(session.StateInProgress); err != nil {
+		m.message = "Error: " + err.Error()
+		return m, nil
+	}
 	m.addActivity("Started ball: " + ball.ID)
 
 	store, err := session.NewStore(ball.WorkingDir)
@@ -701,7 +690,10 @@ func (m Model) handleSplitCompleteBall() (tea.Model, tea.Cmd) {
 	}
 
 	ball := balls[m.cursor]
-	ball.SetState(session.StateComplete)
+	if err := ball.SetState(session.StateComplete); err != nil {
+		m.message = "Error: " + err.Error()
+		return m, nil
+	}
 	m.addActivity("Completing ball: " + ball.ID)
 
 	store, err := session.NewStore(ball.WorkingDir)
@@ -736,8 +728,11 @@ func (m Model) handleSplitBlockBall() (tea.Model, tea.Cmd) {
 func (m *Model) handleStartBall() (tea.Model, tea.Cmd) {
 	ball := m.filteredBalls[m.cursor]
 
-	// Update state to in_progress (no validation - allow any state transition)
-	ball.SetState(session.StateInProgress)
+	// Update state to in_progress
+	if err := ball.SetState(session.StateInProgress); err != nil {
+		m.message = "Error: " + err.Error()
+		return m, nil
+	}
 
 	// Get the store for this ball's working directory
 	store, err := session.NewStore(ball.WorkingDir)
@@ -751,8 +746,11 @@ func (m *Model) handleStartBall() (tea.Model, tea.Cmd) {
 func (m *Model) handleCompleteBall() (tea.Model, tea.Cmd) {
 	ball := m.filteredBalls[m.cursor]
 
-	// Update state to complete (no validation - allow any state transition)
-	ball.SetState(session.StateComplete)
+	// Update state to complete
+	if err := ball.SetState(session.StateComplete); err != nil {
+		m.message = "Error: " + err.Error()
+		return m, nil
+	}
 
 	// Get the store for this ball's working directory
 	store, err := session.NewStore(ball.WorkingDir)
@@ -767,8 +765,11 @@ func (m *Model) handleCompleteBall() (tea.Model, tea.Cmd) {
 func (m *Model) handleDropBall() (tea.Model, tea.Cmd) {
 	ball := m.filteredBalls[m.cursor]
 
-	// Update state to blocked (no validation - allow any state transition)
-	ball.SetBlocked("dropped")
+	// Update state to blocked
+	if err := ball.SetBlocked("dropped"); err != nil {
+		m.message = "Error: " + err.Error()
+		return m, nil
+	}
 
 	// Get the store for this ball's working directory
 	store, err := session.NewStore(ball.WorkingDir)
@@ -844,7 +845,10 @@ func (m *Model) handleCycleState() (tea.Model, tea.Cmd) {
 		nextState = session.StatePending
 	}
 
-	ball.SetState(nextState)
+	if err := ball.SetState(nextState); err != nil {
+		m.message = "Error: " + err.Error()
+		return m, nil
+	}
 
 	store, err := session.NewStore(ball.WorkingDir)
 	if err != nil {
@@ -860,7 +864,10 @@ func (m *Model) handleSetReady() (tea.Model, tea.Cmd) {
 	ball := m.filteredBalls[m.cursor]
 
 	// Set to pending state
-	ball.SetState(session.StatePending)
+	if err := ball.SetState(session.StatePending); err != nil {
+		m.message = "Error: " + err.Error()
+		return m, nil
+	}
 
 	store, err := session.NewStore(ball.WorkingDir)
 	if err != nil {
@@ -900,32 +907,6 @@ func (m *Model) handleCyclePriority() (tea.Model, tea.Cmd) {
 
 	m.message = "Priority: " + string(nextPriority)
 	return m, updateBall(store, ball)
-}
-
-func (m *Model) handleConfirmDelete() (tea.Model, tea.Cmd) {
-	ball := m.filteredBalls[m.cursor]
-
-	// Get store for this ball's working directory
-	store, err := session.NewStore(ball.WorkingDir)
-	if err != nil {
-		m.mode = listView
-		m.message = "Error: " + err.Error()
-		return m, nil
-	}
-
-	// Delete the ball
-	err = store.DeleteBall(ball.ID)
-	if err != nil {
-		m.mode = listView
-		m.message = "Error deleting ball: " + err.Error()
-		return m, nil
-	}
-
-	m.mode = listView
-	m.message = "Deleted ball: " + ball.ID
-
-	// Reload balls
-	return m, loadBalls(m.store, m.config, m.localOnly)
 }
 
 // handleSplitAddItem handles adding a new item based on active panel
@@ -1170,25 +1151,13 @@ func (m Model) handleBallEditInEditor() (tea.Model, tea.Cmd) {
 // handleCopyBallID copies the current ball's ID to the system clipboard (split view)
 // Format: "projectName:ballID" (e.g., "myproject:myproject-abc123")
 func (m Model) handleCopyBallID() (tea.Model, tea.Cmd) {
-	// Get the current ball based on context
-	var ball *session.Ball
-	switch m.activePanel {
-	case BallsPanel:
-		balls := m.filterBallsForSession()
-		if len(balls) == 0 || m.cursor >= len(balls) {
-			m.message = "No ball selected"
-			return m, nil
-		}
-		ball = balls[m.cursor]
-	default:
-		// If selected ball is set (e.g., in detail view), use that
-		if m.selectedBall != nil {
-			ball = m.selectedBall
-		} else {
-			m.message = "No ball selected"
-			return m, nil
-		}
+	// Get the current ball under cursor
+	balls := m.filterBallsForSession()
+	if len(balls) == 0 || m.cursor >= len(balls) {
+		m.message = "No ball selected"
+		return m, nil
 	}
+	ball := balls[m.cursor]
 
 	// Format: "projectName:ballID"
 	copyText := ball.FolderName() + ":" + ball.ID
@@ -1202,35 +1171,6 @@ func (m Model) handleCopyBallID() (tea.Model, tea.Cmd) {
 
 	m.message = "Copied: " + copyText
 	m.addActivity("Copied ball ID to clipboard: " + copyText)
-	return m, nil
-}
-
-// handleCopyBallIDSimple copies the current ball's ID to clipboard (simple list/detail views)
-// Format: "projectName:ballID" (e.g., "myproject:myproject-abc123")
-func (m Model) handleCopyBallIDSimple() (tea.Model, tea.Cmd) {
-	var ball *session.Ball
-
-	// In detail view, use the selected ball
-	if m.mode == detailView && m.selectedBall != nil {
-		ball = m.selectedBall
-	} else if m.mode == listView && len(m.filteredBalls) > 0 && m.cursor < len(m.filteredBalls) {
-		// In list view, use the ball at cursor
-		ball = m.filteredBalls[m.cursor]
-	} else {
-		m.message = "No ball selected"
-		return m, nil
-	}
-
-	// Format: "projectName:ballID"
-	copyText := ball.FolderName() + ":" + ball.ID
-
-	// Copy to clipboard
-	if err := copyToClipboard(copyText); err != nil {
-		m.message = "Clipboard unavailable: " + err.Error()
-		return m, nil
-	}
-
-	m.message = "Copied: " + copyText
 	return m, nil
 }
 

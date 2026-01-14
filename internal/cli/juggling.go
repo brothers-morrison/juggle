@@ -12,6 +12,124 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// knownCommands maps top-level subcommand names to their subcommands (if any).
+// Used to provide helpful error messages when a ball ID looks like a command.
+var knownCommands = map[string][]string{
+	"agent":    {"run", "refine"},
+	"audit":    {},
+	"balls":    {},
+	"check":    {},
+	"config":   {"ac", "delay", "vcs"},
+	"delete":   {},
+	"edit":     {},
+	"export":   {},
+	"history":  {},
+	"import":   {"ralph", "github"},
+	"list":     {},
+	"move":     {},
+	"next":     {},
+	"plan":     {},
+	"progress": {"append"},
+	"projects": {"add", "remove"},
+	"search":   {},
+	"sessions": {"create", "list", "show", "context", "delete", "progress", "edit"},
+	"show":     {},
+	"start":    {},
+	"status":   {},
+	"sync":     {"ralph"},
+	"tag":      {"add", "rm", "list"},
+	"tui":      {},
+	"unarchive": {},
+	"update":   {},
+	"worktree": {"add", "forget", "list", "status"},
+}
+
+// isKnownCommand checks if a string is a known top-level command
+func isKnownCommand(s string) bool {
+	_, ok := knownCommands[s]
+	return ok
+}
+
+// isKnownSubcommand checks if a string is a known subcommand of a parent command
+func isKnownSubcommand(parent, child string) bool {
+	subs, ok := knownCommands[parent]
+	if !ok {
+		return false
+	}
+	for _, sub := range subs {
+		if sub == child {
+			return true
+		}
+	}
+	return false
+}
+
+// suggestCommandSwap checks if args look like a reversed command (e.g., "run agent" instead of "agent run")
+// and returns a suggestion if applicable
+func suggestCommandSwap(args []string) string {
+	if len(args) < 2 {
+		return ""
+	}
+	first, second := args[0], args[1]
+
+	// Check if second is a known command and first is one of its subcommands
+	if isKnownCommand(second) && isKnownSubcommand(second, first) {
+		return fmt.Sprintf("Did you mean 'juggle %s %s'?", second, first)
+	}
+	return ""
+}
+
+// enhanceBallNotFoundError adds helpful suggestions when a ball lookup fails
+// and the provided ID looks like a known command name
+func enhanceBallNotFoundError(err error, ballID string, args []string) error {
+	// Only enhance "not found" errors
+	errStr := err.Error()
+	if !strings.Contains(errStr, "not found") {
+		return err
+	}
+
+	// Check if the ball ID is actually a known command name
+	if isKnownCommand(ballID) {
+		// Build suggestion based on command type
+		subs := knownCommands[ballID]
+		if len(subs) > 0 {
+			// Command has subcommands - suggest the proper syntax
+			return fmt.Errorf("'%s' is a command, not a ball ID. Did you mean 'juggle %s <subcommand>'? (subcommands: %s)",
+				ballID, ballID, strings.Join(subs, ", "))
+		}
+		// Command without subcommands
+		return fmt.Errorf("'%s' is a command, not a ball ID. Did you mean 'juggle %s'?", ballID, ballID)
+	}
+
+	// Warn about unused arguments if we got extra args after ball ID
+	if len(args) > 1 {
+		unusedArgs := args[1:]
+		return fmt.Errorf("%s\nNote: unused arguments after ball ID: %s", errStr, strings.Join(unusedArgs, " "))
+	}
+
+	return err
+}
+
+// SuggestCommandSwap is an exported wrapper for testing
+func SuggestCommandSwap(args []string) string {
+	return suggestCommandSwap(args)
+}
+
+// IsKnownCommand is an exported wrapper for testing
+func IsKnownCommand(s string) bool {
+	return isKnownCommand(s)
+}
+
+// IsKnownSubcommand is an exported wrapper for testing
+func IsKnownSubcommand(parent, child string) bool {
+	return isKnownSubcommand(parent, child)
+}
+
+// EnhanceBallNotFoundError is an exported wrapper for testing
+func EnhanceBallNotFoundError(err error, ballID string, args []string) error {
+	return enhanceBallNotFoundError(err, ballID, args)
+}
+
 // runRootCommand handles dynamic routing for the root command
 func runRootCommand(cmd *cobra.Command, args []string) error {
 	// No args: launch TUI
@@ -126,18 +244,6 @@ func listJugglingBalls(cmd *cobra.Command) error {
 		if ball.BlockedReason != "" {
 			intentDisplay = fmt.Sprintf("%s %s", ball.Title, dimStyle.Render("("+ball.BlockedReason+")"))
 		}
-		// Add tests state indicator
-		testsIndicator := ""
-		if ball.TestsState != "" {
-			switch ball.TestsState {
-			case session.TestsStateNeeded:
-				testsIndicator = " " + dimStyle.Render("[tests:needed]")
-			case session.TestsStateDone:
-				testsIndicator = " " + dimStyle.Render("[tests:done]")
-			case session.TestsStateNotNeeded:
-				testsIndicator = " " + dimStyle.Render("[tests:n/a]")
-			}
-		}
 		// Add output marker
 		outputMarker := ""
 		if ball.HasOutput() {
@@ -149,13 +255,12 @@ func listJugglingBalls(cmd *cobra.Command) error {
 			depMarker = " " + dimStyle.Render("[→deps]")
 		}
 
-		fmt.Printf("  [%s] %s  %s  %s  %s%s%s%s\n",
+		fmt.Printf("  [%s] %s  %s  %s  %s%s%s\n",
 			idPadded,
 			projectPadded,
 			statePadded,
 			priorityPadded,
 			intentDisplay,
-			testsIndicator,
 			outputMarker,
 			depMarker,
 		)
@@ -340,18 +445,6 @@ func listAllBalls(cmd *cobra.Command) error {
 				if ball.BlockedReason != "" {
 					intentDisplay = fmt.Sprintf("%s %s", ball.Title, dimStyle.Render("("+ball.BlockedReason+")"))
 				}
-				// Add tests state indicator
-				testsIndicator := ""
-				if ball.TestsState != "" {
-					switch ball.TestsState {
-					case session.TestsStateNeeded:
-						testsIndicator = " " + dimStyle.Render("[tests:needed]")
-					case session.TestsStateDone:
-						testsIndicator = " " + dimStyle.Render("[tests:done]")
-					case session.TestsStateNotNeeded:
-						testsIndicator = " " + dimStyle.Render("[tests:n/a]")
-					}
-				}
 				// Add output marker
 				outputMarker := ""
 				if ball.HasOutput() {
@@ -363,12 +456,11 @@ func listAllBalls(cmd *cobra.Command) error {
 					depMarker = " " + dimStyle.Render("[→deps]")
 				}
 
-				fmt.Printf("  [%s] %s  %s  %s%s%s%s\n",
+				fmt.Printf("  [%s] %s  %s  %s%s%s\n",
 					idPadded,
 					statePadded,
 					priorityPadded,
 					intentDisplay,
-					testsIndicator,
 					outputMarker,
 					depMarker,
 				)
@@ -450,11 +542,16 @@ func handleBallCommand(cmd *cobra.Command, args []string) error {
 
 	ballID := args[0]
 
+	// Check if this looks like a reversed command (e.g., "run agent" instead of "agent run")
+	if suggestion := suggestCommandSwap(args); suggestion != "" {
+		return fmt.Errorf("%s '%s' is not a valid ball ID", suggestion, ballID)
+	}
+
 	// Special case: unarchive needs to look in archives, not active balls
 	if len(args) > 1 && args[1] == "unarchive" {
 		ball, store, err := findArchivedBallByID(ballID)
 		if err != nil {
-			return err
+			return enhanceBallNotFoundError(err, ballID, args)
 		}
 		return handleBallUnarchive(ball, store)
 	}
@@ -462,7 +559,7 @@ func handleBallCommand(cmd *cobra.Command, args []string) error {
 	// Find ball across all projects
 	ball, store, err := findBallByID(ballID)
 	if err != nil {
-		return err
+		return enhanceBallNotFoundError(err, ballID, args)
 	}
 
 	// If only ball ID provided, activate it
@@ -527,7 +624,9 @@ func activateBall(ball *session.Ball, store *session.Store) error {
 
 // setBallState sets the ball to a new state (pending, in_progress)
 func setBallState(ball *session.Ball, state session.BallState, args []string, store *session.Store) error {
-	ball.SetState(state)
+	if err := ball.SetState(state); err != nil {
+		return err
+	}
 
 	if err := store.Save(ball); err != nil {
 		return fmt.Errorf("failed to save ball: %w", err)
@@ -573,7 +672,9 @@ func setBallBlocked(ball *session.Ball, args []string, store *session.Store) err
 		return fmt.Errorf("blocked reason required: juggle <ball-id> blocked <reason>")
 	}
 
-	ball.SetBlocked(reason)
+	if err := ball.SetBlocked(reason); err != nil {
+		return err
+	}
 
 	if err := store.Save(ball); err != nil {
 		return fmt.Errorf("failed to save ball: %w", err)
@@ -749,10 +850,14 @@ func handleBallUpdate(ball *session.Ball, args []string, store *session.Store) e
 				if reason == "" {
 					return fmt.Errorf("blocked reason required: use --reason flag when setting state to blocked")
 				}
-				ball.SetBlocked(reason)
+				if err := ball.SetBlocked(reason); err != nil {
+					return err
+				}
 				fmt.Printf("✓ Updated state: blocked (reason: %s)\n", reason)
 			} else {
-				ball.SetState(newState)
+				if err := ball.SetState(newState); err != nil {
+					return err
+				}
 				fmt.Printf("✓ Updated state: %s\n", ball.State)
 			}
 			modified = true

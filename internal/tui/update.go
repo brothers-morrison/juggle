@@ -24,16 +24,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleUnifiedBallFormKey(msg)
 		}
 
-		// Handle acceptance criteria input mode (special handling for empty line)
-		if m.mode == inputAcceptanceCriteriaView {
-			return m.handleAcceptanceCriteriaKey(msg)
-		}
-
-		// Handle ball form view (multi-field form with selection)
-		if m.mode == inputBallFormView {
-			return m.handleBallFormKey(msg)
-		}
-
 		// Handle input modes (text entry)
 		if m.mode == inputSessionView || m.mode == inputBallView || m.mode == inputBlockedView || m.mode == inputTagView {
 			return m.handleInputKey(msg)
@@ -69,7 +59,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleSplitHelpKey(msg)
 		}
 
-		// Handle split view specific keys first
+		// Handle split view specific keys
 		if m.mode == splitView {
 			return m.handleSplitViewKey(msg)
 		}
@@ -84,145 +74,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleHistoryOutputViewKey(msg)
 		}
 
-		switch msg.String() {
-		case "ctrl+c", "q":
-			return m, tea.Quit
-
-		case "up", "k":
-			if m.mode == listView && m.cursor > 0 {
-				m.cursor--
-				m.message = "" // Clear message on navigation
-			}
-			return m, nil
-
-		case "down", "j":
-			if m.mode == listView && m.cursor < len(m.filteredBalls)-1 {
-				m.cursor++
-				m.message = "" // Clear message on navigation
-			}
-			return m, nil
-
-		case "enter":
-			// Switch to detail view
-			if m.mode == listView && len(m.filteredBalls) > 0 {
-				m.selectedBall = m.filteredBalls[m.cursor]
-				m.mode = detailView
-			}
-			return m, nil
-
-		case "b":
-			// Back to list view
-			if m.mode == detailView || m.mode == helpView {
-				m.mode = listView
-				m.message = ""
-			}
-			return m, nil
-
-		case "esc":
-			// Back to list view, or exit if already at list view
-			if m.mode == detailView || m.mode == helpView || m.mode == confirmDeleteView {
-				m.mode = listView
-				m.message = ""
-				return m, nil
-			} else if m.mode == listView {
-				// At list view, exit the TUI
-				return m, tea.Quit
-			}
-			return m, nil
-
-		case "s":
-			// Start ball (quick action)
-			if m.mode == listView && len(m.filteredBalls) > 0 {
-				return m.handleStartBall()
-			}
-			return m, nil
-
-		case "c":
-			// Complete ball (quick action)
-			if m.mode == listView && len(m.filteredBalls) > 0 {
-				return m.handleCompleteBall()
-			}
-			return m, nil
-
-		case "d":
-			// Drop ball (quick action)
-			if m.mode == listView && len(m.filteredBalls) > 0 {
-				return m.handleDropBall()
-			}
-			return m, nil
-
-		case "x":
-			// Delete ball (with confirmation)
-			if m.mode == listView && len(m.filteredBalls) > 0 {
-				m.mode = confirmDeleteView
-				m.confirmAction = "delete"
-				return m, nil
-			}
-			return m, nil
-
-		case "p":
-			// Cycle priority
-			if m.mode == listView && len(m.filteredBalls) > 0 {
-				return m.handleCyclePriority()
-			}
-			return m, nil
-
-		case "y", "Y":
-			// Confirm action (e.g., delete)
-			if m.mode == confirmDeleteView {
-				return m.handleConfirmDelete()
-			}
-			// Copy ball ID to clipboard in list or detail view
-			if m.mode == listView && len(m.filteredBalls) > 0 {
-				return m.handleCopyBallIDSimple()
-			}
-			if m.mode == detailView && m.selectedBall != nil {
-				return m.handleCopyBallIDSimple()
-			}
-			return m, nil
-
-		case "n", "N":
-			// Cancel confirmation
-			if m.mode == confirmDeleteView {
-				m.mode = listView
-				m.message = "Cancelled"
-				return m, nil
-			}
-			return m, nil
-
-		case "?":
-			// Toggle help
-			if m.mode == helpView {
-				m.mode = listView
-			} else {
-				m.mode = helpView
-			}
-			return m, nil
-
-		case "r":
-			// Set ball to ready state
-			if m.mode == listView && len(m.filteredBalls) > 0 {
-				return m.handleSetReady()
-			}
-			return m, nil
-
-		case "R":
-			// Refresh/reload balls
-			m.message = "Reloading balls..."
-			return m, loadBalls(m.store, m.config, m.localOnly)
-
-		case "tab":
-			// Cycle ball state
-			if m.mode == listView && len(m.filteredBalls) > 0 {
-				return m.handleCycleState()
-			}
-			return m, nil
-
-		case "1", "2", "3", "4", "5":
-			// Filter by state
-			return m.handleStateFilter(msg.String())
-		}
-
 	case ballsLoadedMsg:
 		if msg.err != nil {
 			m.err = msg.err
@@ -234,9 +85,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.cursor >= len(m.filteredBalls) {
 			m.cursor = 0
 		}
-		if m.mode == splitView {
-			m.addActivity("Balls loaded")
-		}
+		m.addActivity("Balls loaded")
 		return m, nil
 
 	case sessionsLoadedMsg:
@@ -284,22 +133,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Clear the initialSessionID after attempting selection
 			m.initialSessionID = ""
 		}
-		if m.mode == splitView {
-			m.addActivity("Sessions loaded")
-		}
+		m.addActivity("Sessions loaded")
 		return m, nil
 
 	case ballUpdatedMsg:
 		if msg.err != nil {
 			m.message = "Error: " + msg.err.Error()
-			if m.mode == splitView {
-				m.addActivity("Error: " + msg.err.Error())
-			}
+			m.addActivity("Error: " + msg.err.Error())
 		} else {
 			m.message = "Ball updated successfully"
-			if m.mode == splitView {
-				m.addActivity("Ball updated: " + msg.ball.ID)
-			}
+			m.addActivity("Ball updated: " + msg.ball.ID)
 		}
 		// Reload balls
 		return m, loadBalls(m.store, m.config, m.localOnly)
@@ -307,18 +150,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ballArchivedMsg:
 		if msg.err != nil {
 			m.message = "Error: " + msg.err.Error()
-			if m.mode == splitView {
-				m.addActivity("Error archiving: " + msg.err.Error())
-			}
+			m.addActivity("Error archiving: " + msg.err.Error())
 		} else {
 			m.message = "Ball archived successfully"
-			if m.mode == splitView {
-				m.addActivity("Archived ball: " + msg.ball.ID)
-			}
-			// Clear selection if we archived the selected ball
-			if m.selectedBall != nil && m.selectedBall.ID == msg.ball.ID {
-				m.selectedBall = nil
-			}
+			m.addActivity("Archived ball: " + msg.ball.ID)
 		}
 		// Reload balls
 		return m, loadBalls(m.store, m.config, m.localOnly)
@@ -619,9 +454,7 @@ func (m Model) handleSplitViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "esc":
 		// Go back or deselect
-		if m.selectedBall != nil {
-			m.selectedBall = nil
-		} else if m.selectedSession != nil {
+		if m.selectedSession != nil {
 			m.selectedSession = nil
 			m.cursor = 0
 		} else {
@@ -863,10 +696,6 @@ func (m Model) executeSplitDelete() (tea.Model, tea.Cmd) {
 		}
 		m.addActivity("Deleted ball: " + ball.ID)
 		m.message = "Deleted ball: " + ball.ID
-		// Reset selection if we deleted the selected ball
-		if m.selectedBall != nil && m.selectedBall.ID == ball.ID {
-			m.selectedBall = nil
-		}
 		m.mode = splitView
 		return m, loadBalls(m.store, m.config, m.localOnly)
 	}

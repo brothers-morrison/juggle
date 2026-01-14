@@ -13,28 +13,22 @@ import (
 type viewMode int
 
 const (
-	listView viewMode = iota
-	detailView
-	helpView
-	confirmDeleteView
-	splitView     // New three-panel split view
-	splitHelpView // Comprehensive help view for split mode
-	historyView   // Agent run history view
+	splitView viewMode = iota // Three-panel split view (default)
+	splitHelpView             // Comprehensive help view for split mode
+	historyView               // Agent run history view
 
 	// Input modes for CRUD operations
-	inputSessionView     // Add/edit session
-	inputBallView        // Add/edit ball
-	inputBlockedView     // Prompt for blocked reason
-	inputTagView         // Add/remove tags (legacy, kept for backwards compatibility)
-	sessionSelectorView            // Session selector for tagging balls
-	dependencySelectorView         // Dependency selector for ball creation/editing
-	confirmSplitDelete             // Delete confirmation in split view
-	panelSearchView                // Search/filter within current panel
-	confirmAgentCancel             // Agent cancel confirmation
-	inputAcceptanceCriteriaView    // Multi-line acceptance criteria input (legacy)
-	inputBallFormView              // Full ball form with all fields (legacy)
-	unifiedBallFormView            // Unified ball creation form - all fields in one view
-	historyOutputView              // Viewing last_output.txt from history
+	inputSessionView           // Add/edit session
+	inputBallView              // Add/edit ball (for title field)
+	inputBlockedView           // Prompt for blocked reason
+	inputTagView               // Add/remove tags
+	sessionSelectorView        // Session selector for tagging balls
+	dependencySelectorView     // Dependency selector for ball creation/editing
+	confirmSplitDelete         // Delete confirmation in split view
+	panelSearchView            // Search/filter within current panel
+	confirmAgentCancel         // Agent cancel confirmation
+	unifiedBallFormView        // Unified ball creation form - all fields in one view
+	historyOutputView          // Viewing last_output.txt from history
 )
 
 // InputAction represents what action triggered the input mode
@@ -114,9 +108,8 @@ type Model struct {
 	sessionCursor   int
 
 	// View state
-	mode         viewMode
-	cursor       int
-	selectedBall *session.Ball
+	mode   viewMode
+	cursor int
 
 	// Panel state (for split view)
 	activePanel Panel
@@ -139,7 +132,6 @@ type Model struct {
 	// Column visibility for balls panel
 	showPriorityColumn  bool // Show priority column in balls list
 	showTagsColumn      bool // Show tags column in balls list
-	showTestsColumn     bool // Show tests state column in balls list
 	showModelSizeColumn bool // Show model size column in balls list
 
 	// Filter state
@@ -230,32 +222,7 @@ func newContextTextarea() textarea.Model {
 	return ta
 }
 
-// InitialModel creates a model for the legacy list view
-func InitialModel(store *session.Store, config *session.Config, localOnly bool) Model {
-	ti := textinput.New()
-	ti.CharLimit = 256
-	ti.Width = 40
-
-	return Model{
-		store:     store,
-		config:    config,
-		localOnly: localOnly,
-		mode:      listView,
-		filterStates: map[string]bool{
-			"pending":     true,
-			"in_progress": true,
-			"blocked":     true,
-			"complete":    true,
-		},
-		cursor:       0,
-		activityLog:  make([]ActivityEntry, 0),
-		textInput:    ti,
-		contextInput: newContextTextarea(),
-		nowFunc:      time.Now,
-	}
-}
-
-// InitialSplitModel creates a model for the new split-view mode
+// InitialSplitModel creates a model for the split-view mode
 func InitialSplitModel(store *session.Store, sessionStore *session.SessionStore, config *session.Config, localOnly bool) Model {
 	return InitialSplitModelWithWatcher(store, sessionStore, config, localOnly, nil, "")
 }
@@ -283,7 +250,6 @@ func InitialSplitModelWithWatcher(store *session.Store, sessionStore *session.Se
 		// Column visibility defaults (all hidden by default for compact view)
 		showPriorityColumn:  false,
 		showTagsColumn:      false,
-		showTestsColumn:     false,
 		showModelSizeColumn: false,
 		cursor:             0,
 		sessionCursor:      0,
@@ -296,18 +262,15 @@ func InitialSplitModelWithWatcher(store *session.Store, sessionStore *session.Se
 }
 
 func (m Model) Init() tea.Cmd {
-	if m.mode == splitView {
-		cmds := []tea.Cmd{
-			loadBalls(m.store, m.config, m.localOnly),
-			loadSessions(m.sessionStore, m.config, m.localOnly),
-		}
-		// Start file watcher if available
-		if m.fileWatcher != nil {
-			cmds = append(cmds, listenForWatcherEvents(m.fileWatcher))
-		}
-		return tea.Batch(cmds...)
+	cmds := []tea.Cmd{
+		loadBalls(m.store, m.config, m.localOnly),
+		loadSessions(m.sessionStore, m.config, m.localOnly),
 	}
-	return loadBalls(m.store, m.config, m.localOnly)
+	// Start file watcher if available
+	if m.fileWatcher != nil {
+		cmds = append(cmds, listenForWatcherEvents(m.fileWatcher))
+	}
+	return tea.Batch(cmds...)
 }
 
 // addActivity adds an entry to the activity log

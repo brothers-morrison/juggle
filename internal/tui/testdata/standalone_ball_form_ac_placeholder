@@ -6,8 +6,7 @@ run
 -- view:
 Create New Ball␤
 ␤
-Context:␤
-␤
+Context: (empty)␤
 Title: Test task␤
 ␤
 Acceptance Criteria:␤
@@ -15,8 +14,8 @@ Acceptance Criteria:␤
   2. Second criterion␤
   + Third criterion (draft)␤
 ␤
-Tags:␤
-Session: (none)␤
+Tags: (none)␤
+Session:  (none) ␤
 Model Size: (default) small medium large␤
 Priority: low | medium | high | urgent␤
 Blocking Reason: (blank) | Human needed | Waiting for dependency | Needs research | (custom)␤

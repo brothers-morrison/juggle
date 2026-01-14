@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"syscall"
 	"time"
 )
 
@@ -14,8 +15,21 @@ const (
 	progressFile    = "progress.txt"
 )
 
-// JuggleSession represents a grouping of balls by tag
-// Session ID equals the tag, providing a simple mapping
+// JuggleSession represents a grouping of balls by tag.
+//
+// Sessions provide organization and context for related work:
+//   - Balls are linked to sessions via tags matching the session ID
+//   - Session context persists across agent iterations
+//   - Session-level acceptance criteria apply to all linked balls
+//   - Default model size can be set for all balls in the session
+//
+// Sessions are stored in .juggle/sessions/<id>/session.json with
+// accompanying progress.txt for logging agent activity.
+//
+// Example:
+//
+//	session := session.NewJuggleSession("auth-feature", "OAuth2 implementation")
+//	session.AddAcceptanceCriterion("All tests pass")
 type JuggleSession struct {
 	ID                 string    `json:"id"`                         // Session ID (same as tag)
 	Description        string    `json:"description"`                // Human-readable description
@@ -73,7 +87,14 @@ func (s *JuggleSession) HasAcceptanceCriteria() bool {
 	return len(s.AcceptanceCriteria) > 0
 }
 
-// SessionStore handles persistence of JuggleSessions
+// SessionStore handles persistence of JuggleSessions.
+//
+// SessionStore manages session data in .juggle/sessions/<id>/ directories:
+//   - session.json: Session metadata and configuration
+//   - progress.txt: Append-only log of agent activity
+//
+// Thread-safe for concurrent access via file locking.
+// Worktree-aware: resolves to main repo storage when in a git worktree.
 type SessionStore struct {
 	projectDir string
 	config     StoreConfig
@@ -284,6 +305,19 @@ func (s *SessionStore) AppendProgress(id, content string) error {
 	}
 
 	progressPath := s.progressFilePath(id)
+	lockPath := progressPath + ".lock"
+
+	// Acquire file lock
+	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open lock file: %w", err)
+	}
+	defer lockFile.Close()
+
+	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX); err != nil {
+		return fmt.Errorf("failed to acquire lock: %w", err)
+	}
+	defer syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
 
 	// Open file in append mode
 	f, err := os.OpenFile(progressPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)

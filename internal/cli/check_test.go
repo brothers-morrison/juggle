@@ -271,7 +271,10 @@ func TestCheckCommand_MixedStates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create blocked ball: %v", err)
 	}
-	blockedBall.SetBlocked("blocked reason")
+	blockedBall.Start() // Must start before blocking
+	if err := blockedBall.SetBlocked("blocked reason"); err != nil {
+		t.Fatalf("failed to set blocked: %v", err)
+	}
 	if err := store.AppendBall(blockedBall); err != nil {
 		t.Fatalf("failed to save blocked ball: %v", err)
 	}
@@ -384,9 +387,12 @@ func TestCheckCommand_DifferentBallStates(t *testing.T) {
 			t.Fatalf("failed to create ball %d: %v", i, err)
 		}
 		if test.state == session.StateBlocked {
-			ball.SetBlocked(test.reason)
+			ball.Start() // Must start before blocking
+			if err := ball.SetBlocked(test.reason); err != nil {
+				t.Fatalf("failed to set blocked on ball %d: %v", i, err)
+			}
 		} else {
-			ball.SetState(test.state)
+			ball.ForceSetState(test.state)
 		}
 
 		if err := store.AppendBall(ball); err != nil {

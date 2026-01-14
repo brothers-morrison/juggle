@@ -205,7 +205,7 @@ func testUnarchiveRestoresToReadyState(t *testing.T) {
 	ballID := ball.ID
 
 	// Set to in_progress and then complete
-	ball.SetState(session.StateInProgress)
+	ball.ForceSetState(session.StateInProgress)
 
 	store := env.GetStore(t)
 	if err := store.UpdateBall(ball); err != nil {

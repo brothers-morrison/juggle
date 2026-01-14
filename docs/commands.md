@@ -4,17 +4,17 @@ Complete CLI documentation for Juggle.
 
 ## Quick Reference
 
-| Command | Description |
-|---------|-------------|
-| `juggle` | Launch interactive TUI (same as `juggle tui`) |
-| `juggle tui` | Full-screen TUI for managing balls |
-| `juggle agent run [session]` | Start autonomous agent loop |
-| `juggle agent refine [session]` | AI-assisted acceptance criteria improvement |
-| `juggle plan` | Create a new ball via CLI |
-| `juggle show <ball-id>` | View ball details |
-| `juggle update <ball-id>` | Update ball properties |
-| `juggle status` | List all balls across projects |
-| `juggle export` | Export balls (JSON, CSV, agent prompt) |
+| Command                         | Description                                   |
+| ------------------------------- | --------------------------------------------- |
+| `juggle`                        | Launch interactive TUI (same as `juggle tui`) |
+| `juggle tui`                    | Full-screen TUI for managing balls            |
+| `juggle agent run [session]`    | Start autonomous agent loop                   |
+| `juggle agent refine [session]` | AI-assisted acceptance criteria improvement   |
+| `juggle plan`                   | Create a new ball via CLI                     |
+| `juggle show <ball-id>`         | View ball details                             |
+| `juggle update <ball-id>`       | Update ball properties                        |
+| `juggle status`                 | List all balls across projects                |
+| `juggle export`                 | Export balls (JSON, CSV, agent prompt)        |
 
 ## Sessions
 
@@ -80,27 +80,42 @@ juggle agent run my-feature
 
 # Work on ALL balls in repo (no session filter)
 juggle agent run all
+
+# Work on specific ball only
+juggle agent run --ball juggle-5
 ```
 
-### Agent Flags
+### Agent Run Flags
 
-```bash
-juggle agent run my-feature \
-  --iterations 5            # Max iterations (default: 10)
-  --model sonnet           # Model: opus, sonnet, haiku
-  --ball juggle-123       # Work on specific ball only
-  --interactive            # Full Claude TUI (not headless)
-  --timeout 5m             # Per-iteration timeout
-  --trust                  # Skip permission prompts (dangerous)
-  --delay 5                # Minutes between iterations
-  --fuzz 2                 # Random delay variance (+/- minutes)
-```
+| Flag            | Short | Default | Description                                       |
+| --------------- | ----- | ------- | ------------------------------------------------- |
+| `--iterations`  | `-n`  | 10      | Maximum number of iterations                      |
+| `--model`       | `-m`  | auto    | Model to use: `opus`, `sonnet`, `haiku`           |
+| `--ball`        | `-b`  | -       | Work on a specific ball only                      |
+| `--interactive` | `-i`  | false   | Run in interactive mode (full Claude TUI)         |
+| `--timeout`     | `-T`  | 0       | Per-iteration timeout (e.g., `5m`, `1h`)          |
+| `--trust`       | -     | false   | Skip permission prompts (dangerous!)              |
+| `--delay`       | -     | 0       | Delay between iterations in minutes               |
+| `--fuzz`        | -     | 0       | Random +/- variance in delay minutes              |
+| `--dry-run`     | -     | false   | Show prompt info without running                  |
+| `--debug`       | `-d`  | false   | Show prompt info before running                   |
+| `--max-wait`    | -     | 0       | Maximum wait time for rate limits (0 = unlimited) |
+| `--all`         | `-a`  | false   | Select from sessions across all projects          |
 
-### Refining Balls
+**Model auto-selection**: When `--model` is not specified:
+
+- Large/opus for balls marked with `model_size: large`
+- Sonnet for standard work
+- Can be overridden per-ball via the `model_size` field
+
+### Agent Refine
 
 ```bash
 # AI-assisted acceptance criteria improvement
 juggle agent refine my-feature
+
+# Review balls across all projects
+juggle agent refine --all
 ```
 
 ## Ball Properties
@@ -110,40 +125,158 @@ Each ball has:
 - **Title**: Short description (shows in lists)
 - **Context**: Background info for the agent
 - **Acceptance Criteria**: Specific, testable conditions for completion
-- **State**: `pending` → `in_progress` → `complete` (or `blocked`)
+- **State**: `pending` → `in_progress` → `complete`/`researched` (or `blocked`)
 - **Priority**: `low`, `medium`, `high`, `urgent`
 - **Model Size**: `small` (haiku), `medium` (sonnet), `large` (opus)
 - **Dependencies**: Other balls that must complete first
 - **Tags**: For filtering and session grouping
+- **Output**: Research results (for `researched` state)
+
+## Configuration Commands
+
+### Repository-Level Config
+
+```bash
+# Show all configuration
+juggle config
+
+# Manage acceptance criteria
+juggle config ac list
+juggle config ac add "All tests pass"
+juggle config ac set --edit   # Open in $EDITOR
+juggle config ac clear
+
+# Manage VCS preference
+juggle config vcs show
+juggle config vcs set jj      # or "git"
+juggle config vcs clear
+```
+
+### Global Config
+
+```bash
+# Manage iteration delay
+juggle config delay show
+juggle config delay set 5         # 5 minutes between iterations
+juggle config delay set 5 --fuzz 2  # 5 ± 2 minutes
+juggle config delay clear
+```
+
+## Workflow Commands
+
+### Check Current State
+
+```bash
+# Get workflow guidance
+juggle check
+```
+
+### Audit Project Health
+
+```bash
+# Analyze completion metrics
+juggle audit
+
+# Across all projects
+juggle audit --all
+```
+
+## Project Management
+
+### Worktree Support
+
+For parallel agent execution in git worktrees:
+
+```bash
+# Register a worktree
+juggle worktree add ../my-worktree
+
+# List registered worktrees
+juggle worktree list
+
+# Check current directory status
+juggle worktree status
+
+# Unregister a worktree
+juggle worktree forget ../my-worktree
+```
+
+### Move Balls Between Projects
+
+```bash
+# Transfer ball to another project
+juggle move juggle-5 ~/other-project
+```
+
+### Unarchive Completed Balls
+
+```bash
+# Restore from archive to pending state
+juggle unarchive juggle-5
+```
+
+## Sync Commands
+
+### Sync with External Systems
+
+```bash
+# Sync prd.json status to balls
+juggle sync ralph
+```
 
 ## TUI Keyboard Shortcuts
 
 ### Navigation
+
+- `Tab` / `l` - Next panel (Sessions → Balls → Activity)
+- `Shift+Tab` / `h` - Previous panel
 - `j/k` or `↓/↑` - Move up/down
-- `Enter` - View/edit ball
-- `Esc` - Back/cancel
+- `Enter` - Select item / Edit ball
+- `Space` - Go back (in Balls panel)
+- `Esc` - Back/deselect/close
 - `?` - Help
 
-### Ball State (two-key sequences)
-- `sc` - Mark complete
+### Ball State (two-key sequences with `s`)
+
+- `sc` - Mark complete (archives the ball)
 - `ss` - Mark in_progress (start)
-- `sb` - Mark blocked
+- `sb` - Mark blocked (prompts for reason)
 - `sp` - Mark pending
-- `sa` - Archive (complete + hide)
+- `sa` - Archive completed ball
 
-### Filters (two-key sequences)
+### Filters (two-key sequences with `t`)
+
 - `tc` - Toggle complete visibility
-- `tb` - Toggle blocked
-- `ti` - Toggle in_progress
-- `tp` - Toggle pending
-- `ta` - Show all
+- `tb` - Toggle blocked visibility
+- `ti` - Toggle in_progress visibility
+- `tp` - Toggle pending visibility
+- `ta` - Show all states
 
-### Agent Output
-- `O` - Toggle output panel
-- `X` - Cancel running agent
-- `H` - View agent history
+### Ball Management
 
-## Export
+- `a` - Add new ball (tagged to current session)
+- `A` - Add followup ball (depends on selected ball)
+- `e` - Edit ball in $EDITOR (YAML format)
+- `d` - Delete ball (with confirmation)
+- `[ / ]` - Switch session (previous / next)
+- `o` - Toggle sort order
+- `/` - Filter balls
+- `Ctrl+U` - Clear filter
+
+### View Options
+
+- `i` - Cycle bottom pane (activity → detail → split)
+- `O` - Toggle agent output panel
+- `P` - Toggle project scope (local ↔ all projects)
+- `R` - Refresh/reload data
+
+### Agent Control
+
+- `X` - Cancel running agent (with confirmation)
+- `O` - Toggle agent output visibility
+- `H` - View agent run history
+
+## Export Formats
 
 ```bash
 # Export session to JSON
@@ -152,9 +285,110 @@ juggle export --session my-feature --format json
 # Export to CSV
 juggle export --session my-feature --format csv
 
-# Export as agent prompt (Ralph format)
-juggle export --session my-feature --format agent
+# Export as Ralph format (context + progress + tasks)
+juggle export --session my-feature --format ralph
+
+# Export as self-contained agent prompt
+juggle export --session my-feature --format agent | claude -p
 ```
+
+### Format Comparison
+
+| Format  | Use Case                                                               |
+| ------- | ---------------------------------------------------------------------- |
+| `json`  | Data interchange, backups, programmatic access                         |
+| `csv`   | Spreadsheet analysis, reporting                                        |
+| `ralph` | Legacy agent prompts with structured sections                          |
+| `agent` | Self-contained prompt for AI agents with full context and instructions |
+
+### Export Filters
+
+```bash
+# Export specific balls
+juggle export --ball-ids "juggle-5,48" --format json
+
+# Export by state
+juggle export --filter-state in_progress --format json
+
+# Include completed balls (excluded by default)
+juggle export --include-done --format json
+```
+
+## Configuration
+
+### VCS Settings
+
+Juggle auto-detects version control (`.jj` preferred over `.git`), but you can override:
+
+```bash
+# Show current settings and detection
+juggle config vcs show
+
+# Set globally
+juggle config vcs set jj
+juggle config vcs set git
+
+# Set per-project
+juggle config vcs set jj --project
+
+# Clear to use auto-detection
+juggle config vcs clear
+juggle config vcs clear --project
+```
+
+### Acceptance Criteria (repo-level)
+
+```bash
+# List current criteria
+juggle config ac list
+
+# Add criterion
+juggle config ac add "All tests must pass"
+
+# Edit in $EDITOR
+juggle config ac set --edit
+
+# Clear all
+juggle config ac clear
+```
+
+### Agent Iteration Delay
+
+```bash
+# Show delay settings
+juggle config delay show
+
+# Set 5 minute delay
+juggle config delay set 5
+
+# Set 5 ± 2 minute delay (range: 3-7 min)
+juggle config delay set 5 --fuzz 2
+
+# Clear delay
+juggle config delay clear
+```
+
+## Worktrees
+
+Manage worktree links for running parallel agent loops across different VCS worktrees while sharing the same ball state.
+
+```bash
+# Register a worktree (run from main repo)
+juggle worktree add ../my-feature-worktree
+
+# List registered worktrees
+juggle worktree list
+
+# Check worktree status for current directory
+juggle worktree status
+
+# Unregister a worktree (doesn't delete it)
+juggle worktree forget ../my-feature-worktree
+```
+
+**Note:** The `workspace` alias works for all worktree commands (e.g., `juggle workspace add`).
+
+See [Installation Guide - Worktrees](./installation.md#worktrees-parallel-agent-loops) for full setup instructions.
 
 ## File Structure
 
@@ -162,7 +396,7 @@ juggle export --session my-feature --format agent
 your-project/
 ├── .juggle/
 │   ├── balls.jsonl           # Active balls
-│   ├── config.json           # Project config
+│   ├── config.json           # Project config (vcs, acceptance criteria)
 │   ├── archive/
 │   │   └── balls.jsonl       # Completed balls
 │   └── sessions/
@@ -172,5 +406,17 @@ your-project/
 │           └── last_output.txt
 
 ~/.juggle/
-├── config.json               # Global config (search paths)
+├── config.json               # Global config (search paths, vcs, delay)
 ```
+
+## Global Flags
+
+These flags work with most commands:
+
+| Flag            | Description                           |
+| --------------- | ------------------------------------- |
+| `--all`, `-a`   | Search across all discovered projects |
+| `--json`        | Output as JSON                        |
+| `--project-dir` | Override working directory            |
+| `--config-home` | Override ~/.juggle directory          |
+| `--juggle-dir`  | Override .juggle directory name       |

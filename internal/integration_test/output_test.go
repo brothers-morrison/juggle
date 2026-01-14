@@ -76,9 +76,11 @@ func TestBallOutput_MarkResearchedClearsBlockedReason(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	// Create a blocked ball
+	// Create a blocked ball (already in_progress so we can block it)
 	ball := env.CreateInProgressBall(t, "Investigate issue", session.PriorityMedium)
-	ball.SetBlocked("Waiting for more info")
+	if err := ball.SetBlocked("Waiting for more info"); err != nil {
+		t.Fatalf("Failed to set blocked: %v", err)
+	}
 
 	store := env.GetStore(t)
 	if err := store.UpdateBall(ball); err != nil {

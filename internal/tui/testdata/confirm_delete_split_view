@@ -1,16 +1,11 @@
 run
 ----
 -- view:
-⚠️  DELETE BALL␤
+Confirm Delete␤
 ␤
-ID:       juggle-1␤
-Title:    Critical bug fix␤
-State:    in_progress␤
-Priority: high␤
-Tags:     bug, urgent␤
 ␤
-This will permanently delete the ball.␤
+This action cannot be undone.␤
 ␤
-Delete this ball? [y/N]␤
+Delete? [y/N]␤
 ␤
 y = confirm | n/Esc = cancel🛇

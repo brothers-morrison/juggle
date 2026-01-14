@@ -19,7 +19,7 @@ The Juggle TUI provides an interactive, full-screen terminal interface for manag
 - **Ball List View**: See all balls across all projects with color-coded states
 - **Ball Detail View**: View full ball information including todos, tags, and timestamps
 - **Quick Actions**: Perform common operations with single keystrokes
-- **State Filtering**: Filter balls by state (all/ready/juggling/dropped)
+- **State Filtering**: Filter balls by state (all/pending/in_progress/blocked)
 - **Real-time Updates**: Refresh ball data on demand
 - **Help View**: Built-in keyboard reference
 
@@ -42,11 +42,11 @@ juggle tui --help
 
 1. Launch TUI: `juggle tui`
 2. Use `↑`/`↓` to navigate balls
-3. Press `2` to toggle ready ball visibility
-4. Press `s` to start the selected ball
+3. Press `tp` to toggle pending ball visibility
+4. Press `ss` to start the selected ball
 5. Press `Enter` to see ball details
 6. Press `b` to go back to list
-7. Press `Tab` to cycle through states
+7. Press `s` then a state key to change state
 8. Press `x` to delete a ball (with confirmation)
 9. Press `p` to cycle priority levels
 10. Press `q` to quit
@@ -55,26 +55,25 @@ juggle tui --help
 
 The TUI supports several quick actions that work from the list view:
 
-- **Start Ball (s)**: Changes ready ball to juggling:in-air
-  - Only works on ready balls
+- **Start Ball (ss)**: Changes pending ball to in_progress
+  - Only works on pending balls
   - Updates state immediately
 
-- **Complete Ball (c)**: Marks juggling ball as complete
-  - Only works on juggling balls
+- **Complete Ball (sc)**: Marks in_progress ball as complete
+  - Only works on in_progress balls
   - Archives the ball
 
-- **Drop Ball (d)**: Marks ball as dropped
-  - Works on ready or juggling balls
-  - Cannot drop already-dropped or complete balls
+- **Block Ball (sb)**: Marks ball as blocked
+  - Prompts for a reason
+  - Works on pending or in_progress balls
 
-- **Set Ready (r)**: Changes ball to ready state
+- **Set Pending (sp)**: Changes ball to pending state
   - Works from any state
   - Useful for resetting balls
 
-- **Cycle State (Tab)**: Cycles through all states
-  - Order: ready → juggling:in-air → complete → dropped → ready
-  - Works from any state
-  - Provides quick state changes
+- **Archive (sa)**: Archives a completed ball
+  - Only works on completed balls
+  - Moves to archive
 
 - **Delete Ball (x)**: Permanently deletes a ball
   - Shows confirmation dialog with ball details
@@ -93,20 +92,20 @@ The TUI supports several quick actions that work from the list view:
 
 ### Filtering
 
-Use number keys to **toggle** filter visibility by state:
+Use two-key sequences with `t` to toggle filter visibility by state:
 
-- `1` - Show all states (disables all filters)
-- `2` - Toggle ready ball visibility
-- `3` - Toggle juggling ball visibility
-- `4` - Toggle dropped ball visibility
-- `5` - Toggle complete ball visibility
+- `ta` - Show all states (disables all filters)
+- `tp` - Toggle pending ball visibility
+- `ti` - Toggle in_progress ball visibility
+- `tb` - Toggle blocked ball visibility
+- `tc` - Toggle complete ball visibility
 
 **Filter Behavior:**
 
 - Filters are toggleable, not exclusive
 - Multiple states can be visible simultaneously
-- Example: Press `2` then `3` to see both ready and juggling balls
-- Press `1` to reset all filters and show everything
+- Example: Press `tp` then `ti` to see both pending and in_progress balls
+- Press `ta` to reset all filters and show everything
 - Filter state persists during TUI session
 - Current filters shown in stats bar
 
@@ -162,7 +161,7 @@ The TUI maintains several state variables:
 - `balls`: All loaded balls
 - `filteredBalls`: Balls matching current filter
 - `cursor`: Current selection in list
-- `filterState`: Current filter ("all", "ready", "juggling", "dropped")
+- `filterState`: Current filter ("all", "pending", "in_progress", "blocked")
 - `message`: Success/error messages shown to user
 
 ### Ball Updates

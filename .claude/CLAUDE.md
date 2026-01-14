@@ -61,16 +61,18 @@ go fmt ./...
 
 ### State Machine
 
-Balls use a simplified 4-state model:
+Balls use a 5-state model:
 
 - **pending** → Ball is planned but not started
 - **in_progress** → Ball is actively being worked on
 - **complete** → Task finished and archived
+- **researched** → Investigation task finished with findings (stored in `Output`) but no code changes
 - **blocked** → Task is blocked (with optional `BlockedReason` for context)
 
 State transitions:
 - `pending` → `in_progress` (via `start`)
 - `in_progress` → `complete` (via completion commands)
+- `in_progress` → `researched` (via research completion - produces findings, not code)
 - `in_progress` → `blocked` (via block command with reason)
 - `blocked` → `in_progress` (via unblock/resume)
 - Any state → `pending` (reset)
@@ -79,12 +81,20 @@ State transitions:
 
 #### 1. Session Package (`internal/session/`)
 
-**`session.go`** - Core data model:
+**`ball.go`** - Core data model:
 
-- `Session` struct: Represents a ball with ID, intent, priority, state, todos, tags
-- `BallState` type: pending/in_progress/complete/blocked
-- `BlockedReason` field: Provides context when a ball is blocked
-- Priority levels: low/medium/high/urgent
+- `Ball` struct fields:
+  - `ID`, `Title`: Identity and short description
+  - `Context`: Background info for the agent (rich text, can include @file references)
+  - `AcceptanceCriteria`: Specific, testable conditions for completion
+  - `State`: pending/in_progress/complete/researched/blocked
+  - `BlockedReason`: Context when blocked (human needed, waiting for dependency, etc.)
+  - `Priority`: low/medium/high/urgent
+  - `ModelSize`: small (haiku), medium (sonnet), large (opus) - hints for agent model selection
+  - `Output`: Research findings for `researched` state balls
+  - `CompletionNote`: Summary of what was done when completing
+  - `DependsOn`: List of ball IDs that must complete first
+  - `Tags`: For filtering and session grouping
 - Methods for state transitions, todo management
 
 **`store.go`** - Persistent storage:
@@ -192,17 +202,16 @@ Each ball is one line of JSON in `.juggle/balls.jsonl`:
 ```json
 {
   "id": "juggle-5",
-  "intent": "Add search feature",
+  "title": "Add search feature",
+  "context": "Need full-text search across all balls",
+  "acceptance_criteria": ["Search returns relevant results", "Handles special chars"],
   "priority": "high",
   "state": "in_progress",
   "blocked_reason": "",
+  "model_size": "medium",
+  "depends_on": ["juggle-3"],
   "started_at": "2025-10-16T10:30:00Z",
   "last_activity": "2025-10-16T11:45:00Z",
-  "update_count": 12,
-  "todos": [
-    { "text": "Design API", "done": true },
-    { "text": "Implement backend", "done": false }
-  ],
   "tags": ["feature", "backend"]
 }
 ```

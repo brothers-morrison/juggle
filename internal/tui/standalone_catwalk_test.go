@@ -218,31 +218,31 @@ func createTestSplitViewModel(t *testing.T) Model {
 	ta.SetHeight(1)
 
 	m := Model{
-		store:        store,
-		sessionStore: sessionStore,
-		config:       config,
-		localOnly:    true,
-		balls:        make([]*session.Ball, 0),
+		store:         store,
+		sessionStore:  sessionStore,
+		config:        config,
+		localOnly:     true,
+		balls:         make([]*session.Ball, 0),
 		filteredBalls: make([]*session.Ball, 0),
-		sessions:     make([]*session.JuggleSession, 0),
-		activePanel:  SessionsPanel,
+		sessions:      make([]*session.JuggleSession, 0),
+		activePanel:   SessionsPanel,
 		sessionCursor: 0,
-		mode:         splitView,
+		mode:          splitView,
 		filterStates: map[string]bool{
 			"pending":     true,
 			"in_progress": true,
 			"blocked":     true,
 			"complete":    false,
 		},
-		textInput:            ti,
-		contextInput:         ta,
-		width:                80,
-		height:               24,
-		showPriorityColumn:   true,
-		showTagsColumn:       true,
-		agentStatus:          AgentStatus{},
-		pendingKeySequence:   "",
-		activityLog:          make([]ActivityEntry, 0),
+		textInput:          ti,
+		contextInput:       ta,
+		width:              80,
+		height:             24,
+		showPriorityColumn: true,
+		showTagsColumn:     true,
+		agentStatus:        AgentStatus{},
+		pendingKeySequence: "",
+		activityLog:        make([]ActivityEntry, 0),
 	}
 
 	// Set fixed time for deterministic tests
@@ -428,7 +428,6 @@ func TestBallsPanelWithBalls(t *testing.T) {
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 0
-	model.selectedBall = model.balls[0]
 	catwalk.RunModel(t, "testdata/balls_panel_with_balls", model)
 }
 
@@ -445,7 +444,6 @@ func TestBallsPanelWithPriorityColumn(t *testing.T) {
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 1
-	model.selectedBall = model.balls[1]
 	catwalk.RunModel(t, "testdata/balls_panel_with_priority_column", model)
 }
 
@@ -461,39 +459,7 @@ func TestBallsPanelWithTagsColumn(t *testing.T) {
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 2
-	model.selectedBall = model.balls[2]
 	catwalk.RunModel(t, "testdata/balls_panel_with_tags_column", model)
-}
-
-// TestBallsPanelWithTestsColumn tests the balls panel with tests column visible.
-func TestBallsPanelWithTestsColumn(t *testing.T) {
-	model := createTestSplitViewModel(t)
-	model.activePanel = BallsPanel
-	model.showTestsColumn = true
-	model.balls = []*session.Ball{
-		{
-			ID:                   "juggle-1",
-			Title:                "Task with no tests",
-			State:                session.StatePending,
-			AcceptanceCriteria:   []string{},
-		},
-		{
-			ID:                   "juggle-2",
-			Title:                "Task with some tests",
-			State:                session.StateInProgress,
-			AcceptanceCriteria:   []string{"AC 1: Test X", "AC 2: Test Y"},
-		},
-		{
-			ID:                   "juggle-3",
-			Title:                "Task with many tests",
-			State:                session.StateBlocked,
-			AcceptanceCriteria:   []string{"AC 1", "AC 2", "AC 3", "AC 4", "AC 5"},
-		},
-	}
-	model.filteredBalls = model.balls
-	model.cursor = 1
-	model.selectedBall = model.balls[1]
-	catwalk.RunModel(t, "testdata/balls_panel_with_tests_column", model)
 }
 
 // TestBallsPanelMultipleColumns tests the balls panel with all columns visible.
@@ -502,28 +468,26 @@ func TestBallsPanelMultipleColumns(t *testing.T) {
 	model.activePanel = BallsPanel
 	model.showPriorityColumn = true
 	model.showTagsColumn = true
-	model.showTestsColumn = true
 	model.balls = []*session.Ball{
 		{
-			ID:                   "juggle-1",
-			Title:                "First complex task",
-			State:                session.StatePending,
-			Priority:             session.PriorityHigh,
-			Tags:                 []string{"feature", "backend"},
-			AcceptanceCriteria:   []string{"AC 1", "AC 2"},
+			ID:                 "juggle-1",
+			Title:              "First complex task",
+			State:              session.StatePending,
+			Priority:           session.PriorityHigh,
+			Tags:               []string{"feature", "backend"},
+			AcceptanceCriteria: []string{"AC 1", "AC 2"},
 		},
 		{
-			ID:                   "juggle-2",
-			Title:                "Second complex task",
-			State:                session.StateInProgress,
-			Priority:             session.PriorityMedium,
-			Tags:                 []string{"bugfix"},
-			AcceptanceCriteria:   []string{"AC 1"},
+			ID:                 "juggle-2",
+			Title:              "Second complex task",
+			State:              session.StateInProgress,
+			Priority:           session.PriorityMedium,
+			Tags:               []string{"bugfix"},
+			AcceptanceCriteria: []string{"AC 1"},
 		},
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 0
-	model.selectedBall = model.balls[0]
 	catwalk.RunModel(t, "testdata/balls_panel_with_multiple_columns", model)
 }
 
@@ -539,7 +503,6 @@ func TestBallsPanelSortByID(t *testing.T) {
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 0
-	model.selectedBall = model.balls[0]
 	catwalk.RunModel(t, "testdata/balls_panel_sort_by_id", model)
 }
 
@@ -557,7 +520,6 @@ func TestBallsPanelSortByPriority(t *testing.T) {
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 0
-	model.selectedBall = model.balls[0]
 	catwalk.RunModel(t, "testdata/balls_panel_sort_by_priority", model)
 }
 
@@ -579,14 +541,13 @@ func TestBallsPanelWithBlockedReason(t *testing.T) {
 			BlockedReason: "Awaiting API credentials from DevOps",
 		},
 		{
-			ID:       "juggle-3",
-			Title:    "In progress task",
-			State:    session.StateInProgress,
+			ID:    "juggle-3",
+			Title: "In progress task",
+			State: session.StateInProgress,
 		},
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 0
-	model.selectedBall = model.balls[0]
 	catwalk.RunModel(t, "testdata/balls_panel_with_blocked_reason", model)
 }
 
@@ -596,9 +557,9 @@ func TestBallsPanelWithDependencies(t *testing.T) {
 	model.activePanel = BallsPanel
 	model.balls = []*session.Ball{
 		{
-			ID:       "juggle-1",
-			Title:    "Task with no deps",
-			State:    session.StatePending,
+			ID:    "juggle-1",
+			Title: "Task with no deps",
+			State: session.StatePending,
 		},
 		{
 			ID:        "juggle-2",
@@ -615,7 +576,6 @@ func TestBallsPanelWithDependencies(t *testing.T) {
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 2
-	model.selectedBall = model.balls[2]
 	catwalk.RunModel(t, "testdata/balls_panel_with_dependencies", model)
 }
 
@@ -643,7 +603,6 @@ func TestBallsPanelScroll(t *testing.T) {
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 15 // Scroll to middle
-	model.selectedBall = model.balls[15]
 	model.showPriorityColumn = true
 	catwalk.RunModel(t, "testdata/balls_panel_scroll", model)
 }
@@ -684,54 +643,6 @@ func TestActivityLogViewWithEntries(t *testing.T) {
 	})
 	model.filteredBalls = model.balls
 	catwalk.RunModel(t, "testdata/activity_log_view_with_entries", model)
-}
-
-// TestBallDetailView tests the ball detail view rendering.
-func TestBallDetailView(t *testing.T) {
-	model := createTestSplitViewModel(t)
-	model.activePanel = ActivityPanel
-	model.bottomPaneMode = BottomPaneDetail
-
-	model.balls = append(model.balls, &session.Ball{
-		ID:        "juggle-1",
-		Title:     "Fix authentication bug",
-		State:     session.StateInProgress,
-		Priority:  session.PriorityHigh,
-		Context:   "Users are unable to login with SSO",
-		Tags:      []string{"bug", "authentication"},
-		DependsOn: []string{},
-	})
-	model.filteredBalls = model.balls
-	model.cursor = 0
-	model.selectedBall = model.balls[0]
-	catwalk.RunModel(t, "testdata/ball_detail_view", model)
-}
-
-// TestSplitBottomPane tests the split bottom pane with activity and details side by side.
-func TestSplitBottomPane(t *testing.T) {
-	model := createTestSplitViewModel(t)
-	model.activePanel = BallsPanel
-	model.bottomPaneMode = BottomPaneSplit
-
-	fixedTime := time.Date(2025, 1, 13, 16, 41, 11, 0, time.UTC)
-	model.activityLog = []ActivityEntry{
-		{Time: fixedTime.Add(0), Message: "Balls loaded"},
-		{Time: fixedTime.Add(1 * time.Second), Message: "Sessions loaded"},
-	}
-
-	model.balls = append(model.balls, &session.Ball{
-		ID:        "juggle-1",
-		Title:     "Add test coverage",
-		State:     session.StateInProgress,
-		Priority:  session.PriorityMedium,
-		Context:   "Need to improve test coverage to 80%",
-		Tags:      []string{"testing", "refactor"},
-		DependsOn: []string{},
-	})
-	model.filteredBalls = model.balls
-	model.cursor = 0
-	model.selectedBall = model.balls[0]
-	catwalk.RunModel(t, "testdata/split_bottom_pane", model)
 }
 
 // TestCyclingBottomPaneModes tests cycling through bottom pane display modes.
@@ -777,34 +688,6 @@ func TestActivityLogScrolling(t *testing.T) {
 	model.filteredBalls = model.balls
 	model.activityLogOffset = 10 // Scroll to middle
 	catwalk.RunModel(t, "testdata/activity_log_scrolling", model)
-}
-
-// TestDetailViewScrolling tests scrolling behavior in the detail view.
-func TestDetailViewScrolling(t *testing.T) {
-	model := createTestSplitViewModel(t)
-	model.activePanel = ActivityPanel
-	model.bottomPaneMode = BottomPaneDetail
-
-	longContext := "This is a very long context that should demonstrate scrolling in the detail view panel. " +
-		"It contains multiple lines of text to show how the detail view handles content that is too large " +
-		"to fit in the available space. The detail panel should be able to scroll through this content " +
-		"to show all the information about the selected ball. This is important for displaying comprehensive " +
-		"context and acceptance criteria that may be quite lengthy."
-
-	model.balls = append(model.balls, &session.Ball{
-		ID:        "juggle-1",
-		Title:     "Long context ball",
-		State:     session.StateInProgress,
-		Priority:  session.PriorityHigh,
-		Context:   longContext,
-		Tags:      []string{"feature", "documentation"},
-		DependsOn: []string{},
-	})
-	model.filteredBalls = model.balls
-	model.cursor = 0
-	model.selectedBall = model.balls[0]
-	model.detailScrollOffset = 5
-	catwalk.RunModel(t, "testdata/detail_view_scrolling", model)
 }
 
 // TestAgentOutputPanelVisible tests the agent output panel when visible but not expanded.
@@ -855,84 +738,6 @@ func TestAgentOutputPanelExpanded(t *testing.T) {
 	})
 	model.filteredBalls = model.balls
 	catwalk.RunModel(t, "testdata/agent_output_panel_expanded", model)
-}
-
-// TestConfirmDeleteListView tests the delete confirmation dialog in list view.
-func TestConfirmDeleteListView(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggle-tui-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	t.Cleanup(func() { os.RemoveAll(tmpDir) })
-
-	store, err := session.NewStore(tmpDir)
-	if err != nil {
-		t.Fatalf("failed to create store: %v", err)
-	}
-
-	// Create balls
-	balls := []*session.Ball{
-		{ID: "juggle-1", Title: "Important task", State: session.StatePending, Priority: session.PriorityHigh},
-		{ID: "juggle-2", Title: "Another task", State: session.StateInProgress, Priority: session.PriorityMedium},
-	}
-	for _, ball := range balls {
-		if err := store.AppendBall(ball); err != nil {
-			t.Fatalf("failed to append ball: %v", err)
-		}
-	}
-
-	sessionStore, err := session.NewSessionStore(tmpDir)
-	if err != nil {
-		t.Fatalf("failed to create session store: %v", err)
-	}
-
-	config := &session.Config{
-		SearchPaths: []string{tmpDir},
-	}
-
-	ti := textinput.New()
-	ti.CharLimit = 256
-	ti.Width = 60
-
-	ta := textarea.New()
-	ta.CharLimit = 2000
-	ta.SetWidth(60)
-	ta.SetHeight(1)
-
-	model := Model{
-		store:         store,
-		sessionStore:  sessionStore,
-		config:        config,
-		localOnly:     true,
-		balls:         balls,
-		filteredBalls: balls,
-		sessions:      make([]*session.JuggleSession, 0),
-		activePanel:   BallsPanel,
-		mode:          confirmDeleteView,
-		cursor:        0,
-		filterStates: map[string]bool{
-			"pending":     true,
-			"in_progress": true,
-			"blocked":     true,
-			"complete":    false,
-		},
-		textInput:           ti,
-		contextInput:        ta,
-		width:               80,
-		height:              24,
-		showPriorityColumn:  true,
-		showTagsColumn:      true,
-		agentStatus:         AgentStatus{},
-		pendingKeySequence:  "",
-		activityLog:         make([]ActivityEntry, 0),
-	}
-
-	fixedTime := time.Date(2025, 1, 13, 16, 41, 11, 0, time.UTC)
-	model.nowFunc = func() time.Time {
-		return fixedTime
-	}
-
-	catwalk.RunModel(t, "testdata/confirm_delete_list_view", model)
 }
 
 // TestConfirmDeleteSplitView tests the delete confirmation dialog in split view.
@@ -986,7 +791,7 @@ func TestConfirmDeleteSplitView(t *testing.T) {
 		filteredBalls: balls,
 		sessions:      make([]*session.JuggleSession, 0),
 		activePanel:   BallsPanel,
-		mode:          confirmDeleteView,
+		mode:          confirmSplitDelete,
 		cursor:        0,
 		filterStates: map[string]bool{
 			"pending":     true,
@@ -994,15 +799,15 @@ func TestConfirmDeleteSplitView(t *testing.T) {
 			"blocked":     true,
 			"complete":    false,
 		},
-		textInput:           ti,
-		contextInput:        ta,
-		width:               80,
-		height:              24,
-		showPriorityColumn:  true,
-		showTagsColumn:      true,
-		agentStatus:         AgentStatus{},
-		pendingKeySequence:  "",
-		activityLog:         make([]ActivityEntry, 0),
+		textInput:          ti,
+		contextInput:       ta,
+		width:              80,
+		height:             24,
+		showPriorityColumn: true,
+		showTagsColumn:     true,
+		agentStatus:        AgentStatus{},
+		pendingKeySequence: "",
+		activityLog:        make([]ActivityEntry, 0),
 	}
 
 	fixedTime := time.Date(2025, 1, 13, 16, 41, 11, 0, time.UTC)
@@ -1018,20 +823,13 @@ func TestConfirmAgentCancelDialog(t *testing.T) {
 	model := createTestSplitViewModel(t)
 	model.mode = confirmAgentCancel
 	model.agentStatus = AgentStatus{
-		Running:        true,
-		SessionID:      "session-1",
-		Iteration:      5,
-		MaxIterations:  10,
+		Running:       true,
+		SessionID:     "session-1",
+		Iteration:     5,
+		MaxIterations: 10,
 	}
 
 	catwalk.RunModel(t, "testdata/confirm_agent_cancel", model)
-}
-
-// TestHelpViewLegacy tests the legacy help view rendering.
-func TestHelpViewLegacy(t *testing.T) {
-	model := createTestSplitViewModel(t)
-	model.mode = helpView
-	catwalk.RunModel(t, "testdata/help_view_legacy", model)
 }
 
 // TestHelpViewSplitComprehensive tests the comprehensive split help view.
@@ -1072,7 +870,6 @@ func TestCatwalkStatusBarBallsPanel(t *testing.T) {
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 0
-	model.selectedBall = model.balls[0]
 	catwalk.RunModel(t, "testdata/status_bar_balls_panel", model)
 }
 
@@ -1110,7 +907,6 @@ func TestCatwalkStatusBarWithFilters(t *testing.T) {
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 0
-	model.selectedBall = model.balls[0]
 	catwalk.RunModel(t, "testdata/status_bar_with_filters", model)
 }
 
@@ -1145,7 +941,6 @@ func TestCatwalkStatusBarWithSearchQuery(t *testing.T) {
 	}
 	model.filteredBalls = model.balls[:1] // Only first ball matches filter
 	model.cursor = 0
-	model.selectedBall = model.balls[0]
 	catwalk.RunModel(t, "testdata/status_bar_with_search_query", model)
 }
 
@@ -1287,54 +1082,15 @@ func TestPanelSearchViewWithQuery(t *testing.T) {
 	catwalk.RunModel(t, "testdata/panel_search_with_query", model)
 }
 
-// TestInputAcceptanceCriteriaViewEmpty tests the acceptance criteria input dialog when empty.
-func TestInputAcceptanceCriteriaViewEmpty(t *testing.T) {
-	model := createTestSplitViewModel(t)
-	model.mode = inputAcceptanceCriteriaView
-	model.pendingBallIntent = "Implement user authentication"
-	model.pendingAcceptanceCriteria = []string{}
-	model.textInput.SetValue("")
-	model.textInput.Focus()
-	catwalk.RunModel(t, "testdata/input_ac_empty", model)
-}
-
-// TestInputAcceptanceCriteriaViewWithEntries tests the AC input with existing entries.
-func TestInputAcceptanceCriteriaViewWithEntries(t *testing.T) {
-	model := createTestSplitViewModel(t)
-	model.mode = inputAcceptanceCriteriaView
-	model.pendingBallIntent = "Implement user authentication"
-	model.pendingAcceptanceCriteria = []string{
-		"User can login with email and password",
-		"Password reset flow works correctly",
-		"Session tokens expire after 24 hours",
-	}
-	model.textInput.SetValue("")
-	model.textInput.Focus()
-	catwalk.RunModel(t, "testdata/input_ac_with_entries", model)
-}
-
-// TestInputAcceptanceCriteriaViewTyping tests the AC input while typing a new criterion.
-func TestInputAcceptanceCriteriaViewTyping(t *testing.T) {
-	model := createTestSplitViewModel(t)
-	model.mode = inputAcceptanceCriteriaView
-	model.pendingBallIntent = "Implement user authentication"
-	model.pendingAcceptanceCriteria = []string{
-		"User can login with email and password",
-	}
-	model.textInput.SetValue("OAuth integration supports Google")
-	model.textInput.Focus()
-	catwalk.RunModel(t, "testdata/input_ac_typing", model)
-}
-
 // TestInputTagViewEmpty tests the tag input dialog with no existing tags.
 func TestInputTagViewEmpty(t *testing.T) {
 	model := createTestSplitViewModel(t)
 	model.mode = inputTagView
 	model.editingBall = &session.Ball{
-		ID:       "juggle-3",
-		Title:    "Task without tags",
-		State:    session.StatePending,
-		Tags:     []string{},
+		ID:    "juggle-3",
+		Title: "Task without tags",
+		State: session.StatePending,
+		Tags:  []string{},
 	}
 	model.textInput.SetValue("")
 	model.textInput.Focus()
@@ -1346,10 +1102,10 @@ func TestInputTagViewWithTags(t *testing.T) {
 	model := createTestSplitViewModel(t)
 	model.mode = inputTagView
 	model.editingBall = &session.Ball{
-		ID:       "juggle-3",
-		Title:    "Task with multiple tags",
-		State:    session.StatePending,
-		Tags:     []string{"backend", "api", "authentication"},
+		ID:    "juggle-3",
+		Title: "Task with multiple tags",
+		State: session.StatePending,
+		Tags:  []string{"backend", "api", "authentication"},
 	}
 	model.textInput.SetValue("")
 	model.textInput.Focus()
@@ -1361,10 +1117,10 @@ func TestInputTagViewTyping(t *testing.T) {
 	model := createTestSplitViewModel(t)
 	model.mode = inputTagView
 	model.editingBall = &session.Ball{
-		ID:       "juggle-3",
-		Title:    "Task with some tags",
-		State:    session.StatePending,
-		Tags:     []string{"backend", "api"},
+		ID:    "juggle-3",
+		Title: "Task with some tags",
+		State: session.StatePending,
+		Tags:  []string{"backend", "api"},
 	}
 	model.textInput.SetValue("security")
 	model.textInput.Focus()
@@ -1376,10 +1132,10 @@ func TestInputTagViewRemove(t *testing.T) {
 	model := createTestSplitViewModel(t)
 	model.mode = inputTagView
 	model.editingBall = &session.Ball{
-		ID:       "juggle-3",
-		Title:    "Task with tags to remove",
-		State:    session.StatePending,
-		Tags:     []string{"backend", "obsolete", "api"},
+		ID:    "juggle-3",
+		Title: "Task with tags to remove",
+		State: session.StatePending,
+		Tags:  []string{"backend", "obsolete", "api"},
 	}
 	model.textInput.SetValue("-obsolete")
 	model.textInput.Focus()
@@ -1467,19 +1223,19 @@ func TestHistoryViewSelectedDetails(t *testing.T) {
 			OutputFile:    "/tmp/juggle/backend-work/last_output.txt",
 		},
 		{
-			ID:             "1736779271000000000",
-			SessionID:      "frontend-tasks",
-			StartedAt:      fixedTime.Add(-1 * time.Hour),
-			EndedAt:        fixedTime.Add(-1*time.Hour + 8*time.Minute),
-			Iterations:     5,
-			MaxIterations:  10,
-			Result:         "blocked",
-			BlockedReason:  "Missing API credentials from DevOps team",
-			BallsComplete:  2,
-			BallsBlocked:   1,
-			BallsTotal:     3,
-			TotalWaitTime:  30 * time.Second,
-			OutputFile:     "/tmp/juggle/frontend-tasks/last_output.txt",
+			ID:            "1736779271000000000",
+			SessionID:     "frontend-tasks",
+			StartedAt:     fixedTime.Add(-1 * time.Hour),
+			EndedAt:       fixedTime.Add(-1*time.Hour + 8*time.Minute),
+			Iterations:    5,
+			MaxIterations: 10,
+			Result:        "blocked",
+			BlockedReason: "Missing API credentials from DevOps team",
+			BallsComplete: 2,
+			BallsBlocked:  1,
+			BallsTotal:    3,
+			TotalWaitTime: 30 * time.Second,
+			OutputFile:    "/tmp/juggle/frontend-tasks/last_output.txt",
 		},
 		{
 			ID:            "1736775671000000000",
@@ -1573,18 +1329,6 @@ func TestHistoryOutputViewScrolling(t *testing.T) {
 	model.historyOutput = strings.Join(lines, "\n")
 	model.historyOutputOffset = 10 // Scroll to middle of content
 	catwalk.RunModel(t, "testdata/history_output_view_scrolling", model)
-}
-
-// TestBallFormPriorityCycling tests priority field cycling with left/right arrow keys in the legacy ball form.
-func TestBallFormPriorityCycling(t *testing.T) {
-	model := createTestSplitViewModel(t)
-	model.mode = inputBallFormView
-	model.pendingBallIntent = "Test task for priority cycling"
-	model.pendingBallFormField = 0 // priority field
-	model.pendingBallPriority = 1  // medium
-	model.pendingBallSession = 0   // none
-	model.pendingBallTags = ""
-	catwalk.RunModel(t, "testdata/ball_form_priority_cycling", model)
 }
 
 // TestBallFormModelSizeCycling tests model size field cycling with left/right arrow keys.
@@ -1902,14 +1646,14 @@ func TestFollowupBallCreation(t *testing.T) {
 	ta.Focus()
 
 	model := StandaloneBallModel{
-		store:                  store,
-		textInput:              ti,
-		contextInput:           ta,
-		pendingBallPriority:    1, // medium
-		pendingBallDependsOn:   []string{"parent-ball-1"}, // Pre-filled dependency
-		fileAutocomplete:       NewAutocompleteState(store.ProjectDir()),
-		width:                  80,
-		height:                 24,
+		store:                store,
+		textInput:            ti,
+		contextInput:         ta,
+		pendingBallPriority:  1,                         // medium
+		pendingBallDependsOn: []string{"parent-ball-1"}, // Pre-filled dependency
+		fileAutocomplete:     NewAutocompleteState(store.ProjectDir()),
+		width:                80,
+		height:               24,
 	}
 	catwalk.RunModel(t, "testdata/followup_ball_creation", model)
 }
@@ -1955,7 +1699,6 @@ func TestEdgeCaseNarrowTerminal(t *testing.T) {
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 0
-	model.selectedBall = model.balls[0]
 	model.showPriorityColumn = true
 	catwalk.RunModel(t, "testdata/edge_case_narrow_terminal", model)
 }
@@ -1983,10 +1726,8 @@ func TestEdgeCaseWideTerminal(t *testing.T) {
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 0
-	model.selectedBall = model.balls[0]
 	model.showPriorityColumn = true
 	model.showTagsColumn = true
-	model.showTestsColumn = true
 	catwalk.RunModel(t, "testdata/edge_case_wide_terminal", model)
 }
 
@@ -2014,10 +1755,8 @@ func TestEdgeCaseWideTerminalWithAllColumns(t *testing.T) {
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 0
-	model.selectedBall = model.balls[0]
 	model.showPriorityColumn = true
 	model.showTagsColumn = true
-	model.showTestsColumn = true
 	catwalk.RunModel(t, "testdata/edge_case_wide_all_columns", model)
 }
 
@@ -2032,7 +1771,6 @@ func TestEdgeCaseShortTerminal(t *testing.T) {
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 0
-	model.selectedBall = model.balls[0]
 	catwalk.RunModel(t, "testdata/edge_case_short_terminal", model)
 }
 
@@ -2050,7 +1788,6 @@ func TestEdgeCaseShortTerminalWithManyBalls(t *testing.T) {
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 7 // Scroll to middle
-	model.selectedBall = model.balls[7]
 	catwalk.RunModel(t, "testdata/edge_case_short_many_balls", model)
 }
 
@@ -2073,7 +1810,6 @@ func TestEdgeCaseLongTitleTruncation(t *testing.T) {
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 0
-	model.selectedBall = model.balls[0]
 	catwalk.RunModel(t, "testdata/edge_case_long_title_truncation", model)
 }
 
@@ -2091,7 +1827,6 @@ func TestEdgeCaseLongTitleInNarrowTerminal(t *testing.T) {
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 0
-	model.selectedBall = model.balls[0]
 	catwalk.RunModel(t, "testdata/edge_case_long_title_narrow", model)
 }
 
@@ -2101,7 +1836,6 @@ func TestEdgeCaseEmptyBallsList(t *testing.T) {
 	model.activePanel = BallsPanel
 	model.balls = make([]*session.Ball, 0)
 	model.filteredBalls = make([]*session.Ball, 0)
-	model.selectedBall = nil
 	catwalk.RunModel(t, "testdata/edge_case_empty_balls", model)
 }
 
@@ -2157,7 +1891,6 @@ func TestEdgeCaseMaxScrollBallsAtBottom(t *testing.T) {
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 29 // Last ball
-	model.selectedBall = model.balls[29]
 	catwalk.RunModel(t, "testdata/edge_case_max_scroll_balls_bottom", model)
 }
 
@@ -2175,7 +1908,6 @@ func TestEdgeCaseMaxScrollBallsAtTop(t *testing.T) {
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 0 // First ball
-	model.selectedBall = model.balls[0]
 	catwalk.RunModel(t, "testdata/edge_case_max_scroll_balls_top", model)
 }
 
@@ -2252,7 +1984,6 @@ func TestEdgeCaseCursorAtFirstBall(t *testing.T) {
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 0 // At the top
-	model.selectedBall = model.balls[0]
 	catwalk.RunModel(t, "testdata/edge_case_cursor_first_ball", model)
 }
 
@@ -2267,7 +1998,6 @@ func TestEdgeCaseCursorAtLastBall(t *testing.T) {
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 2 // At the end
-	model.selectedBall = model.balls[2]
 	catwalk.RunModel(t, "testdata/edge_case_cursor_last_ball", model)
 }
 
@@ -2309,7 +2039,6 @@ func TestEdgeCaseSingleBall(t *testing.T) {
 	}
 	model.filteredBalls = model.balls
 	model.cursor = 0
-	model.selectedBall = model.balls[0]
 	catwalk.RunModel(t, "testdata/edge_case_single_ball", model)
 }
 

@@ -40,18 +40,23 @@ const (
 	StateResearched BallState = "researched" // Completed with no code changes, output contains results
 )
 
-// TestsState represents whether tests are needed/done for a ball
-type TestsState string
 
-const (
-	TestsStateUnset    TestsState = ""           // Default - not specified
-	TestsStateNotNeeded TestsState = "not_needed" // Tests are not required for this task
-	TestsStateNeeded   TestsState = "needed"     // Tests are required but not yet done
-	TestsStateDone     TestsState = "done"       // Tests have been completed
-)
-
-
-// Ball represents a task being tracked
+// Ball represents a task being tracked in the juggle system.
+//
+// A Ball is the fundamental unit of work in juggle. It contains:
+//   - Identity: unique ID and working directory context
+//   - Description: title, context, and acceptance criteria
+//   - Lifecycle: state, timestamps, and completion info
+//   - Organization: priority, tags, and dependencies
+//   - Agent hints: model size preference
+//
+// Balls progress through states: pending → in_progress → complete/researched (or blocked).
+// The "researched" state is for investigation tasks that produce findings (stored in Output)
+// but no code changes.
+//
+// Example JSONL representation:
+//
+//	{"id":"proj-a1b2c3d4","title":"Add feature","priority":"medium","state":"pending",...}
 type Ball struct {
 	ID                 string      `json:"id"`
 	WorkingDir         string      `json:"-"` // Computed from file location, not stored
@@ -61,7 +66,6 @@ type Ball struct {
 	Priority           Priority    `json:"priority"`
 	State              BallState   `json:"state"`
 	BlockedReason      string      `json:"blocked_reason,omitempty"`
-	TestsState         TestsState  `json:"tests_state,omitempty"`
 	Output             string      `json:"output,omitempty"` // Research results or investigation output
 	DependsOn          []string    `json:"depends_on,omitempty"` // Ball IDs this ball depends on
 	StartedAt          time.Time   `json:"started_at"`
@@ -129,8 +133,55 @@ func (b *Ball) IncrementUpdateCount() {
 	b.UpdateActivity()
 }
 
-// SetState sets the ball state
-func (b *Ball) SetState(state BallState) {
+// ValidStateTransition checks if a state transition is valid.
+// Valid transitions:
+// - pending → in_progress (start)
+// - in_progress → complete/researched (completion)
+// - in_progress → blocked (blocking)
+// - blocked → in_progress (resume)
+// - Any state → pending (reset)
+func ValidStateTransition(from, to BallState) bool {
+	// Reset to pending is always allowed
+	if to == StatePending {
+		return true
+	}
+
+	switch from {
+	case StatePending:
+		// Can only start (move to in_progress)
+		return to == StateInProgress
+	case StateInProgress:
+		// Can complete, block, or mark as researched
+		return to == StateComplete || to == StateBlocked || to == StateResearched
+	case StateBlocked:
+		// Can resume (move back to in_progress)
+		return to == StateInProgress
+	case StateComplete, StateResearched:
+		// Terminal states - no transitions allowed (except reset to pending)
+		return false
+	default:
+		return false
+	}
+}
+
+// SetState sets the ball state.
+// Returns an error if the transition is invalid.
+func (b *Ball) SetState(state BallState) error {
+	if !ValidStateTransition(b.State, state) {
+		return fmt.Errorf("invalid state transition from %s to %s", b.State, state)
+	}
+	b.State = state
+	if state != StateBlocked {
+		b.BlockedReason = ""
+	}
+	b.UpdateActivity()
+	return nil
+}
+
+// ForceSetState sets the ball state without validation.
+// Use this only for tests and administrative purposes where
+// the normal state machine rules should be bypassed.
+func (b *Ball) ForceSetState(state BallState) {
 	b.State = state
 	if state != StateBlocked {
 		b.BlockedReason = ""
@@ -138,11 +189,16 @@ func (b *Ball) SetState(state BallState) {
 	b.UpdateActivity()
 }
 
-// SetBlocked sets the ball to blocked state with a reason
-func (b *Ball) SetBlocked(reason string) {
+// SetBlocked sets the ball to blocked state with a reason.
+// Returns an error if the transition from the current state is not valid.
+func (b *Ball) SetBlocked(reason string) error {
+	if !ValidStateTransition(b.State, StateBlocked) {
+		return fmt.Errorf("invalid state transition: cannot block from %s", b.State)
+	}
 	b.State = StateBlocked
 	b.BlockedReason = reason
 	b.UpdateActivity()
+	return nil
 }
 
 // MarkComplete marks the ball as complete
@@ -432,16 +488,6 @@ func (b *Ball) PriorityWeight() int {
 	}
 }
 
-// ValidateTestsState checks if a tests state string is valid
-func ValidateTestsState(s string) bool {
-	switch TestsState(s) {
-	case TestsStateUnset, TestsStateNotNeeded, TestsStateNeeded, TestsStateDone:
-		return true
-	default:
-		return false
-	}
-}
-
 // ValidateModelSize checks if a model size string is valid
 func ValidateModelSize(s string) bool {
 	switch ModelSize(s) {
@@ -452,30 +498,10 @@ func ValidateModelSize(s string) bool {
 	}
 }
 
-// SetTestsState sets the tests state for the ball
-func (b *Ball) SetTestsState(state TestsState) {
-	b.TestsState = state
-	b.UpdateActivity()
-}
-
 // SetModelSize sets the preferred model size for the ball
 func (b *Ball) SetModelSize(size ModelSize) {
 	b.ModelSize = size
 	b.UpdateActivity()
-}
-
-// TestsStateLabel returns a human-readable label for the tests state
-func (b *Ball) TestsStateLabel() string {
-	switch b.TestsState {
-	case TestsStateNotNeeded:
-		return "not needed"
-	case TestsStateNeeded:
-		return "needed"
-	case TestsStateDone:
-		return "done"
-	default:
-		return ""
-	}
 }
 
 // HasDependencies returns true if the ball has dependencies

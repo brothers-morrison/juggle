@@ -89,7 +89,9 @@ func runEdit(cmd *cobra.Command, args []string) error {
 		if !session.ValidateBallState(editState) {
 			return fmt.Errorf("invalid state: %s (must be pending|in_progress|blocked|complete)", editState)
 		}
-		foundBall.SetState(session.BallState(editState))
+		if err := foundBall.SetState(session.BallState(editState)); err != nil {
+			return err
+		}
 		modified = true
 		fmt.Printf("✓ Updated state: %s\n", foundBall.State)
 	}
@@ -150,7 +152,9 @@ func runInteractiveEdit(ball *session.Ball, store *session.Store) error {
 		if !session.ValidateBallState(input) {
 			return fmt.Errorf("invalid state: %s", input)
 		}
-		ball.SetState(session.BallState(input))
+		if err := ball.SetState(session.BallState(input)); err != nil {
+			return err
+		}
 	}
 
 	// Edit tags

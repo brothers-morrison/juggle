@@ -35,7 +35,7 @@ func TestEndToEndWorkflow(t *testing.T) {
 
 	// Create a blocked ball
 	blocked := env.CreateBall(t, "Blocked ball", session.PriorityLow)
-	blocked.SetState(session.StateBlocked)
+	blocked.ForceSetState(session.StateBlocked)
 	if err := store.UpdateBall(blocked); err != nil {
 		t.Fatalf("Failed to mark ball blocked: %v", err)
 	}
@@ -94,7 +94,7 @@ func TestEndToEndWorkflow(t *testing.T) {
 	// === Step 2: Test Check Command with Different Scenarios ===
 	t.Run("CheckCommand_NoInProgressBalls", func(t *testing.T) {
 		// Archive the in-progress ball temporarily
-		inProgress1.SetState(session.StateComplete)
+		inProgress1.ForceSetState(session.StateComplete)
 		if err := store.UpdateBall(inProgress1); err != nil {
 			t.Fatalf("Failed to update ball: %v", err)
 		}
@@ -111,7 +111,7 @@ func TestEndToEndWorkflow(t *testing.T) {
 		}
 
 		// Restore in-progress state
-		inProgress1.SetState(session.StateInProgress)
+		inProgress1.ForceSetState(session.StateInProgress)
 		if err := store.UpdateBall(inProgress1); err != nil {
 			t.Fatalf("Failed to restore ball: %v", err)
 		}
@@ -250,8 +250,10 @@ func TestCrossCommandConsistency(t *testing.T) {
 			t.Fatalf("Failed to save ball: %v", err)
 		}
 
-		// Test: blocked state with reason
-		ball.SetBlocked("Waiting for review")
+		// Test: blocked state with reason (valid from in_progress)
+		if err := ball.SetBlocked("Waiting for review"); err != nil {
+			t.Fatalf("SetBlocked failed: %v", err)
+		}
 		if ball.BlockedReason != "Waiting for review" {
 			t.Error("SetBlocked should update blocked reason")
 		}

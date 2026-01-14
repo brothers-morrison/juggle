@@ -94,14 +94,113 @@ juggle projects add ~/personal-projects
 
 Juggle will search these directories for any project containing a `.juggle` folder.
 
-### 3. Start Your First Session
+### 3. Initialize Your First Project
 
 ```bash
 cd your-project
-juggle start "My first work session"
+
+# Create a session to group related work
+juggle sessions create my-feature -m "My first feature"
+
+# Create your first task (ball)
+juggle plan --session my-feature --title "First task"
 ```
 
-This creates `.juggle/balls.jsonl` in your project directory.
+This creates the `.juggle/` directory in your project with your session and ball.
+
+## Worktrees (Parallel Agent Loops)
+
+Run multiple agent loops simultaneously using VCS worktrees. Each worktree gets its own agent while sharing the same ball state from the main repo.
+
+### Why Worktrees?
+
+- **Parallel execution**: Run agents on different balls concurrently
+- **Isolated workspaces**: Each agent works in its own directory
+- **Shared state**: All worktrees read/write to the main repo's `.juggle/` directory
+- **No conflicts**: Agents work on different branches/changes
+
+### Setup Steps
+
+#### 1. Create VCS Worktree
+
+**For jj (Jujutsu):**
+
+```bash
+# From your main repo
+jj workspace add ../my-feature-worktree
+
+# Or create on a specific bookmark
+jj workspace add ../my-feature-worktree --revision my-bookmark
+```
+
+**For Git:**
+
+```bash
+# From your main repo
+git worktree add ../my-feature-worktree feature-branch
+```
+
+#### 2. Build in Worktree (if needed)
+
+If your project requires building:
+
+```bash
+cd ../my-feature-worktree
+go build ./...  # or npm install, cargo build, etc.
+```
+
+#### 3. Register with Juggle
+
+From the **main repo** (not the worktree):
+
+```bash
+juggle worktree add ../my-feature-worktree
+```
+
+This creates:
+
+- An entry in `.juggle/config.json` listing the worktree
+- A `.juggle/link` file in the worktree pointing to the main repo
+
+### Running Parallel Agents
+
+After setup, run agents from different terminals:
+
+```bash
+# Terminal 1 (main repo)
+cd ~/Development/my-project
+juggle agent run loop-a
+
+# Terminal 2 (worktree)
+cd ~/Development/my-feature-worktree
+juggle agent run loop-b
+```
+
+Both agents share the same balls and progress from the main repo's `.juggle/` directory.
+
+### Worktree Commands
+
+```bash
+# List registered worktrees
+juggle worktree list
+
+# Check worktree status
+juggle worktree status
+
+# Unregister a worktree (doesn't delete it)
+juggle worktree forget ../my-feature-worktree
+```
+
+### Cleanup
+
+```bash
+# Unregister from juggle
+juggle worktree forget ../my-feature-worktree
+
+# Remove VCS worktree
+jj workspace forget my-feature-worktree  # for jj
+git worktree remove ../my-feature-worktree  # for git
+```
 
 ## Updating
 
@@ -123,11 +222,12 @@ Download the latest release and replace the binary.
 
 ## Configuration
 
-Juggle stores configuration in `~/.config/juggle/config.json`:
+Juggle stores configuration in `~/.juggle/config.json`:
 
 ```json
 {
-  "search_paths": ["/home/user/Development", "/home/user/projects"]
+  "search_paths": ["/home/user/Development", "/home/user/projects"],
+  "vcs": "jj"
 }
 ```
 
@@ -138,6 +238,41 @@ juggle projects add /new/path
 juggle projects remove /old/path
 ```
 
+### Version Control System (VCS)
+
+Juggle supports both **Git** and **jj (Jujutsu)** for version control operations (committing changes after agent iterations).
+
+**Auto-detection (default):** Juggle automatically detects which VCS to use:
+
+1. If a `.jj` directory exists → uses jj
+2. If a `.git` directory exists → uses git
+3. Otherwise → defaults to git
+
+**Manual configuration:** You can override auto-detection at the global or project level:
+
+```bash
+# View current VCS settings and detection
+juggle config vcs show
+
+# Set globally (stored in ~/.juggle/config.json)
+juggle config vcs set jj
+juggle config vcs set git
+
+# Set for current project only (stored in .juggle/config.json)
+juggle config vcs set jj --project
+juggle config vcs set git --project
+
+# Clear setting to use auto-detection
+juggle config vcs clear
+juggle config vcs clear --project
+```
+
+**Resolution priority (highest to lowest):**
+
+1. Project config (`.juggle/config.json` `vcs` field)
+2. Global config (`~/.juggle/config.json` `vcs` field)
+3. Auto-detect: `.jj` directory > `.git` directory > git (default)
+
 ## Uninstallation
 
 ```bash
@@ -147,7 +282,7 @@ rm ~/.local/bin/juggle
 sudo rm /usr/local/bin/juggle
 
 # Remove configuration
-rm -rf ~/.config/juggle
+rm -rf ~/.juggle
 
 # Remove project data (optional - only if you want to delete all tracked sessions)
 find ~/Development -name ".juggle" -type d -exec rm -rf {} +
@@ -175,11 +310,11 @@ Add search paths:
 juggle projects add ~/Development
 ```
 
-Or start a session in a specific directory to create `.juggle`:
+Or initialize a session in a specific directory to create `.juggle`:
 
 ```bash
 cd your-project
-juggle start "Initial session"
+juggle sessions create my-feature -m "Initial feature"
 ```
 
 ### Permission denied
@@ -206,4 +341,4 @@ mv juggle ~/.local/bin/
 ## Next Steps
 
 - Explore commands with `juggle --help`
-- Set up your first project: `juggle start "Description of your work"`
+- Set up your first project: `juggle sessions create my-feature -m "Description"`

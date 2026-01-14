@@ -18,7 +18,6 @@ var (
 	updateCriteria    []string
 	updateTags        string
 	updateBlockReason string
-	updateTestsState  string
 	updateOutput      string
 	updateModelSize   string
 	updateJSONFlag    bool
@@ -43,7 +42,6 @@ Examples:
   juggle update my-app-1 --state researched --output "Investigation results..."
   juggle update my-app-1 --criteria "User can log in" --criteria "Session persists"
   juggle update my-app-1 --tags bug-fix,security
-  juggle update my-app-1 --tests-state needed
   juggle update my-app-1 --output "Research findings: ..."
   juggle update my-app-1 --model-size small
   juggle update my-app-1 --add-dep other-ball-5
@@ -61,7 +59,6 @@ func init() {
 	updateCmd.Flags().StringArrayVar(&updateCriteria, "criteria", nil, "Set acceptance criteria (can be specified multiple times)")
 	updateCmd.Flags().StringVar(&updateTags, "tags", "", "Update tags (comma-separated)")
 	updateCmd.Flags().StringVar(&updateBlockReason, "reason", "", "Blocked reason (required when setting state to blocked)")
-	updateCmd.Flags().StringVar(&updateTestsState, "tests-state", "", "Update tests state (not_needed|needed|done)")
 	updateCmd.Flags().StringVar(&updateOutput, "output", "", "Set research output/results")
 	updateCmd.Flags().StringVar(&updateModelSize, "model-size", "", "Set preferred model size (small|medium|large)")
 	updateCmd.Flags().BoolVar(&updateJSONFlag, "json", false, "Output updated ball as JSON")
@@ -73,9 +70,6 @@ func init() {
 	updateCmd.RegisterFlagCompletionFunc("priority", CompletePriorities)
 	updateCmd.RegisterFlagCompletionFunc("state", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"pending", "in_progress", "blocked", "complete", "researched"}, cobra.ShellCompDirectiveNoFileComp
-	})
-	updateCmd.RegisterFlagCompletionFunc("tests-state", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return []string{"not_needed", "needed", "done"}, cobra.ShellCompDirectiveNoFileComp
 	})
 	updateCmd.RegisterFlagCompletionFunc("model-size", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"small", "medium", "large"}, cobra.ShellCompDirectiveNoFileComp
@@ -95,7 +89,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	}
 
 	// If no flags provided (except --json), enter interactive mode
-	if updateIntent == "" && updatePriority == "" && updateState == "" && updateCriteria == nil && updateTags == "" && updateTestsState == "" && updateOutput == "" && updateModelSize == "" && updateAddDep == nil && updateRemoveDep == nil && updateSetDeps == nil && !updateJSONFlag {
+	if updateIntent == "" && updatePriority == "" && updateState == "" && updateCriteria == nil && updateTags == "" && updateOutput == "" && updateModelSize == "" && updateAddDep == nil && updateRemoveDep == nil && updateSetDeps == nil && !updateJSONFlag {
 		return runInteractiveUpdate(foundBall, foundStore)
 	}
 
@@ -152,7 +146,12 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 				}
 				return err
 			}
-			foundBall.SetBlocked(updateBlockReason)
+			if err := foundBall.SetBlocked(updateBlockReason); err != nil {
+				if updateJSONFlag {
+					return printJSONError(err)
+				}
+				return err
+			}
 			if !updateJSONFlag {
 				fmt.Printf("✓ Updated state: blocked (reason: %s)\n", updateBlockReason)
 			}
@@ -167,7 +166,9 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 				fmt.Printf("✓ Updated state: researched\n")
 			}
 		} else {
-			foundBall.SetState(newState)
+			if err := foundBall.SetState(newState); err != nil {
+				return err
+			}
 			if !updateJSONFlag {
 				fmt.Printf("✓ Updated state: %s\n", foundBall.State)
 			}
@@ -193,21 +194,6 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		modified = true
 		if !updateJSONFlag {
 			fmt.Printf("✓ Updated tags: %s\n", strings.Join(tags, ", "))
-		}
-	}
-
-	if updateTestsState != "" {
-		if !session.ValidateTestsState(updateTestsState) {
-			err := fmt.Errorf("invalid tests state: %s (must be not_needed|needed|done)", updateTestsState)
-			if updateJSONFlag {
-				return printJSONError(err)
-			}
-			return err
-		}
-		foundBall.SetTestsState(session.TestsState(updateTestsState))
-		modified = true
-		if !updateJSONFlag {
-			fmt.Printf("✓ Updated tests state: %s\n", updateTestsState)
 		}
 	}
 
@@ -387,11 +373,15 @@ func runInteractiveUpdate(ball *session.Ball, store *session.Store) error {
 			reason, _ := reader.ReadString('\n')
 			reason = strings.TrimSpace(reason)
 			if reason != "" {
-				ball.SetBlocked(reason)
+				if err := ball.SetBlocked(reason); err != nil {
+					return err
+				}
 			} else if ball.BlockedReason == "" {
 				return fmt.Errorf("blocked reason required when setting state to blocked")
 			} else {
-				ball.SetState(newState)
+				if err := ball.SetState(newState); err != nil {
+					return err
+				}
 			}
 		} else if newState == session.StateResearched {
 			fmt.Printf("Research output [%s]: ", truncateForDisplay(ball.Output, 50))
@@ -405,7 +395,9 @@ func runInteractiveUpdate(ball *session.Ball, store *session.Store) error {
 				ball.MarkResearched("")
 			}
 		} else {
-			ball.SetState(newState)
+			if err := ball.SetState(newState); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -444,21 +436,6 @@ func runInteractiveUpdate(ball *session.Ball, store *session.Store) error {
 			tags[i] = strings.TrimSpace(tags[i])
 		}
 		ball.Tags = tags
-	}
-
-	// Edit tests state
-	currentTestsState := string(ball.TestsState)
-	if currentTestsState == "" {
-		currentTestsState = "unset"
-	}
-	fmt.Printf("Tests State [%s] (not_needed|needed|done): ", currentTestsState)
-	input, _ = reader.ReadString('\n')
-	input = strings.TrimSpace(input)
-	if input != "" {
-		if !session.ValidateTestsState(input) {
-			return fmt.Errorf("invalid tests state: %s", input)
-		}
-		ball.SetTestsState(session.TestsState(input))
 	}
 
 	// Edit output
@@ -513,9 +490,6 @@ func runInteractiveUpdate(ball *session.Ball, store *session.Store) error {
 	}
 	if len(ball.Tags) > 0 {
 		fmt.Printf("  Tags: %s\n", strings.Join(ball.Tags, ", "))
-	}
-	if ball.TestsState != "" {
-		fmt.Printf("  Tests State: %s\n", ball.TestsStateLabel())
 	}
 	if ball.Output != "" {
 		fmt.Printf("  Output: %d characters\n", len(ball.Output))
