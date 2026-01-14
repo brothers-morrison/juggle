@@ -1267,7 +1267,9 @@ func (m Model) renderUnifiedBallFormView() string {
 	fieldTags := fieldACEnd + 1
 	fieldSession := fieldTags + 1
 	fieldModelSize := fieldSession + 1
-	fieldDependsOn := fieldModelSize + 1
+	fieldPriority := fieldModelSize + 1
+	fieldDependsOn := fieldPriority + 1
+	fieldSave := fieldDependsOn + 1
 
 	// Build sessions list for display
 	sessionOptions := []string{"(none)"}
@@ -1472,6 +1474,32 @@ func (m Model) renderUnifiedBallFormView() string {
 	}
 	b.WriteString("\n")
 
+	// --- Priority field ---
+	priorityOptions := []string{"low", "medium", "high", "urgent"}
+	priorityColors := []string{"245", "6", "214", "196"} // gray, cyan, orange, red
+	labelStyle = normalStyle
+	if m.pendingBallFormField == fieldPriority {
+		labelStyle = activeFieldStyle
+	}
+	b.WriteString(labelStyle.Render("Priority: "))
+	for j, opt := range priorityOptions {
+		if j > 0 {
+			b.WriteString(" | ")
+		}
+		if j == m.pendingBallPriority {
+			if m.pendingBallFormField == fieldPriority {
+				b.WriteString(optionSelectedStyle.Render(opt))
+			} else {
+				// Use priority color for selected option when not focused
+				colorStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(priorityColors[j]))
+				b.WriteString(colorStyle.Render(opt))
+			}
+		} else {
+			b.WriteString(optionNormalStyle.Render(opt))
+		}
+	}
+	b.WriteString("\n")
+
 	// --- Depends On field ---
 	labelStyle = normalStyle
 	if m.pendingBallFormField == fieldDependsOn {
@@ -1494,6 +1522,15 @@ func (m Model) renderUnifiedBallFormView() string {
 		}
 	}
 	b.WriteString("\n\n")
+
+	// --- Save button ---
+	saveButtonStyle := lipgloss.NewStyle().Padding(0, 2)
+	if m.pendingBallFormField == fieldSave {
+		saveButtonStyle = saveButtonStyle.Bold(true).Background(lipgloss.Color("2")).Foreground(lipgloss.Color("0"))
+	} else {
+		saveButtonStyle = saveButtonStyle.Foreground(lipgloss.Color("2")).Border(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color("2"))
+	}
+	b.WriteString(saveButtonStyle.Render("[ Save ]") + "\n\n")
 
 	// Show message if any
 	if m.message != "" {

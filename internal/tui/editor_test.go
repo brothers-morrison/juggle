@@ -800,6 +800,7 @@ func TestEditKeyInSplitView(t *testing.T) {
 		selectedSession: &session.JuggleSession{ID: PseudoSessionAll},
 		activityLog:     make([]ActivityEntry, 0),
 		textInput:       newTestTextInput(),
+		contextInput:    newContextTextarea(),
 	}
 
 	// Simulate pressing 'e' key

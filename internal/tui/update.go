@@ -3164,10 +3164,10 @@ func adjustContextTextareaHeight(m *Model) {
 }
 
 // handleUnifiedBallFormKey handles keyboard input for the unified ball creation form
-// Field order: Context, Title, Acceptance Criteria, Tags, Session, Model Size, Depends On
+// Field order: Context, Title, Acceptance Criteria, Tags, Session, Model Size, Priority, Depends On, Save
 func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Field indices are dynamic due to variable AC count
-	// Order: Context(0), Title(1), ACs(2 to 2+len(ACs)), Tags, Session, ModelSize, DependsOn
+	// Order: Context(0), Title(1), ACs(2 to 2+len(ACs)), Tags, Session, ModelSize, Priority, DependsOn, Save
 	const (
 		fieldContext = 0
 		fieldIntent  = 1 // Title field (was intent)
@@ -3178,10 +3178,13 @@ func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	fieldTags := fieldACEnd + 1
 	fieldSession := fieldTags + 1
 	fieldModelSize := fieldSession + 1
-	fieldDependsOn := fieldModelSize + 1
+	fieldPriority := fieldModelSize + 1
+	fieldDependsOn := fieldPriority + 1
+	fieldSave := fieldDependsOn + 1
 
 	// Number of options for selection fields
-	numModelSizeOptions := 4 // (default), small, medium, large
+	numModelSizeOptions := 4  // (default), small, medium, large
+	numPriorityOptions := 4   // low, medium, high, urgent
 
 	// Count real sessions (excluding pseudo-sessions)
 	numSessionOptions := 1 // Start with "(none)"
@@ -3191,8 +3194,8 @@ func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Calculate the maximum field index (DependsOn is the last field)
-	maxFieldIndex := fieldDependsOn
+	// Calculate the maximum field index (Save is the last field)
+	maxFieldIndex := fieldSave
 
 	// Helper to check if we're on a text input field
 	isTextInputField := func(field int) bool {
@@ -3257,19 +3260,21 @@ func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Helper to recalculate dynamic field indices after AC changes
-	recalcFieldIndices := func() (int, int, int, int, int) {
+	recalcFieldIndices := func() (int, int, int, int, int, int, int) {
 		newFieldACEnd := fieldACStart + len(m.pendingAcceptanceCriteria)
 		newFieldTags := newFieldACEnd + 1
 		newFieldSession := newFieldTags + 1
 		newFieldModelSize := newFieldSession + 1
-		newFieldDependsOn := newFieldModelSize + 1
-		return newFieldACEnd, newFieldTags, newFieldSession, newFieldModelSize, newFieldDependsOn
+		newFieldPriority := newFieldModelSize + 1
+		newFieldDependsOn := newFieldPriority + 1
+		newFieldSave := newFieldDependsOn + 1
+		return newFieldACEnd, newFieldTags, newFieldSession, newFieldModelSize, newFieldPriority, newFieldDependsOn, newFieldSave
 	}
 
 	// Helper to load field value into text input when entering field
 	loadFieldValue := func(field int) {
 		// Recalculate indices since ACs may have changed
-		acEnd, tagsField, _, _, _ := recalcFieldIndices()
+		acEnd, tagsField, _, _, _, _, _ := recalcFieldIndices()
 
 		m.textInput.Reset()
 		switch field {
@@ -3339,6 +3344,14 @@ func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.contextInput, cmd = m.contextInput.Update(msg)
 			adjustContextTextareaHeight(&m)
 			return m, cmd
+		} else if m.pendingBallFormField == fieldSave {
+			// Save button - finalize ball creation
+			saveCurrentFieldValue()
+			if m.pendingBallIntent == "" {
+				m.message = "Title is required"
+				return m, nil
+			}
+			return m.finalizeBallCreation()
 		} else if m.pendingBallFormField == fieldDependsOn {
 			// Open dependency selector
 			return m.openDependencySelector()
@@ -3369,12 +3382,12 @@ func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				saveCurrentFieldValue()
 				m.pendingBallFormField++
 				// Recalculate indices after potential removal
-				newACEnd, _, _, _, newDependsOn := recalcFieldIndices()
-				maxFieldIndex = newDependsOn
+				newACEnd, _, _, _, _, _, newSave := recalcFieldIndices()
+				maxFieldIndex = newSave
 				// Clamp to valid range
 				if m.pendingBallFormField > newACEnd {
 					// If we went past AC section, jump to Tags
-					_, newFieldTags, _, _, _ := recalcFieldIndices()
+					_, newFieldTags, _, _, _, _, _ := recalcFieldIndices()
 					m.pendingBallFormField = newFieldTags
 				}
 				loadFieldValue(m.pendingBallFormField)
@@ -3384,8 +3397,8 @@ func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			saveCurrentFieldValue()
 			m.pendingBallFormField++
 			// Recalculate after potential changes
-			_, _, _, _, newDependsOn := recalcFieldIndices()
-			maxFieldIndex = newDependsOn
+			_, _, _, _, _, _, newSave := recalcFieldIndices()
+			maxFieldIndex = newSave
 			if m.pendingBallFormField > maxFieldIndex {
 				m.pendingBallFormField = maxFieldIndex
 			}
@@ -3403,8 +3416,8 @@ func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		saveCurrentFieldValue()
 		m.pendingBallFormField--
 		// Recalculate after potential removal
-		_, _, _, _, newDependsOn := recalcFieldIndices()
-		maxFieldIndex = newDependsOn
+		_, _, _, _, _, _, newSave := recalcFieldIndices()
+		maxFieldIndex = newSave
 		if m.pendingBallFormField < 0 {
 			m.pendingBallFormField = maxFieldIndex
 		}
@@ -3420,13 +3433,13 @@ func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Arrow key down always moves to next field
 		saveCurrentFieldValue()
 		// Check if we're on the "new AC" field - if so, move to Tags
-		newACEnd, newFieldTags, _, _, newDependsOn := recalcFieldIndices()
+		newACEnd, newFieldTags, _, _, _, _, newSave := recalcFieldIndices()
 		if m.pendingBallFormField == newACEnd {
 			// On "new AC" field, down arrow moves to Tags
 			m.pendingBallFormField = newFieldTags
 		} else {
 			m.pendingBallFormField++
-			maxFieldIndex = newDependsOn
+			maxFieldIndex = newSave
 			if m.pendingBallFormField > maxFieldIndex {
 				m.pendingBallFormField = 0
 			}
@@ -3468,7 +3481,7 @@ func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "left":
 		// Arrow key left only cycles selection left for selection fields
-		_, _, sessionField, modelSizeField, _ := recalcFieldIndices()
+		_, _, sessionField, modelSizeField, priorityField, _, _ := recalcFieldIndices()
 		if m.pendingBallFormField == sessionField {
 			m.pendingBallSession--
 			if m.pendingBallSession < 0 {
@@ -3479,12 +3492,17 @@ func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.pendingBallModelSize < 0 {
 				m.pendingBallModelSize = numModelSizeOptions - 1
 			}
+		} else if m.pendingBallFormField == priorityField {
+			m.pendingBallPriority--
+			if m.pendingBallPriority < 0 {
+				m.pendingBallPriority = numPriorityOptions - 1
+			}
 		}
 		return m, nil
 
 	case "right":
 		// Arrow key right only cycles selection right for selection fields
-		_, _, sessionField, modelSizeField, _ := recalcFieldIndices()
+		_, _, sessionField, modelSizeField, priorityField, _, _ := recalcFieldIndices()
 		if m.pendingBallFormField == sessionField {
 			m.pendingBallSession++
 			if m.pendingBallSession >= numSessionOptions {
@@ -3494,6 +3512,11 @@ func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.pendingBallModelSize++
 			if m.pendingBallModelSize >= numModelSizeOptions {
 				m.pendingBallModelSize = 0
+			}
+		} else if m.pendingBallFormField == priorityField {
+			m.pendingBallPriority++
+			if m.pendingBallPriority >= numPriorityOptions {
+				m.pendingBallPriority = 0
 			}
 		}
 		return m, nil
@@ -3549,7 +3572,7 @@ func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 		// Tab always moves to next field
 		// For selection fields, also toggle to next option before moving
-		_, _, sessionField, modelSizeField, _ := recalcFieldIndices()
+		_, _, sessionField, modelSizeField, priorityField, _, _ := recalcFieldIndices()
 		if m.pendingBallFormField == sessionField {
 			// Toggle to next session option
 			m.pendingBallSession++
@@ -3562,17 +3585,23 @@ func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.pendingBallModelSize >= numModelSizeOptions {
 				m.pendingBallModelSize = 0
 			}
+		} else if m.pendingBallFormField == priorityField {
+			// Toggle to next priority option
+			m.pendingBallPriority++
+			if m.pendingBallPriority >= numPriorityOptions {
+				m.pendingBallPriority = 0
+			}
 		} else {
 			// For text fields, save current value
 			saveCurrentFieldValue()
 		}
 		// Move to next field
-		newACEnd, newFieldTags, _, _, newDependsOn := recalcFieldIndices()
+		newACEnd, newFieldTags, _, _, _, _, newSave := recalcFieldIndices()
 		if m.pendingBallFormField == newACEnd {
 			m.pendingBallFormField = newFieldTags
 		} else {
 			m.pendingBallFormField++
-			maxFieldIndex = newDependsOn
+			maxFieldIndex = newSave
 			if m.pendingBallFormField > maxFieldIndex {
 				m.pendingBallFormField = 0
 			}

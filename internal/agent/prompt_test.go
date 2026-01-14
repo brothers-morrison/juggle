@@ -15,7 +15,7 @@ func TestGetPromptTemplate(t *testing.T) {
 
 	// Template should contain key sections
 	requiredSections := []string{
-		"Juggle Agent Instructions",
+		"Juggler Agent Instructions",
 		"<promise>COMPLETE</promise>",
 		"<promise>BLOCKED:",
 		"juggle update",

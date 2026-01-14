@@ -9165,6 +9165,98 @@ func TestUnifiedBallFormModelSizeSelection(t *testing.T) {
 	}
 }
 
+// Test priority selection in unified ball form
+// Field order with no ACs: 0=Context, 1=Title, 2=NewAC, 3=Tags, 4=Session, 5=ModelSize, 6=Priority, 7=DependsOn, 8=Save
+func TestUnifiedBallFormPrioritySelection(t *testing.T) {
+	ti := textinput.New()
+	ti.CharLimit = 256
+	ti.Width = 40
+
+	model := Model{
+		mode:                 unifiedBallFormView,
+		pendingBallIntent:    "Test",
+		pendingBallPriority:  1, // medium
+		pendingBallModelSize: 0, // default
+		pendingBallFormField: 6, // priority field (after model_size)
+		textInput:            ti,
+		sessions:             []*session.JuggleSession{},
+		activityLog:          make([]ActivityEntry, 0),
+	}
+
+	// Test cycling right through priorities
+	newModel, _ := model.handleUnifiedBallFormKey(tea.KeyMsg{Type: tea.KeyRight})
+	m := newModel.(Model)
+	if m.pendingBallPriority != 2 {
+		t.Errorf("Expected priority to be 2 (high) after right, got %d", m.pendingBallPriority)
+	}
+
+	// Continue cycling
+	newModel, _ = m.handleUnifiedBallFormKey(tea.KeyMsg{Type: tea.KeyRight})
+	m = newModel.(Model)
+	if m.pendingBallPriority != 3 {
+		t.Errorf("Expected priority to be 3 (urgent) after right, got %d", m.pendingBallPriority)
+	}
+
+	// Wrap around
+	newModel, _ = m.handleUnifiedBallFormKey(tea.KeyMsg{Type: tea.KeyRight})
+	m = newModel.(Model)
+	if m.pendingBallPriority != 0 {
+		t.Errorf("Expected priority to wrap to 0 (low), got %d", m.pendingBallPriority)
+	}
+
+	// Test cycling left
+	newModel, _ = m.handleUnifiedBallFormKey(tea.KeyMsg{Type: tea.KeyLeft})
+	m = newModel.(Model)
+	if m.pendingBallPriority != 3 {
+		t.Errorf("Expected priority to wrap to 3 (urgent) after left from 0, got %d", m.pendingBallPriority)
+	}
+}
+
+// Test ball creation includes priority
+func TestBallCreationWithPriority(t *testing.T) {
+	ti := textinput.New()
+	ti.CharLimit = 256
+	ti.Width = 40
+	ti.Focus()
+
+	tmpDir := t.TempDir()
+	store, _ := session.NewStore(tmpDir)
+
+	// Field order with no ACs: 0=Context, 1=Title, 2=NewAC, 3=Tags, 4=Session, 5=ModelSize, 6=Priority, 7=DependsOn, 8=Save
+	model := Model{
+		mode:                      unifiedBallFormView,
+		pendingBallIntent:         "Ball with high priority",
+		pendingBallPriority:       2, // high
+		pendingBallModelSize:      0, // default
+		pendingBallFormField:      2, // On "new AC" field
+		pendingAcceptanceCriteria: []string{},
+		textInput:                 ti,
+		sessions:                  []*session.JuggleSession{},
+		activityLog:               make([]ActivityEntry, 0),
+		store:                     store,
+	}
+	model.textInput.SetValue("") // Empty value
+
+	// Call finalizeBallCreation directly
+	newModel, _ := model.finalizeBallCreation()
+	m := newModel.(Model)
+
+	// Should have created ball
+	if m.mode != splitView {
+		t.Errorf("Expected mode to be splitView, got %v", m.mode)
+	}
+
+	// Verify ball was created with correct priority
+	balls, _ := store.LoadBalls()
+	if len(balls) != 1 {
+		t.Errorf("Expected 1 ball, got %d", len(balls))
+	} else {
+		if balls[0].Priority != session.PriorityHigh {
+			t.Errorf("Expected priority to be high, got %v", balls[0].Priority)
+		}
+	}
+}
+
 // Test ball creation includes model size
 func TestBallCreationWithModelSize(t *testing.T) {
 	ti := textinput.New()
