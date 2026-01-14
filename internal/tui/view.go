@@ -1164,6 +1164,45 @@ func (m Model) renderUnifiedBallFormView() string {
 		}
 		b.WriteString("\n")
 	}
+
+	// Show AC templates as selectable options (if any)
+	if len(m.acTemplates) > 0 {
+		templateLabelStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Italic(true)
+		b.WriteString(templateLabelStyle.Render("  Templates (j/k to navigate, Enter to add):") + "\n")
+		for i, template := range m.acTemplates {
+			cursor := "  "
+			if m.acTemplateCursor == i {
+				cursor = "> "
+			}
+			checkbox := "[ ]"
+			templateStyle := optionNormalStyle
+			if m.acTemplateSelected != nil && i < len(m.acTemplateSelected) && m.acTemplateSelected[i] {
+				checkbox = "[✓]"
+				templateStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+			}
+			// Highlight current selection
+			if m.acTemplateCursor == i {
+				highlightStyle := lipgloss.NewStyle().Bold(true).Background(lipgloss.Color("240")).Foreground(lipgloss.Color("15"))
+				b.WriteString(highlightStyle.Render(cursor + checkbox + " " + truncate(template, 53)) + "\n")
+			} else {
+				b.WriteString(templateStyle.Render(cursor + checkbox + " " + truncate(template, 53)) + "\n")
+			}
+		}
+	}
+
+	// Show repo/session level ACs as non-selectable reminders (if any)
+	hasReminders := len(m.repoLevelACs) > 0 || len(m.sessionLevelACs) > 0
+	if hasReminders {
+		reminderLabelStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Italic(true)
+		reminderACStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+		b.WriteString(reminderLabelStyle.Render("  Auto-applied (not stored on ball):") + "\n")
+		for _, ac := range m.repoLevelACs {
+			b.WriteString(reminderACStyle.Render("    [repo] " + truncate(ac, 50)) + "\n")
+		}
+		for _, ac := range m.sessionLevelACs {
+			b.WriteString(reminderACStyle.Render("    [session] " + truncate(ac, 47)) + "\n")
+		}
+	}
 	b.WriteString("\n")
 
 	// --- Tags field ---

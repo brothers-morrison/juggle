@@ -318,11 +318,13 @@ func EnsureProjectInSearchPaths(projectDir string) error {
 //
 // Project configuration includes:
 //   - DefaultAcceptanceCriteria: repo-level ACs applied to all balls
+//   - ACTemplates: optional AC suggestions shown during ball creation
 //   - VCS: project-specific VCS preference (overrides global)
 //
 // These settings apply to all balls and sessions within the project.
 type ProjectConfig struct {
 	DefaultAcceptanceCriteria []string `json:"default_acceptance_criteria,omitempty"` // Repo-level ACs applied to all sessions
+	ACTemplates               []string `json:"ac_templates,omitempty"`                // Optional AC templates shown during ball creation
 	VCS                       string   `json:"vcs,omitempty"`                         // Version control system: "git" or "jj"
 }
 
@@ -389,6 +391,21 @@ func (c *ProjectConfig) HasDefaultAcceptanceCriteria() bool {
 	return len(c.DefaultAcceptanceCriteria) > 0
 }
 
+// SetACTemplates sets the optional AC templates for ball creation
+func (c *ProjectConfig) SetACTemplates(templates []string) {
+	c.ACTemplates = templates
+}
+
+// HasACTemplates returns true if the project has AC templates
+func (c *ProjectConfig) HasACTemplates() bool {
+	return len(c.ACTemplates) > 0
+}
+
+// GetACTemplates returns the AC templates
+func (c *ProjectConfig) GetACTemplates() []string {
+	return c.ACTemplates
+}
+
 // SetVCS sets the project VCS preference.
 // Valid values are "git", "jj", or "" (empty for inherit from global/auto-detect).
 func (c *ProjectConfig) SetVCS(vcs string) error {
@@ -428,6 +445,27 @@ func GetProjectAcceptanceCriteria(projectDir string) ([]string, error) {
 	}
 
 	return config.DefaultAcceptanceCriteria, nil
+}
+
+// UpdateProjectACTemplates updates the AC templates for ball creation
+func UpdateProjectACTemplates(projectDir string, templates []string) error {
+	config, err := LoadProjectConfig(projectDir)
+	if err != nil {
+		return err
+	}
+
+	config.SetACTemplates(templates)
+	return SaveProjectConfig(projectDir, config)
+}
+
+// GetProjectACTemplates returns the AC templates for ball creation
+func GetProjectACTemplates(projectDir string) ([]string, error) {
+	config, err := LoadProjectConfig(projectDir)
+	if err != nil {
+		return nil, err
+	}
+
+	return config.ACTemplates, nil
 }
 
 // UpdateGlobalIterationDelay updates the iteration delay in global config

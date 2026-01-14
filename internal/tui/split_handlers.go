@@ -909,6 +909,40 @@ func (m *Model) handleCyclePriority() (tea.Model, tea.Cmd) {
 	return m, updateBall(store, ball)
 }
 
+// loadACTemplatesAndRepoACs loads AC templates and repo/session level ACs for the ball form
+func (m *Model) loadACTemplatesAndRepoACs() {
+	if m.store == nil {
+		return
+	}
+	projectDir := m.store.ProjectDir()
+
+	// Load AC templates from project config
+	templates, err := session.GetProjectACTemplates(projectDir)
+	if err == nil && len(templates) > 0 {
+		m.acTemplates = templates
+		m.acTemplateSelected = make([]bool, len(templates))
+		m.acTemplateCursor = -1 // Not on templates initially
+	} else {
+		m.acTemplates = nil
+		m.acTemplateSelected = nil
+		m.acTemplateCursor = -1
+	}
+
+	// Load repo-level ACs
+	repoACs, err := session.GetProjectAcceptanceCriteria(projectDir)
+	if err == nil {
+		m.repoLevelACs = repoACs
+	} else {
+		m.repoLevelACs = nil
+	}
+
+	// Load session-level ACs if a session is selected
+	m.sessionLevelACs = nil
+	if m.selectedSession != nil && m.selectedSession.ID != PseudoSessionAll && m.selectedSession.ID != PseudoSessionUntagged {
+		m.sessionLevelACs = m.selectedSession.AcceptanceCriteria
+	}
+}
+
 // handleSplitAddItem handles adding a new item based on active panel
 func (m Model) handleSplitAddItem() (tea.Model, tea.Cmd) {
 	m.inputAction = actionAdd
@@ -935,6 +969,8 @@ func (m Model) handleSplitAddItem() (tea.Model, tea.Cmd) {
 		if m.store != nil {
 			m.fileAutocomplete = NewAutocompleteState(m.store.ProjectDir())
 		}
+		// Load AC templates and repo/session level ACs
+		m.loadACTemplatesAndRepoACs()
 		// Default session to currently selected one (if a real session is selected)
 		m.pendingBallSession = 0 // Start with (none)
 		if m.selectedSession != nil && m.selectedSession.ID != PseudoSessionAll && m.selectedSession.ID != PseudoSessionUntagged {
@@ -993,6 +1029,8 @@ func (m Model) handleSplitAddFollowup() (tea.Model, tea.Cmd) {
 	if m.store != nil {
 		m.fileAutocomplete = NewAutocompleteState(m.store.ProjectDir())
 	}
+	// Load AC templates and repo/session level ACs
+	m.loadACTemplatesAndRepoACs()
 
 	// Default session to currently selected one (if a real session is selected)
 	m.pendingBallSession = 0 // Start with (none)
@@ -1061,6 +1099,8 @@ func (m Model) handleSplitEditItem() (tea.Model, tea.Cmd) {
 		if m.store != nil {
 			m.fileAutocomplete = NewAutocompleteState(m.store.ProjectDir())
 		}
+		// Load AC templates and repo/session level ACs
+		m.loadACTemplatesAndRepoACs()
 
 		// Use unified ball form with prepopulated fields
 		m.pendingBallContext = ball.Context

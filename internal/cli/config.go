@@ -91,6 +91,17 @@ func runConfigShow(cmd *cobra.Command, args []string) error {
 					fmt.Printf("    - %s\n", ac)
 				}
 			}
+
+			// AC Templates
+			fmt.Printf("  %s: ", keyStyle.Render("ac_templates"))
+			if len(projectConfig.ACTemplates) == 0 {
+				fmt.Println("(empty)")
+			} else {
+				fmt.Println()
+				for _, template := range projectConfig.ACTemplates {
+					fmt.Printf("    - %s\n", template)
+				}
+			}
 		}
 	}
 
@@ -157,6 +168,62 @@ Use --yes (-y) to skip the confirmation prompt (for headless/automated use).`,
 var configACEditFlag bool
 var configACYesFlag bool
 
+// AC Templates command variables
+var configTemplatesEditFlag bool
+var configTemplatesYesFlag bool
+
+var configTemplatesCmd = &cobra.Command{
+	Use:   "templates",
+	Short: "Manage AC templates for ball creation",
+	Long: `Manage AC templates that appear as selectable suggestions when creating balls.
+
+Unlike repo-level ACs (which apply automatically to all balls), templates are
+optional suggestions that can be selected during ball creation.
+
+Commands:
+  config templates list              List current AC templates
+  config templates add "template"    Add a new template
+  config templates set --edit        Edit templates in $EDITOR
+  config templates clear             Remove all templates`,
+	RunE: runConfigTemplatesList,
+}
+
+var configTemplatesListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List AC templates",
+	RunE:  runConfigTemplatesList,
+}
+
+var configTemplatesAddCmd = &cobra.Command{
+	Use:   "add <template>",
+	Short: "Add an AC template",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runConfigTemplatesAdd,
+}
+
+var configTemplatesSetCmd = &cobra.Command{
+	Use:   "set",
+	Short: "Set AC templates",
+	Long: `Set AC templates for ball creation.
+
+Without flags, prompts for templates one per line.
+With --edit, opens templates in $EDITOR for editing.
+
+Examples:
+  juggle config templates set --edit
+  juggle config templates set  # Interactive prompt`,
+	RunE: runConfigTemplatesSet,
+}
+
+var configTemplatesClearCmd = &cobra.Command{
+	Use:   "clear",
+	Short: "Clear all AC templates",
+	Long: `Clear all AC templates.
+
+Use --yes (-y) to skip the confirmation prompt (for headless/automated use).`,
+	RunE: runConfigTemplatesClear,
+}
+
 func init() {
 	configACSetCmd.Flags().BoolVar(&configACEditFlag, "edit", false, "Open criteria in $EDITOR")
 	configACClearCmd.Flags().BoolVarP(&configACYesFlag, "yes", "y", false, "Skip confirmation prompt (for headless mode)")
@@ -167,6 +234,17 @@ func init() {
 	configACCmd.AddCommand(configACClearCmd)
 
 	configCmd.AddCommand(configACCmd)
+
+	// AC Templates commands
+	configTemplatesSetCmd.Flags().BoolVar(&configTemplatesEditFlag, "edit", false, "Open templates in $EDITOR")
+	configTemplatesClearCmd.Flags().BoolVarP(&configTemplatesYesFlag, "yes", "y", false, "Skip confirmation prompt (for headless mode)")
+
+	configTemplatesCmd.AddCommand(configTemplatesListCmd)
+	configTemplatesCmd.AddCommand(configTemplatesAddCmd)
+	configTemplatesCmd.AddCommand(configTemplatesSetCmd)
+	configTemplatesCmd.AddCommand(configTemplatesClearCmd)
+
+	configCmd.AddCommand(configTemplatesCmd)
 }
 
 func runConfigACList(cmd *cobra.Command, args []string) error {
@@ -355,6 +433,197 @@ func runConfigACClear(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println("Cleared all repository-level acceptance criteria.")
+	return nil
+}
+
+// AC Templates command handlers
+
+func runConfigTemplatesList(cmd *cobra.Command, args []string) error {
+	cwd, err := GetWorkingDir()
+	if err != nil {
+		return fmt.Errorf("failed to get current directory: %w", err)
+	}
+
+	templates, err := session.GetProjectACTemplates(cwd)
+	if err != nil {
+		return fmt.Errorf("failed to load AC templates: %w", err)
+	}
+
+	if len(templates) == 0 {
+		fmt.Println("No AC templates configured.")
+		fmt.Println("\nAdd templates with: juggle config templates add \"template\"")
+		fmt.Println("Or edit in $EDITOR: juggle config templates set --edit")
+		return nil
+	}
+
+	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
+	fmt.Println(labelStyle.Render("AC Templates:"))
+	fmt.Println()
+	for i, template := range templates {
+		fmt.Printf("  %d. %s\n", i+1, template)
+	}
+	fmt.Println()
+	fmt.Printf("These templates appear as selectable options when creating balls.\n")
+
+	return nil
+}
+
+func runConfigTemplatesAdd(cmd *cobra.Command, args []string) error {
+	template := args[0]
+
+	cwd, err := GetWorkingDir()
+	if err != nil {
+		return fmt.Errorf("failed to get current directory: %w", err)
+	}
+
+	// Load existing templates
+	templates, err := session.GetProjectACTemplates(cwd)
+	if err != nil {
+		// If config doesn't exist, start with empty list
+		templates = []string{}
+	}
+
+	// Add new template
+	templates = append(templates, template)
+
+	// Save
+	if err := session.UpdateProjectACTemplates(cwd, templates); err != nil {
+		return fmt.Errorf("failed to save AC templates: %w", err)
+	}
+
+	fmt.Printf("Added AC template: %s\n", template)
+	fmt.Printf("Total templates: %d\n", len(templates))
+
+	return nil
+}
+
+func runConfigTemplatesSet(cmd *cobra.Command, args []string) error {
+	cwd, err := GetWorkingDir()
+	if err != nil {
+		return fmt.Errorf("failed to get current directory: %w", err)
+	}
+
+	// Load existing templates
+	existingTemplates, err := session.GetProjectACTemplates(cwd)
+	if err != nil {
+		existingTemplates = []string{}
+	}
+
+	var newTemplates []string
+
+	if configTemplatesEditFlag {
+		// Edit in $EDITOR
+		editor := os.Getenv("EDITOR")
+		if editor == "" {
+			editor = "vi"
+		}
+
+		// Create temp file with current templates
+		tmpFile, err := os.CreateTemp("", "juggle-templates-*.txt")
+		if err != nil {
+			return fmt.Errorf("failed to create temp file: %w", err)
+		}
+		tmpPath := tmpFile.Name()
+		defer os.Remove(tmpPath)
+
+		// Write header and existing templates
+		tmpFile.WriteString("# AC Templates\n")
+		tmpFile.WriteString("# One template per line. Lines starting with # are comments.\n")
+		tmpFile.WriteString("# Empty lines are ignored.\n\n")
+		for _, template := range existingTemplates {
+			tmpFile.WriteString(template + "\n")
+		}
+		tmpFile.Close()
+
+		// Open editor
+		editorCmd := exec.Command(editor, tmpPath)
+		editorCmd.Stdin = os.Stdin
+		editorCmd.Stdout = os.Stdout
+		editorCmd.Stderr = os.Stderr
+
+		if err := editorCmd.Run(); err != nil {
+			return fmt.Errorf("editor failed: %w", err)
+		}
+
+		// Read edited content
+		file, err := os.Open(tmpPath)
+		if err != nil {
+			return fmt.Errorf("failed to read edited content: %w", err)
+		}
+		defer file.Close()
+
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			// Skip comments and empty lines
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			newTemplates = append(newTemplates, line)
+		}
+	} else {
+		// Interactive prompt
+		fmt.Println("Enter AC templates (one per line, empty line to finish):")
+		if len(existingTemplates) > 0 {
+			fmt.Println("Current templates will be replaced.")
+		}
+
+		reader := bufio.NewReader(os.Stdin)
+		for {
+			fmt.Print("  > ")
+			input, err := reader.ReadString('\n')
+			if err != nil {
+				break
+			}
+			template := strings.TrimSpace(input)
+			if template == "" {
+				break
+			}
+			newTemplates = append(newTemplates, template)
+		}
+	}
+
+	// Save
+	if err := session.UpdateProjectACTemplates(cwd, newTemplates); err != nil {
+		return fmt.Errorf("failed to save AC templates: %w", err)
+	}
+
+	if len(newTemplates) == 0 {
+		fmt.Println("Cleared all AC templates.")
+	} else {
+		fmt.Printf("Updated AC templates (%d items):\n", len(newTemplates))
+		for i, template := range newTemplates {
+			fmt.Printf("  %d. %s\n", i+1, template)
+		}
+	}
+
+	return nil
+}
+
+func runConfigTemplatesClear(cmd *cobra.Command, args []string) error {
+	cwd, err := GetWorkingDir()
+	if err != nil {
+		return fmt.Errorf("failed to get current directory: %w", err)
+	}
+
+	// Confirm (skip with --yes flag)
+	if !configTemplatesYesFlag {
+		confirmed, err := ConfirmSingleKey("Clear all AC templates?")
+		if err != nil {
+			return err
+		}
+		if !confirmed {
+			fmt.Println("Cancelled.")
+			return nil
+		}
+	}
+
+	// Save empty list
+	if err := session.UpdateProjectACTemplates(cwd, []string{}); err != nil {
+		return fmt.Errorf("failed to clear AC templates: %w", err)
+	}
+
+	fmt.Println("Cleared all AC templates.")
 	return nil
 }
 

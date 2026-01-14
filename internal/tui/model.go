@@ -176,6 +176,13 @@ type Model struct {
 	pendingACEditIndex         int      // Index of AC being edited (-1 = adding new, >= 0 = editing existing)
 	pendingNewAC               string   // Content of the "new AC" field, preserved during navigation
 
+	// AC Templates and repo/session level ACs (for ball creation form)
+	acTemplates           []string // Selectable AC templates from project config
+	acTemplateSelected    []bool   // Which templates are currently selected (added to ACs)
+	acTemplateCursor      int      // Current cursor position in templates list (-1 = not on templates)
+	repoLevelACs          []string // Repo-level ACs shown as reminders (not stored on ball)
+	sessionLevelACs       []string // Session-level ACs shown as reminders (not stored on ball)
+
 	// File autocomplete state for ball form
 	fileAutocomplete *AutocompleteState // File path autocomplete suggestions
 

@@ -188,6 +188,12 @@ func (m *Model) clearPendingBallState() {
 	m.dependencySelectActive = nil
 	m.editingBall = nil
 	m.inputAction = actionAdd
+	// Clear AC template state
+	m.acTemplates = nil
+	m.acTemplateSelected = nil
+	m.acTemplateCursor = -1
+	m.repoLevelACs = nil
+	m.sessionLevelACs = nil
 }
 
 // generateTitlePlaceholderFromContext generates a title placeholder from context content.
@@ -455,6 +461,28 @@ func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.finalizeBallCreation()
 
 	case "enter":
+		// Check if we're navigating AC templates
+		if m.acTemplateCursor >= 0 && m.acTemplateCursor < len(m.acTemplates) {
+			// Add the selected template to ACs
+			template := m.acTemplates[m.acTemplateCursor]
+			if m.acTemplateSelected == nil {
+				m.acTemplateSelected = make([]bool, len(m.acTemplates))
+			}
+			if !m.acTemplateSelected[m.acTemplateCursor] {
+				// Only add if not already added
+				m.pendingAcceptanceCriteria = append(m.pendingAcceptanceCriteria, template)
+				m.acTemplateSelected[m.acTemplateCursor] = true
+				m.message = "Added template: " + truncate(template, 30)
+			} else {
+				m.message = "Template already added"
+			}
+			// Move to next template or stay if at end
+			m.acTemplateCursor++
+			if m.acTemplateCursor >= len(m.acTemplates) {
+				m.acTemplateCursor = len(m.acTemplates) - 1 // Stay at last
+			}
+			return m, nil
+		}
 		// Behavior depends on current field
 		if m.pendingBallFormField == fieldContext {
 			// For context field, Enter adds newline in textarea
@@ -534,6 +562,16 @@ func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.fileAutocomplete.SelectPrev()
 			return m, nil
 		}
+		// Check if we're navigating AC templates
+		if m.acTemplateCursor >= 0 && len(m.acTemplates) > 0 {
+			// We're in template navigation mode
+			m.acTemplateCursor--
+			if m.acTemplateCursor < 0 {
+				// Exit template navigation, stay on new AC field
+				m.acTemplateCursor = -1
+			}
+			return m, nil
+		}
 		// Arrow key up always moves to previous field
 		saveCurrentFieldValue()
 		m.pendingBallFormField--
@@ -552,12 +590,30 @@ func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.fileAutocomplete.SelectNext()
 			return m, nil
 		}
+		// Check if we're navigating AC templates
+		newACEnd, newFieldTags, _, _, _, _, _, newSave := recalcFieldIndices()
+		if m.acTemplateCursor >= 0 && len(m.acTemplates) > 0 {
+			// We're in template navigation mode
+			m.acTemplateCursor++
+			if m.acTemplateCursor >= len(m.acTemplates) {
+				// Exit template navigation, move to Tags
+				m.acTemplateCursor = -1
+				saveCurrentFieldValue()
+				m.pendingBallFormField = newFieldTags
+				loadFieldValue(m.pendingBallFormField)
+			}
+			return m, nil
+		}
 		// Arrow key down always moves to next field
 		saveCurrentFieldValue()
-		// Check if we're on the "new AC" field - if so, move to Tags
-		newACEnd, newFieldTags, _, _, _, _, _, newSave := recalcFieldIndices()
+		// Check if we're on the "new AC" field - if so, enter template mode or move to Tags
 		if m.pendingBallFormField == newACEnd {
-			// On "new AC" field, down arrow moves to Tags
+			if len(m.acTemplates) > 0 {
+				// Enter template selection mode
+				m.acTemplateCursor = 0
+				return m, nil
+			}
+			// No templates, move to Tags
 			m.pendingBallFormField = newFieldTags
 		} else {
 			m.pendingBallFormField++
