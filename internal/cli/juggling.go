@@ -527,7 +527,9 @@ func activateBall(ball *session.Ball, store *session.Store) error {
 
 // setBallState sets the ball to a new state (pending, in_progress)
 func setBallState(ball *session.Ball, state session.BallState, args []string, store *session.Store) error {
-	ball.SetState(state)
+	if err := ball.SetState(state); err != nil {
+		return err
+	}
 
 	if err := store.Save(ball); err != nil {
 		return fmt.Errorf("failed to save ball: %w", err)
@@ -573,7 +575,9 @@ func setBallBlocked(ball *session.Ball, args []string, store *session.Store) err
 		return fmt.Errorf("blocked reason required: juggle <ball-id> blocked <reason>")
 	}
 
-	ball.SetBlocked(reason)
+	if err := ball.SetBlocked(reason); err != nil {
+		return err
+	}
 
 	if err := store.Save(ball); err != nil {
 		return fmt.Errorf("failed to save ball: %w", err)
@@ -749,10 +753,14 @@ func handleBallUpdate(ball *session.Ball, args []string, store *session.Store) e
 				if reason == "" {
 					return fmt.Errorf("blocked reason required: use --reason flag when setting state to blocked")
 				}
-				ball.SetBlocked(reason)
+				if err := ball.SetBlocked(reason); err != nil {
+					return err
+				}
 				fmt.Printf("✓ Updated state: blocked (reason: %s)\n", reason)
 			} else {
-				ball.SetState(newState)
+				if err := ball.SetState(newState); err != nil {
+					return err
+				}
 				fmt.Printf("✓ Updated state: %s\n", ball.State)
 			}
 			modified = true

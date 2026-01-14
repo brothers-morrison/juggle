@@ -124,8 +124,11 @@ func TestUpdateCommandBlocked(t *testing.T) {
 	ball := env.CreateBall(t, "Test ball for blocked", session.PriorityMedium)
 	store := env.GetStore(t)
 
-	// Set to blocked with reason
-	ball.SetBlocked("Waiting for API access")
+	// Start the ball first, then block it (blocked only valid from in_progress)
+	ball.Start()
+	if err := ball.SetBlocked("Waiting for API access"); err != nil {
+		t.Fatalf("Failed to set blocked: %v", err)
+	}
 	if err := store.UpdateBall(ball); err != nil {
 		t.Fatalf("Failed to update ball: %v", err)
 	}
@@ -205,7 +208,7 @@ func TestListCommandFiltered(t *testing.T) {
 	ball2.Start()
 	store.UpdateBall(ball2)
 
-	ball3.SetState(session.StateComplete)
+	ball3.ForceSetState(session.StateComplete)
 	store.UpdateBall(ball3)
 
 	// Count by state
@@ -279,7 +282,7 @@ func TestHistoryCommand(t *testing.T) {
 
 	// Create and complete a ball
 	ball := env.CreateBall(t, "Ball to archive", session.PriorityMedium)
-	ball.SetState(session.StateComplete)
+	ball.ForceSetState(session.StateComplete)
 	store.UpdateBall(ball)
 
 	// Archive the ball
@@ -474,7 +477,11 @@ func TestStatusCommand(t *testing.T) {
 	ball2.Start()
 	store.UpdateBall(ball2)
 
-	ball3.SetBlocked("Waiting for dependency")
+	// Start ball3 first, then block it (blocked only valid from in_progress)
+	ball3.Start()
+	if err := ball3.SetBlocked("Waiting for dependency"); err != nil {
+		t.Fatalf("Failed to set blocked: %v", err)
+	}
 	store.UpdateBall(ball3)
 
 	// Verify status counts

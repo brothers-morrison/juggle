@@ -144,8 +144,8 @@ func LoadConfig() (*Config, error) {
 }
 
 // LoadConfigWithOptions loads configuration with custom options.
-// After loading, the config is saved back to disk to ensure any default values
-// are populated and the file reflects the full config structure.
+// If the config file doesn't exist, creates a default config and saves it.
+// Reading an existing config does NOT automatically write it back.
 func LoadConfigWithOptions(opts ConfigOptions) (*Config, error) {
 	if opts.ConfigHome == "" {
 		home, err := os.UserHomeDir()
@@ -179,12 +179,6 @@ func LoadConfigWithOptions(opts ConfigOptions) (*Config, error) {
 	// Ensure UnknownFields map is initialized
 	if config.UnknownFields == nil {
 		config.UnknownFields = make(map[string]interface{})
-	}
-
-	// Save the config back to disk to persist any defaults that were applied.
-	// This ensures the file always has all known fields with their current values.
-	if err := config.SaveWithOptions(opts); err != nil {
-		return nil, fmt.Errorf("failed to save config with defaults: %w", err)
 	}
 
 	return &config, nil

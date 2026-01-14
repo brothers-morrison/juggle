@@ -129,8 +129,55 @@ func (b *Ball) IncrementUpdateCount() {
 	b.UpdateActivity()
 }
 
-// SetState sets the ball state
-func (b *Ball) SetState(state BallState) {
+// ValidStateTransition checks if a state transition is valid.
+// Valid transitions:
+// - pending → in_progress (start)
+// - in_progress → complete/researched (completion)
+// - in_progress → blocked (blocking)
+// - blocked → in_progress (resume)
+// - Any state → pending (reset)
+func ValidStateTransition(from, to BallState) bool {
+	// Reset to pending is always allowed
+	if to == StatePending {
+		return true
+	}
+
+	switch from {
+	case StatePending:
+		// Can only start (move to in_progress)
+		return to == StateInProgress
+	case StateInProgress:
+		// Can complete, block, or mark as researched
+		return to == StateComplete || to == StateBlocked || to == StateResearched
+	case StateBlocked:
+		// Can resume (move back to in_progress)
+		return to == StateInProgress
+	case StateComplete, StateResearched:
+		// Terminal states - no transitions allowed (except reset to pending)
+		return false
+	default:
+		return false
+	}
+}
+
+// SetState sets the ball state.
+// Returns an error if the transition is invalid.
+func (b *Ball) SetState(state BallState) error {
+	if !ValidStateTransition(b.State, state) {
+		return fmt.Errorf("invalid state transition from %s to %s", b.State, state)
+	}
+	b.State = state
+	if state != StateBlocked {
+		b.BlockedReason = ""
+	}
+	b.UpdateActivity()
+	return nil
+}
+
+// ForceSetState sets the ball state without validation.
+// Use this only for tests and administrative purposes where
+// the normal state machine rules should be bypassed.
+func (b *Ball) ForceSetState(state BallState) {
 	b.State = state
 	if state != StateBlocked {
 		b.BlockedReason = ""
@@ -138,11 +185,16 @@ func (b *Ball) SetState(state BallState) {
 	b.UpdateActivity()
 }
 
-// SetBlocked sets the ball to blocked state with a reason
-func (b *Ball) SetBlocked(reason string) {
+// SetBlocked sets the ball to blocked state with a reason.
+// Returns an error if the transition from the current state is not valid.
+func (b *Ball) SetBlocked(reason string) error {
+	if !ValidStateTransition(b.State, StateBlocked) {
+		return fmt.Errorf("invalid state transition: cannot block from %s", b.State)
+	}
 	b.State = StateBlocked
 	b.BlockedReason = reason
 	b.UpdateActivity()
+	return nil
 }
 
 // MarkComplete marks the ball as complete

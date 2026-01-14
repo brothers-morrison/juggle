@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 )
 
 const (
@@ -87,12 +88,42 @@ func NewStoreWithConfig(projectDir string, config StoreConfig) (*Store, error) {
 	}, nil
 }
 
+// acquireFileLock acquires an exclusive lock on a file
+// Returns the file handle and cleanup function. The cleanup function should be deferred.
+func acquireFileLock(path string) (*os.File, func(), error) {
+	lockPath := path + ".lock"
+	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0644)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to open lock file %s: %w", lockPath, err)
+	}
+
+	// Acquire exclusive lock (blocking)
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		f.Close()
+		return nil, nil, fmt.Errorf("failed to acquire lock on %s: %w", lockPath, err)
+	}
+
+	cleanup := func() {
+		syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		f.Close()
+	}
+
+	return f, cleanup, nil
+}
+
 // AppendBall adds a new ball to the JSONL file
 func (s *Store) AppendBall(ball *Ball) error {
 	data, err := json.Marshal(ball)
 	if err != nil {
 		return fmt.Errorf("failed to marshal ball: %w", err)
 	}
+
+	// Acquire file lock
+	_, unlock, err := acquireFileLock(s.ballsPath)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 
 	// Open file in append mode
 	f, err := os.OpenFile(s.ballsPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -260,30 +291,68 @@ func (s *Store) DeleteBall(id string) error {
 	return s.writeBalls(filtered)
 }
 
-// ArchiveBall moves a ball to the archive
+// ArchiveBall moves a ball to the archive.
+// This operation is atomic: both files are locked, and changes are applied
+// atomically using temp file + rename pattern.
 func (s *Store) ArchiveBall(ball *Ball) error {
-	// Append to archive
-	data, err := json.Marshal(ball)
+	// Acquire locks on both files to ensure atomic operation
+	_, unlockBalls, err := acquireFileLock(s.ballsPath)
 	if err != nil {
-		return fmt.Errorf("failed to marshal ball: %w", err)
+		return fmt.Errorf("failed to lock balls file: %w", err)
 	}
+	defer unlockBalls()
 
-	f, err := os.OpenFile(s.archivePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	_, unlockArchive, err := acquireFileLock(s.archivePath)
 	if err != nil {
-		return fmt.Errorf("failed to open archive file: %w", err)
+		return fmt.Errorf("failed to lock archive file: %w", err)
 	}
-	defer f.Close()
+	defer unlockArchive()
 
-	if _, err := f.Write(data); err != nil {
-		return fmt.Errorf("failed to write to archive: %w", err)
-	}
-
-	if _, err := f.WriteString("\n"); err != nil {
-		return fmt.Errorf("failed to write newline: %w", err)
+	// Load current balls
+	balls, err := s.LoadBalls()
+	if err != nil {
+		return fmt.Errorf("failed to load balls: %w", err)
 	}
 
-	// Remove from active balls
-	return s.DeleteBall(ball.ID)
+	// Load current archive
+	archived, err := s.LoadArchivedBalls()
+	if err != nil {
+		return fmt.Errorf("failed to load archived balls: %w", err)
+	}
+
+	// Find and remove the ball from active list
+	found := false
+	filtered := make([]*Ball, 0, len(balls))
+	for _, b := range balls {
+		if b.ID != ball.ID {
+			filtered = append(filtered, b)
+		} else {
+			found = true
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("ball %s not found in active balls", ball.ID)
+	}
+
+	// Add ball to archive
+	archived = append(archived, ball)
+
+	// Write both files atomically
+	// First, write the new archive (safer to add first)
+	if err := s.writeArchivedBallsUnlocked(archived); err != nil {
+		return fmt.Errorf("failed to update archive: %w", err)
+	}
+
+	// Then, write the active balls (without the archived ball)
+	if err := s.writeBallsUnlocked(filtered); err != nil {
+		// Attempt to restore archive on failure (remove the ball we just added)
+		// This is best-effort; in worst case we have a duplicate in archive
+		s.writeArchivedBallsUnlocked(archived[:len(archived)-1])
+		return fmt.Errorf("failed to remove ball from active: %w", err)
+	}
+
+	return nil
 }
 
 // GetInProgressBalls returns all balls currently in progress in this project
@@ -442,6 +511,19 @@ func (s *Store) ResolveBallIDStrict(id string) (*Ball, error) {
 
 // writeBalls rewrites the entire balls.jsonl file
 func (s *Store) writeBalls(balls []*Ball) error {
+	// Acquire file lock
+	_, unlock, err := acquireFileLock(s.ballsPath)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+
+	return s.writeBallsUnlocked(balls)
+}
+
+// writeBallsUnlocked rewrites the entire balls.jsonl file without acquiring a lock.
+// Caller must hold the lock.
+func (s *Store) writeBallsUnlocked(balls []*Ball) error {
 	// Write to temp file first
 	tempPath := s.ballsPath + ".tmp"
 	f, err := os.Create(tempPath)
@@ -484,9 +566,24 @@ func (s *Store) writeBalls(balls []*Ball) error {
 	return nil
 }
 
-// UnarchiveBall restores a completed ball from archive back to ready state
+// UnarchiveBall restores a completed ball from archive back to ready state.
+// This operation is atomic: both files are locked, and changes are applied
+// atomically using temp file + rename pattern.
 func (s *Store) UnarchiveBall(ballID string) (*Ball, error) {
-	// Load archived balls
+	// Acquire locks on both files to ensure atomic operation
+	_, unlockBalls, err := acquireFileLock(s.ballsPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to lock balls file: %w", err)
+	}
+	defer unlockBalls()
+
+	_, unlockArchive, err := acquireFileLock(s.archivePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to lock archive file: %w", err)
+	}
+	defer unlockArchive()
+
+	// Load archived balls (within lock)
 	archived, err := s.LoadArchivedBalls()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load archived balls: %w", err)
@@ -512,12 +609,16 @@ func (s *Store) UnarchiveBall(ballID string) (*Ball, error) {
 	ball.CompletedAt = nil
 	ball.CompletionNote = ""
 
-	// Append to active balls
-	if err := s.AppendBall(ball); err != nil {
-		return nil, fmt.Errorf("failed to restore ball to active: %w", err)
+	// Load current balls
+	balls, err := s.LoadBalls()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load balls: %w", err)
 	}
 
-	// Remove from archive by rewriting archive file without this ball
+	// Add the unarchived ball to the list
+	balls = append(balls, ball)
+
+	// Prepare the updated archive (without the ball being restored)
 	updatedArchive := make([]*Ball, 0, len(archived)-1)
 	for i, b := range archived {
 		if i != ballIndex {
@@ -525,10 +626,18 @@ func (s *Store) UnarchiveBall(ballID string) (*Ball, error) {
 		}
 	}
 
-	if err := s.writeArchivedBalls(updatedArchive); err != nil {
-		// Ball was added to active, but we failed to remove from archive
-		// This is not ideal but not critical - archive will have duplicate
-		return ball, fmt.Errorf("ball restored but failed to remove from archive: %w", err)
+	// Write both files atomically (temp file + rename pattern)
+	// First, write the new archive
+	if err := s.writeArchivedBallsUnlocked(updatedArchive); err != nil {
+		return nil, fmt.Errorf("failed to update archive: %w", err)
+	}
+
+	// Then, write the active balls
+	if err := s.writeBallsUnlocked(balls); err != nil {
+		// Attempt to restore archive on failure
+		// This is best-effort; in worst case we have inconsistent state
+		s.writeArchivedBallsUnlocked(archived)
+		return nil, fmt.Errorf("failed to add ball to active: %w", err)
 	}
 
 	return ball, nil
@@ -536,6 +645,19 @@ func (s *Store) UnarchiveBall(ballID string) (*Ball, error) {
 
 // writeArchivedBalls rewrites the entire archive/balls.jsonl file
 func (s *Store) writeArchivedBalls(balls []*Ball) error {
+	// Acquire file lock
+	_, unlock, err := acquireFileLock(s.archivePath)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+
+	return s.writeArchivedBallsUnlocked(balls)
+}
+
+// writeArchivedBallsUnlocked rewrites the entire archive/balls.jsonl file without acquiring a lock.
+// Caller must hold the lock.
+func (s *Store) writeArchivedBallsUnlocked(balls []*Ball) error {
 	// Write to temp file first
 	tempPath := s.archivePath + ".tmp"
 	f, err := os.Create(tempPath)

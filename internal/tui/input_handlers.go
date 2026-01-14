@@ -153,7 +153,11 @@ func (m Model) submitBlockedInput(value string) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	m.editingBall.SetBlocked(value)
+	if err := m.editingBall.SetBlocked(value); err != nil {
+		m.message = "Error: " + err.Error()
+		m.mode = splitView
+		return m, nil
+	}
 	m.addActivity("Blocked ball: " + m.editingBall.ID + " - " + truncate(value, 20))
 	m.message = "Blocked ball: " + m.editingBall.ID
 

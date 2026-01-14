@@ -129,9 +129,14 @@ func TestBlockWithReasonLogic(t *testing.T) {
 
 	ball := env.CreateBall(t, "Ball to block", session.PriorityMedium)
 
+	// Start the ball first so we can block it (blocked transition only valid from in_progress)
+	ball.Start()
+
 	// Simulate interactive block with reason
 	reason := "Waiting for design approval from stakeholders"
-	ball.SetBlocked(reason)
+	if err := ball.SetBlocked(reason); err != nil {
+		t.Fatalf("Failed to set blocked: %v", err)
+	}
 
 	if err := store.UpdateBall(ball); err != nil {
 		t.Fatalf("Failed to update ball: %v", err)
@@ -359,7 +364,7 @@ func TestStartFromDifferentStates(t *testing.T) {
 			ball := env.CreateBall(t, "Start test "+tt.name, session.PriorityMedium)
 
 			// Set initial state
-			ball.SetState(tt.initialState)
+			ball.ForceSetState(tt.initialState)
 			store.UpdateBall(ball)
 
 			// Start the ball
@@ -395,11 +400,11 @@ func TestCompleteFromDifferentStates(t *testing.T) {
 			ball := env.CreateBall(t, "Complete test "+tt.name, session.PriorityMedium)
 
 			// Set initial state
-			ball.SetState(tt.initialState)
+			ball.ForceSetState(tt.initialState)
 			store.UpdateBall(ball)
 
 			// Complete the ball
-			ball.SetState(session.StateComplete)
+			ball.ForceSetState(session.StateComplete)
 			store.UpdateBall(ball)
 
 			retrieved, _ := store.GetBallByID(ball.ID)

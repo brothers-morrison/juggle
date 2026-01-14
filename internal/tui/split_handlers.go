@@ -208,7 +208,10 @@ func (m Model) handleSplitSetPending() (tea.Model, tea.Cmd) {
 	}
 
 	ball := balls[m.cursor]
-	ball.SetState(session.StatePending)
+	if err := ball.SetState(session.StatePending); err != nil {
+		m.message = "Error: " + err.Error()
+		return m, nil
+	}
 	m.addActivity("Set pending: " + ball.ID)
 
 	store, err := session.NewStore(ball.WorkingDir)
@@ -681,7 +684,10 @@ func (m Model) handleSplitStartBall() (tea.Model, tea.Cmd) {
 	}
 
 	ball := balls[m.cursor]
-	ball.SetState(session.StateInProgress)
+	if err := ball.SetState(session.StateInProgress); err != nil {
+		m.message = "Error: " + err.Error()
+		return m, nil
+	}
 	m.addActivity("Started ball: " + ball.ID)
 
 	store, err := session.NewStore(ball.WorkingDir)
@@ -701,7 +707,10 @@ func (m Model) handleSplitCompleteBall() (tea.Model, tea.Cmd) {
 	}
 
 	ball := balls[m.cursor]
-	ball.SetState(session.StateComplete)
+	if err := ball.SetState(session.StateComplete); err != nil {
+		m.message = "Error: " + err.Error()
+		return m, nil
+	}
 	m.addActivity("Completing ball: " + ball.ID)
 
 	store, err := session.NewStore(ball.WorkingDir)
@@ -736,8 +745,11 @@ func (m Model) handleSplitBlockBall() (tea.Model, tea.Cmd) {
 func (m *Model) handleStartBall() (tea.Model, tea.Cmd) {
 	ball := m.filteredBalls[m.cursor]
 
-	// Update state to in_progress (no validation - allow any state transition)
-	ball.SetState(session.StateInProgress)
+	// Update state to in_progress
+	if err := ball.SetState(session.StateInProgress); err != nil {
+		m.message = "Error: " + err.Error()
+		return m, nil
+	}
 
 	// Get the store for this ball's working directory
 	store, err := session.NewStore(ball.WorkingDir)
@@ -751,8 +763,11 @@ func (m *Model) handleStartBall() (tea.Model, tea.Cmd) {
 func (m *Model) handleCompleteBall() (tea.Model, tea.Cmd) {
 	ball := m.filteredBalls[m.cursor]
 
-	// Update state to complete (no validation - allow any state transition)
-	ball.SetState(session.StateComplete)
+	// Update state to complete
+	if err := ball.SetState(session.StateComplete); err != nil {
+		m.message = "Error: " + err.Error()
+		return m, nil
+	}
 
 	// Get the store for this ball's working directory
 	store, err := session.NewStore(ball.WorkingDir)
@@ -767,8 +782,11 @@ func (m *Model) handleCompleteBall() (tea.Model, tea.Cmd) {
 func (m *Model) handleDropBall() (tea.Model, tea.Cmd) {
 	ball := m.filteredBalls[m.cursor]
 
-	// Update state to blocked (no validation - allow any state transition)
-	ball.SetBlocked("dropped")
+	// Update state to blocked
+	if err := ball.SetBlocked("dropped"); err != nil {
+		m.message = "Error: " + err.Error()
+		return m, nil
+	}
 
 	// Get the store for this ball's working directory
 	store, err := session.NewStore(ball.WorkingDir)
@@ -844,7 +862,10 @@ func (m *Model) handleCycleState() (tea.Model, tea.Cmd) {
 		nextState = session.StatePending
 	}
 
-	ball.SetState(nextState)
+	if err := ball.SetState(nextState); err != nil {
+		m.message = "Error: " + err.Error()
+		return m, nil
+	}
 
 	store, err := session.NewStore(ball.WorkingDir)
 	if err != nil {
@@ -860,7 +881,10 @@ func (m *Model) handleSetReady() (tea.Model, tea.Cmd) {
 	ball := m.filteredBalls[m.cursor]
 
 	// Set to pending state
-	ball.SetState(session.StatePending)
+	if err := ball.SetState(session.StatePending); err != nil {
+		m.message = "Error: " + err.Error()
+		return m, nil
+	}
 
 	store, err := session.NewStore(ball.WorkingDir)
 	if err != nil {

@@ -278,54 +278,67 @@ func TestTruncateID(t *testing.T) {
 	}
 }
 
-func TestStateTransitionsUnrestricted(t *testing.T) {
+func TestStateTransitionsValidated(t *testing.T) {
+	// Tests that state transitions follow the validated state machine:
+	// - pending → in_progress (start)
+	// - in_progress → complete/blocked (complete/block)
+	// - blocked → in_progress (start)
+	// - any → pending (reset)
 	tests := []struct {
-		name         string
-		initialState session.BallState
-		action       string // "start", "complete", "block"
-		expectError  bool
+		name          string
+		initialState  session.BallState
+		action        string // "start", "complete", "block"
+		expectError   bool
+		expectedState session.BallState
 	}{
 		{
-			name:         "start from pending",
-			initialState: session.StatePending,
-			action:       "start",
-			expectError:  false,
+			name:          "start from pending",
+			initialState:  session.StatePending,
+			action:        "start",
+			expectError:   false,
+			expectedState: session.StateInProgress,
 		},
 		{
-			name:         "start from complete",
-			initialState: session.StateComplete,
-			action:       "start",
-			expectError:  false,
+			name:          "start from complete - invalid transition",
+			initialState:  session.StateComplete,
+			action:        "start",
+			expectError:   true,
+			expectedState: session.StateComplete, // unchanged
 		},
 		{
-			name:         "start from blocked",
-			initialState: session.StateBlocked,
-			action:       "start",
-			expectError:  false,
+			name:          "start from blocked",
+			initialState:  session.StateBlocked,
+			action:        "start",
+			expectError:   false,
+			expectedState: session.StateInProgress,
 		},
 		{
-			name:         "complete from in_progress",
-			initialState: session.StateInProgress,
-			action:       "complete",
-			expectError:  false,
+			name:          "complete from in_progress",
+			initialState:  session.StateInProgress,
+			action:        "complete",
+			expectError:   false,
+			expectedState: session.StateComplete,
 		},
 		{
-			name:         "complete from pending",
-			initialState: session.StatePending,
-			action:       "complete",
-			expectError:  false,
+			name:          "complete from pending - invalid transition",
+			initialState:  session.StatePending,
+			action:        "complete",
+			expectError:   true,
+			expectedState: session.StatePending, // unchanged
 		},
 		{
-			name:         "block from in_progress",
-			initialState: session.StateInProgress,
-			action:       "block",
-			expectError:  false,
+			name:          "block from in_progress",
+			initialState:  session.StateInProgress,
+			action:        "block",
+			expectError:   false,
+			expectedState: session.StateBlocked,
 		},
 		{
-			name:         "block from complete",
-			initialState: session.StateComplete,
-			action:       "block",
-			expectError:  false,
+			name:          "block from complete - invalid transition",
+			initialState:  session.StateComplete,
+			action:        "block",
+			expectError:   true,
+			expectedState: session.StateComplete, // unchanged
 		},
 	}
 
@@ -353,28 +366,19 @@ func TestStateTransitionsUnrestricted(t *testing.T) {
 			}
 
 			m := newModel.(*Model)
-			if m.err != nil && !tt.expectError {
-				t.Errorf("Unexpected error: %v", m.err)
+			// Handlers set m.message on error, not m.err
+			hasError := strings.HasPrefix(m.message, "Error:")
+			if hasError && !tt.expectError {
+				t.Errorf("Unexpected error: %v", m.message)
 			}
-			if m.err == nil && tt.expectError {
-				t.Error("Expected error but got none")
+			if !hasError && tt.expectError {
+				t.Errorf("Expected error but got none (message: %q)", m.message)
 			}
 
-			// Check that state was updated (even if store operation failed)
+			// Check that state matches expected (unchanged on error, transitioned on success)
 			ball := m.filteredBalls[0]
-			switch tt.action {
-			case "start":
-				if ball.State != session.StateInProgress {
-					t.Errorf("Expected state to be in_progress, got %v", ball.State)
-				}
-			case "complete":
-				if ball.State != session.StateComplete {
-					t.Errorf("Expected state to be complete, got %v", ball.State)
-				}
-			case "block":
-				if ball.State != session.StateBlocked {
-					t.Errorf("Expected state to be blocked, got %v", ball.State)
-				}
+			if ball.State != tt.expectedState {
+				t.Errorf("Expected state to be %v, got %v", tt.expectedState, ball.State)
 			}
 		})
 	}

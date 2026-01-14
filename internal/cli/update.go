@@ -152,7 +152,12 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 				}
 				return err
 			}
-			foundBall.SetBlocked(updateBlockReason)
+			if err := foundBall.SetBlocked(updateBlockReason); err != nil {
+				if updateJSONFlag {
+					return printJSONError(err)
+				}
+				return err
+			}
 			if !updateJSONFlag {
 				fmt.Printf("✓ Updated state: blocked (reason: %s)\n", updateBlockReason)
 			}
@@ -167,7 +172,9 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 				fmt.Printf("✓ Updated state: researched\n")
 			}
 		} else {
-			foundBall.SetState(newState)
+			if err := foundBall.SetState(newState); err != nil {
+				return err
+			}
 			if !updateJSONFlag {
 				fmt.Printf("✓ Updated state: %s\n", foundBall.State)
 			}
@@ -387,11 +394,15 @@ func runInteractiveUpdate(ball *session.Ball, store *session.Store) error {
 			reason, _ := reader.ReadString('\n')
 			reason = strings.TrimSpace(reason)
 			if reason != "" {
-				ball.SetBlocked(reason)
+				if err := ball.SetBlocked(reason); err != nil {
+					return err
+				}
 			} else if ball.BlockedReason == "" {
 				return fmt.Errorf("blocked reason required when setting state to blocked")
 			} else {
-				ball.SetState(newState)
+				if err := ball.SetState(newState); err != nil {
+					return err
+				}
 			}
 		} else if newState == session.StateResearched {
 			fmt.Printf("Research output [%s]: ", truncateForDisplay(ball.Output, 50))
@@ -405,7 +416,9 @@ func runInteractiveUpdate(ball *session.Ball, store *session.Store) error {
 				ball.MarkResearched("")
 			}
 		} else {
-			ball.SetState(newState)
+			if err := ball.SetState(newState); err != nil {
+				return err
+			}
 		}
 	}
 
