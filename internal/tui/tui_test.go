@@ -8522,6 +8522,59 @@ func TestUnifiedBallFormNavigateThroughACs(t *testing.T) {
 	}
 }
 
+// Test that new AC field content is preserved when navigating away
+func TestUnifiedBallFormPreserveNewACContent(t *testing.T) {
+	ti := textinput.New()
+	ti.CharLimit = 256
+	ti.Width = 40
+	ti.Focus()
+
+	// Start with field on new AC field (no existing ACs, so new AC is at index 2)
+	model := Model{
+		mode:                      unifiedBallFormView,
+		pendingBallIntent:         "Test intent",
+		pendingBallPriority:       1,
+		pendingBallTags:           "",
+		pendingBallSession:        0,
+		pendingBallFormField:      2, // On new AC field
+		pendingAcceptanceCriteria: []string{},
+		textInput:                 ti,
+		sessions:                  []*session.JuggleSession{},
+		activityLog:               make([]ActivityEntry, 0),
+	}
+
+	// Type some text in the new AC field
+	model.textInput.SetValue("Partial acceptance criterion")
+
+	// Navigate away with Tab (should go to Tags field which is index 3)
+	newModel, _ := model.handleUnifiedBallFormKey(tea.KeyMsg{Type: tea.KeyTab})
+	m := newModel.(Model)
+
+	// Verify we moved to Tags field
+	if m.pendingBallFormField != 3 {
+		t.Errorf("Expected to be on Tags field (3), got %d", m.pendingBallFormField)
+	}
+
+	// Verify content was preserved
+	if m.pendingNewAC != "Partial acceptance criterion" {
+		t.Errorf("Expected pendingNewAC to be preserved, got '%s'", m.pendingNewAC)
+	}
+
+	// Navigate back to new AC field (up arrow to get back)
+	newModel, _ = m.handleUnifiedBallFormKey(tea.KeyMsg{Type: tea.KeyUp})
+	m = newModel.(Model)
+
+	// Verify we're back on new AC field
+	if m.pendingBallFormField != 2 {
+		t.Errorf("Expected to be on new AC field (2), got %d", m.pendingBallFormField)
+	}
+
+	// Verify the content was restored to the text input
+	if m.textInput.Value() != "Partial acceptance criterion" {
+		t.Errorf("Expected text input to have preserved content, got '%s'", m.textInput.Value())
+	}
+}
+
 // Test escape cancels the form
 func TestUnifiedBallFormCancel(t *testing.T) {
 	ti := textinput.New()

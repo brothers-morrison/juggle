@@ -31,6 +31,7 @@ type StandaloneBallModel struct {
 	pendingBallDependsOn      []string // Selected dependency ball IDs
 	pendingBallFormField      int      // Current field in form
 	pendingAcceptanceCriteria []string // Acceptance criteria being collected
+	pendingNewAC              string   // Content of the "new AC" field, preserved during navigation
 
 	// File autocomplete state
 	fileAutocomplete *AutocompleteState
@@ -247,6 +248,9 @@ func (m StandaloneBallModel) handleFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 					} else {
 						m.pendingAcceptanceCriteria[acIndex] = value
 					}
+				} else {
+					// On the "new AC" field - save content for restoration when navigating back
+					m.pendingNewAC = value
 				}
 			}
 		}
@@ -288,7 +292,8 @@ func (m StandaloneBallModel) handleFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 					m.textInput.SetValue(m.pendingAcceptanceCriteria[acIndex])
 					m.textInput.Placeholder = "Edit acceptance criterion"
 				} else {
-					m.textInput.SetValue("")
+					// Restore preserved new AC content when navigating back
+					m.textInput.SetValue(m.pendingNewAC)
 					m.textInput.Placeholder = "New acceptance criterion (Enter on empty = save)"
 				}
 				m.textInput.Focus()
@@ -335,6 +340,7 @@ func (m StandaloneBallModel) handleFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 					return m.finalizeBallCreation()
 				} else {
 					m.pendingAcceptanceCriteria = append(m.pendingAcceptanceCriteria, value)
+					m.pendingNewAC = "" // Clear preserved content since it was added
 					m.textInput.Reset()
 					m.textInput.Placeholder = "New acceptance criterion (Enter on empty = save)"
 					m.pendingBallFormField = fieldACStart + len(m.pendingAcceptanceCriteria)
@@ -564,6 +570,12 @@ func (m StandaloneBallModel) handleDependencySelectorKey(msg tea.KeyMsg) (tea.Mo
 }
 
 func (m StandaloneBallModel) finalizeBallCreation() (tea.Model, tea.Cmd) {
+	// Include any preserved new AC content that wasn't added via Enter
+	if m.pendingNewAC != "" {
+		m.pendingAcceptanceCriteria = append(m.pendingAcceptanceCriteria, m.pendingNewAC)
+		m.pendingNewAC = ""
+	}
+
 	priorities := []session.Priority{session.PriorityLow, session.PriorityMedium, session.PriorityHigh, session.PriorityUrgent}
 	priority := priorities[m.pendingBallPriority]
 

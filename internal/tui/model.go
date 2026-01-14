@@ -179,6 +179,7 @@ type Model struct {
 	pendingBallFormField       int      // Current field in form (0=context, 1=title, 2+=ACs, then tags, session, model_size, depends_on)
 	pendingAcceptanceCriteria  []string // Acceptance criteria being collected
 	pendingACEditIndex         int      // Index of AC being edited (-1 = adding new, >= 0 = editing existing)
+	pendingNewAC               string   // Content of the "new AC" field, preserved during navigation
 
 	// File autocomplete state for ball form
 	fileAutocomplete *AutocompleteState // File path autocomplete suggestions

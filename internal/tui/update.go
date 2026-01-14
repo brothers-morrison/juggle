@@ -2196,6 +2196,12 @@ func (m Model) handleBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // finalizeBallCreation creates the ball with the collected intent and acceptance criteria
 func (m Model) finalizeBallCreation() (tea.Model, tea.Cmd) {
+	// Include any preserved new AC content that wasn't added via Enter
+	if m.pendingNewAC != "" {
+		m.pendingAcceptanceCriteria = append(m.pendingAcceptanceCriteria, m.pendingNewAC)
+		m.pendingNewAC = ""
+	}
+
 	// Map priority index to Priority constant
 	priorities := []session.Priority{session.PriorityLow, session.PriorityMedium, session.PriorityHigh, session.PriorityUrgent}
 	priority := priorities[m.pendingBallPriority]
@@ -2320,6 +2326,7 @@ func (m *Model) clearPendingBallState() {
 	m.pendingBallContext = ""
 	m.pendingBallIntent = ""
 	m.pendingAcceptanceCriteria = nil
+	m.pendingNewAC = ""
 	m.pendingBallPriority = 1   // Reset to default (medium)
 	m.pendingBallModelSize = 0  // Reset to default
 	m.pendingBallTags = ""
@@ -3253,8 +3260,10 @@ func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					} else {
 						m.pendingAcceptanceCriteria[acIndex] = value
 					}
+				} else {
+					// On the "new AC" field - save content for restoration when navigating back
+					m.pendingNewAC = value
 				}
-				// Don't save if on the "new AC" field - that's handled by Enter
 			}
 		}
 	}
@@ -3302,7 +3311,8 @@ func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.textInput.SetValue(m.pendingAcceptanceCriteria[acIndex])
 					m.textInput.Placeholder = "Edit acceptance criterion"
 				} else {
-					m.textInput.SetValue("")
+					// Restore preserved new AC content when navigating back
+					m.textInput.SetValue(m.pendingNewAC)
 					m.textInput.Placeholder = "New acceptance criterion (Enter on empty = save)"
 				}
 				m.textInput.Focus()
@@ -3373,6 +3383,7 @@ func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				} else {
 					// Add new AC and stay on the new AC field
 					m.pendingAcceptanceCriteria = append(m.pendingAcceptanceCriteria, value)
+					m.pendingNewAC = "" // Clear preserved content since it was added
 					m.textInput.Reset()
 					m.textInput.Placeholder = "New acceptance criterion (Enter on empty = save)"
 					m.pendingBallFormField = fieldACStart + len(m.pendingAcceptanceCriteria) // Move to new "add" field
