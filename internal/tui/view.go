@@ -1334,22 +1334,34 @@ func (m Model) renderUnifiedBallFormView() string {
 	b.WriteString(labelStyle.Render("Title: "))
 	if m.pendingBallFormField == fieldIntent {
 		b.WriteString(m.textInput.View())
-		// Show character count with color warnings
+		// Show character count only when user has entered content (not when showing placeholder)
 		titleLen := len(m.textInput.Value())
-		countStyle := lipgloss.NewStyle().Faint(true)
-		if titleLen >= 50 {
-			countStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196")) // Red
-		} else if titleLen >= 40 {
-			countStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("226")) // Yellow
+		if titleLen > 0 {
+			countStyle := lipgloss.NewStyle().Faint(true)
+			if titleLen >= 50 {
+				countStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196")) // Red
+			} else if titleLen >= 40 {
+				countStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("226")) // Yellow
+			}
+			b.WriteString(countStyle.Render(fmt.Sprintf(" (%d/50)", titleLen)))
 		}
-		b.WriteString(countStyle.Render(fmt.Sprintf(" (%d/50)", titleLen)))
 		// Show autocomplete popup if active on this field
 		if popup := m.renderAutocompletePopup(); popup != "" {
 			b.WriteString(popup)
 		}
 	} else {
 		if m.pendingBallIntent == "" {
-			b.WriteString(optionNormalStyle.Render("(empty)"))
+			// Show context-derived placeholder when unfocused, or (empty) if no context
+			if m.pendingBallContext != "" {
+				placeholder := generateTitlePlaceholderFromContext(m.pendingBallContext)
+				if placeholder != "" {
+					b.WriteString(optionNormalStyle.Render(placeholder))
+				} else {
+					b.WriteString(optionNormalStyle.Render("(empty)"))
+				}
+			} else {
+				b.WriteString(optionNormalStyle.Render("(empty)"))
+			}
 		} else {
 			titleLen := len(m.pendingBallIntent)
 			b.WriteString(m.pendingBallIntent)

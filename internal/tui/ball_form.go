@@ -173,6 +173,11 @@ func (m Model) finalizeBallCreation() (tea.Model, tea.Cmd) {
 		m.pendingNewAC = ""
 	}
 
+	// Auto-generate title from context if title is empty but context has content
+	if m.pendingBallIntent == "" && m.pendingBallContext != "" {
+		m.pendingBallIntent = generateTitlePlaceholderFromContext(m.pendingBallContext)
+	}
+
 	// Map priority index to Priority constant
 	priorities := []session.Priority{session.PriorityLow, session.PriorityMedium, session.PriorityHigh, session.PriorityUrgent}
 	priority := priorities[m.pendingBallPriority]
@@ -310,6 +315,32 @@ func (m *Model) clearPendingBallState() {
 	m.dependencySelectActive = nil
 	m.editingBall = nil
 	m.inputAction = actionAdd
+}
+
+// generateTitlePlaceholderFromContext generates a title placeholder from context content.
+// Returns the first 50 characters trimmed at a word boundary, or empty string if no context.
+func generateTitlePlaceholderFromContext(context string) string {
+	context = strings.TrimSpace(context)
+	if context == "" {
+		return ""
+	}
+
+	// If context is short enough, use it all
+	if len(context) <= 50 {
+		return context
+	}
+
+	// Find a good word boundary before 50 chars
+	// Start from position 50 and look backwards for a space
+	cutoff := 50
+	for i := cutoff; i > 0; i-- {
+		if context[i] == ' ' {
+			return strings.TrimSpace(context[:i])
+		}
+	}
+
+	// No space found, just truncate at 50
+	return context[:50]
 }
 
 // adjustContextTextareaHeight dynamically adjusts the context textarea height based on content
@@ -476,7 +507,17 @@ func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case fieldIntent:
 			m.contextInput.Blur()
 			m.textInput.SetValue(m.pendingBallIntent)
-			m.textInput.Placeholder = "What is this ball about? (50 char recommended)"
+			// Set placeholder - use context-derived placeholder if context has content and title is empty
+			if m.pendingBallContext != "" && m.pendingBallIntent == "" {
+				placeholder := generateTitlePlaceholderFromContext(m.pendingBallContext)
+				if placeholder != "" {
+					m.textInput.Placeholder = placeholder
+				} else {
+					m.textInput.Placeholder = "What is this ball about? (50 char recommended)"
+				}
+			} else {
+				m.textInput.Placeholder = "What is this ball about? (50 char recommended)"
+			}
 			m.textInput.Focus()
 		default:
 			m.contextInput.Blur()
@@ -517,9 +558,9 @@ func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Save current field value first
 		saveCurrentFieldValue()
 
-		// Validate required fields
-		if m.pendingBallIntent == "" {
-			m.message = "Title is required"
+		// Validate required fields - title can be empty if context has content (will auto-generate)
+		if m.pendingBallIntent == "" && m.pendingBallContext == "" {
+			m.message = "Title is required (or add context to auto-generate)"
 			return m, nil
 		}
 
@@ -536,8 +577,9 @@ func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		} else if m.pendingBallFormField == fieldSave {
 			// Save button - finalize ball creation
 			saveCurrentFieldValue()
-			if m.pendingBallIntent == "" {
-				m.message = "Title is required"
+			// Validate required fields - title can be empty if context has content (will auto-generate)
+			if m.pendingBallIntent == "" && m.pendingBallContext == "" {
+				m.message = "Title is required (or add context to auto-generate)"
 				return m, nil
 			}
 			return m.finalizeBallCreation()
@@ -553,9 +595,9 @@ func (m Model) handleUnifiedBallFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				if value == "" {
 					// Empty enter on the new AC field - create the ball
 					saveCurrentFieldValue()
-					// Validate required fields
-					if m.pendingBallIntent == "" {
-						m.message = "Title is required"
+					// Validate required fields - title can be empty if context has content (will auto-generate)
+					if m.pendingBallIntent == "" && m.pendingBallContext == "" {
+						m.message = "Title is required (or add context to auto-generate)"
 						return m, nil
 					}
 					return m.finalizeBallCreation()
