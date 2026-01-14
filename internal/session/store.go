@@ -47,7 +47,8 @@ func NewStore(projectDir string) (*Store, error) {
 	return NewStoreWithConfig(projectDir, DefaultStoreConfig())
 }
 
-// NewStoreWithConfig creates a new store with custom configuration
+// NewStoreWithConfig creates a new store with custom configuration.
+// If running in a worktree (has .juggle/link file), uses the linked main repo for storage.
 func NewStoreWithConfig(projectDir string, config StoreConfig) (*Store, error) {
 	if projectDir == "" {
 		cwd, err := os.Getwd()
@@ -57,7 +58,14 @@ func NewStoreWithConfig(projectDir string, config StoreConfig) (*Store, error) {
 		projectDir = cwd
 	}
 
-	storePath := filepath.Join(projectDir, config.JuggleDirName)
+	// Resolve to main repo if this is a worktree
+	storageDir, err := ResolveStorageDir(projectDir, config.JuggleDirName)
+	if err != nil {
+		// If resolution fails, fall back to projectDir
+		storageDir = projectDir
+	}
+
+	storePath := filepath.Join(storageDir, config.JuggleDirName)
 	ballsPath := filepath.Join(storePath, ballsFile)
 	archivePath := filepath.Join(storePath, archiveDir, archiveBallsFile)
 

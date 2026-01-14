@@ -84,7 +84,8 @@ func NewSessionStore(projectDir string) (*SessionStore, error) {
 	return NewSessionStoreWithConfig(projectDir, DefaultStoreConfig())
 }
 
-// NewSessionStoreWithConfig creates a new session store with custom configuration
+// NewSessionStoreWithConfig creates a new session store with custom configuration.
+// If running in a worktree (has .juggle/link file), uses the linked main repo for storage.
 func NewSessionStoreWithConfig(projectDir string, config StoreConfig) (*SessionStore, error) {
 	if projectDir == "" {
 		cwd, err := os.Getwd()
@@ -94,8 +95,15 @@ func NewSessionStoreWithConfig(projectDir string, config StoreConfig) (*SessionS
 		projectDir = cwd
 	}
 
+	// Resolve to main repo if this is a worktree
+	storageDir, err := ResolveStorageDir(projectDir, config.JuggleDirName)
+	if err != nil {
+		// If resolution fails, fall back to projectDir
+		storageDir = projectDir
+	}
+
 	return &SessionStore{
-		projectDir: projectDir,
+		projectDir: storageDir,
 		config:     config,
 	}, nil
 }
