@@ -95,55 +95,25 @@ func (m Model) submitSessionInput(value string) (tea.Model, tea.Cmd) {
 	return m, loadSessions(m.sessionStore, m.config, m.localOnly)
 }
 
-// submitBallInput handles ball add/edit submission
+// submitBallInput handles ball title edit submission
+// Note: Ball creation is handled via unifiedBallFormView, not this function
 func (m Model) submitBallInput(value string) (tea.Model, tea.Cmd) {
-	if m.inputAction == actionAdd {
-		// Store the intent and transition to ball form view
-		m.pendingBallIntent = value
-		m.pendingAcceptanceCriteria = []string{}
-		m.pendingBallPriority = 1 // Default to medium (index 1)
-		m.pendingBallTags = ""
-		// Default session to currently selected one (if a real session is selected)
-		m.pendingBallSession = 0 // Start with (none)
-		if m.selectedSession != nil && m.selectedSession.ID != PseudoSessionAll && m.selectedSession.ID != PseudoSessionUntagged {
-			// Find the index of the selected session in real sessions
-			realSessionIdx := 0
-			for _, sess := range m.sessions {
-				if sess.ID == PseudoSessionAll || sess.ID == PseudoSessionUntagged {
-					continue
-				}
-				realSessionIdx++
-				if sess.ID == m.selectedSession.ID {
-					m.pendingBallSession = realSessionIdx
-					break
-				}
-			}
-		}
-		m.pendingBallFormField = 0
-		m.textInput.Reset()
-		m.textInput.Placeholder = "tag1, tag2, ..."
-		m.textInput.Blur() // Start with selection fields, not text
-		m.mode = inputBallFormView
-		m.addActivity("Configure ball properties")
-		return m, nil
-	} else {
-		// Edit ball intent
-		if m.editingBall == nil {
-			m.mode = splitView
-			return m, nil
-		}
-		m.editingBall.Title = value
-		store, err := session.NewStore(m.editingBall.WorkingDir)
-		if err != nil {
-			m.message = "Error: " + err.Error()
-			m.mode = splitView
-			return m, nil
-		}
-		m.addActivity("Updated ball: " + m.editingBall.ID)
-		m.message = "Updated ball: " + m.editingBall.ID
+	// Edit ball title
+	if m.editingBall == nil {
 		m.mode = splitView
-		return m, updateBall(store, m.editingBall)
+		return m, nil
 	}
+	m.editingBall.Title = value
+	store, err := session.NewStore(m.editingBall.WorkingDir)
+	if err != nil {
+		m.message = "Error: " + err.Error()
+		m.mode = splitView
+		return m, nil
+	}
+	m.addActivity("Updated ball: " + m.editingBall.ID)
+	m.message = "Updated ball: " + m.editingBall.ID
+	m.mode = splitView
+	return m, updateBall(store, m.editingBall)
 }
 
 // submitBlockedInput handles blocked reason submission

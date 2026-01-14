@@ -25,12 +25,13 @@ import (
 func TestModelInitialization(t *testing.T) {
 	// Create a mock store (even though it's nil, we're just testing structure)
 	var store *session.Store
+	var sessionStore *session.SessionStore
 	var config *session.Config
 
-	model := InitialModel(store, config, false)
+	model := InitialSplitModel(store, sessionStore, config, false)
 
-	if model.mode != listView {
-		t.Errorf("Expected initial mode to be listView, got %v", model.mode)
+	if model.mode != splitView {
+		t.Errorf("Expected initial mode to be splitView, got %v", model.mode)
 	}
 
 	if model.cursor != 0 {
@@ -40,16 +41,17 @@ func TestModelInitialization(t *testing.T) {
 
 func TestLocalOnlyMode(t *testing.T) {
 	var store *session.Store
+	var sessionStore *session.SessionStore
 	var config *session.Config
 
 	// Test local-only model
-	model := InitialModel(store, config, true)
+	model := InitialSplitModel(store, sessionStore, config, true)
 	if !model.localOnly {
 		t.Error("Expected localOnly to be true")
 	}
 
 	// Test non-local model
-	model2 := InitialModel(store, config, false)
+	model2 := InitialSplitModel(store, sessionStore, config, false)
 	if model2.localOnly {
 		t.Error("Expected localOnly to be false")
 	}
@@ -413,50 +415,6 @@ func TestCyclePriority(t *testing.T) {
 				t.Errorf("Expected %v, got %v", tt.expectedPriority, nextPriority)
 			}
 		})
-	}
-}
-
-func TestConfirmDeleteRendering(t *testing.T) {
-	ball := &session.Ball{
-		ID:       "test-1",
-		Title:   "Test ball",
-		Priority: session.PriorityMedium,
-	}
-
-	model := Model{
-		mode:          confirmDeleteView,
-		filteredBalls: []*session.Ball{ball},
-		cursor:        0,
-	}
-
-	view := model.renderConfirmDeleteView()
-
-	// Check that important elements are present
-	if !strings.Contains(view, "DELETE BALL") {
-		t.Error("View should contain DELETE BALL title")
-	}
-	if !strings.Contains(view, ball.ID) {
-		t.Error("View should contain ball ID")
-	}
-	if !strings.Contains(view, "Delete this ball") {
-		t.Error("View should contain confirmation prompt")
-	}
-	if !strings.Contains(view, "[y/N]") {
-		t.Error("View should contain y/N options")
-	}
-}
-
-func TestConfirmDeleteEmptyBalls(t *testing.T) {
-	model := Model{
-		mode:          confirmDeleteView,
-		filteredBalls: []*session.Ball{},
-		cursor:        0,
-	}
-
-	view := model.renderConfirmDeleteView()
-
-	if !strings.Contains(view, "No ball selected") {
-		t.Error("View should indicate no ball selected when filteredBalls is empty")
 	}
 }
 
@@ -1033,10 +991,6 @@ func TestViewRenderingNoPanic(t *testing.T) {
 		name string
 		mode viewMode
 	}{
-		{"listView", listView},
-		{"detailView", detailView},
-		{"helpView", helpView},
-		{"confirmDeleteView", confirmDeleteView},
 		{"splitView", splitView},
 		{"splitHelpView", splitHelpView},
 	}
@@ -1068,137 +1022,6 @@ func TestViewRenderingNoPanic(t *testing.T) {
 	}
 }
 
-// Test key message handling for list view
-func TestListViewKeyHandling(t *testing.T) {
-	balls := []*session.Ball{
-		{ID: "1", State: session.StatePending, WorkingDir: "/tmp"},
-		{ID: "2", State: session.StatePending, WorkingDir: "/tmp"},
-		{ID: "3", State: session.StatePending, WorkingDir: "/tmp"},
-	}
-
-	model := Model{
-		mode:          listView,
-		balls:         balls,
-		filteredBalls: balls,
-		cursor:        0,
-		filterStates: map[string]bool{
-			"pending":     true,
-			"in_progress": true,
-			"blocked":     true,
-			"complete":    true,
-		},
-	}
-
-	// Test navigation down
-	newModel, _ := model.Update(tea.KeyMsg{Type: tea.KeyDown})
-	m := newModel.(Model)
-	if m.cursor != 1 {
-		t.Errorf("Expected cursor to move to 1, got %d", m.cursor)
-	}
-
-	// Test navigation up
-	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyUp})
-	m = newModel.(Model)
-	if m.cursor != 0 {
-		t.Errorf("Expected cursor to move back to 0, got %d", m.cursor)
-	}
-}
-
-// Test entering detail view
-func TestEnterDetailView(t *testing.T) {
-	balls := []*session.Ball{
-		{ID: "test-1", Title: "Test ball", State: session.StatePending},
-	}
-
-	model := Model{
-		mode:          listView,
-		balls:         balls,
-		filteredBalls: balls,
-		cursor:        0,
-	}
-
-	// Press enter to go to detail view
-	newModel, _ := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	m := newModel.(Model)
-
-	if m.mode != detailView {
-		t.Errorf("Expected mode to be detailView, got %v", m.mode)
-	}
-
-	if m.selectedBall == nil {
-		t.Error("Expected selectedBall to be set")
-	}
-
-	if m.selectedBall.ID != "test-1" {
-		t.Errorf("Expected selected ball ID to be 'test-1', got '%s'", m.selectedBall.ID)
-	}
-}
-
-// Test escape key behavior
-func TestEscapeKeyBehavior(t *testing.T) {
-	t.Run("escape from detail view goes to list", func(t *testing.T) {
-		model := Model{
-			mode: detailView,
-		}
-
-		newModel, _ := model.Update(tea.KeyMsg{Type: tea.KeyEsc})
-		m := newModel.(Model)
-
-		if m.mode != listView {
-			t.Errorf("Expected mode to be listView after escape, got %v", m.mode)
-		}
-	})
-
-	t.Run("escape from help view goes to list", func(t *testing.T) {
-		model := Model{
-			mode: helpView,
-		}
-
-		newModel, _ := model.Update(tea.KeyMsg{Type: tea.KeyEsc})
-		m := newModel.(Model)
-
-		if m.mode != listView {
-			t.Errorf("Expected mode to be listView after escape from help, got %v", m.mode)
-		}
-	})
-
-	t.Run("escape from confirm delete goes to list", func(t *testing.T) {
-		model := Model{
-			mode: confirmDeleteView,
-		}
-
-		newModel, _ := model.Update(tea.KeyMsg{Type: tea.KeyEsc})
-		m := newModel.(Model)
-
-		if m.mode != listView {
-			t.Errorf("Expected mode to be listView after escape from confirm, got %v", m.mode)
-		}
-	})
-}
-
-// Test help toggle
-func TestHelpToggle(t *testing.T) {
-	model := Model{
-		mode: listView,
-	}
-
-	// Toggle help on
-	newModel, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
-	m := newModel.(Model)
-
-	if m.mode != helpView {
-		t.Errorf("Expected mode to be helpView after pressing ?, got %v", m.mode)
-	}
-
-	// Toggle help off
-	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
-	m = newModel.(Model)
-
-	if m.mode != listView {
-		t.Errorf("Expected mode to be listView after pressing ? again, got %v", m.mode)
-	}
-}
-
 // Test balls loaded message handling
 func TestBallsLoadedMsg(t *testing.T) {
 	balls := []*session.Ball{
@@ -1207,7 +1030,7 @@ func TestBallsLoadedMsg(t *testing.T) {
 	}
 
 	model := Model{
-		mode: listView,
+		mode: splitView,
 		filterStates: map[string]bool{
 			"pending":     true,
 			"in_progress": true,
@@ -1264,468 +1087,6 @@ func TestWindowSizeMsg(t *testing.T) {
 
 	if m.height != 40 {
 		t.Errorf("Expected height 40, got %d", m.height)
-	}
-}
-
-// Test acceptance criteria input mode - transition from intent input
-func TestAcceptanceCriteriaInputTransition(t *testing.T) {
-	model := Model{
-		mode:        inputBallView,
-		inputAction: actionAdd,
-		activityLog: make([]ActivityEntry, 0),
-	}
-	model.textInput.SetValue("Test intent")
-
-	// Simulate entering intent
-	m := model
-	m.pendingBallIntent = "Test intent"
-	m.pendingAcceptanceCriteria = []string{}
-	m.mode = inputAcceptanceCriteriaView
-
-	if m.mode != inputAcceptanceCriteriaView {
-		t.Errorf("Expected mode to be inputAcceptanceCriteriaView, got %v", m.mode)
-	}
-
-	if m.pendingBallIntent != "Test intent" {
-		t.Errorf("Expected pendingBallIntent to be 'Test intent', got %s", m.pendingBallIntent)
-	}
-
-	if len(m.pendingAcceptanceCriteria) != 0 {
-		t.Errorf("Expected pendingAcceptanceCriteria to be empty, got %d items", len(m.pendingAcceptanceCriteria))
-	}
-}
-
-// Test acceptance criteria input - adding criteria
-func TestAcceptanceCriteriaInputAddCriteria(t *testing.T) {
-	model := Model{
-		mode:                      inputAcceptanceCriteriaView,
-		pendingBallIntent:         "Test intent",
-		pendingAcceptanceCriteria: []string{},
-		activityLog:               make([]ActivityEntry, 0),
-	}
-	model.textInput.SetValue("First AC")
-
-	// Simulate entering a non-empty criterion
-	newModel, _ := model.handleAcceptanceCriteriaKey(tea.KeyMsg{Type: tea.KeyEnter})
-	m := newModel.(Model)
-
-	if len(m.pendingAcceptanceCriteria) != 1 {
-		t.Errorf("Expected 1 acceptance criterion, got %d", len(m.pendingAcceptanceCriteria))
-	}
-
-	if m.pendingAcceptanceCriteria[0] != "First AC" {
-		t.Errorf("Expected criterion to be 'First AC', got %s", m.pendingAcceptanceCriteria[0])
-	}
-
-	// Mode should still be inputAcceptanceCriteriaView for more input
-	if m.mode != inputAcceptanceCriteriaView {
-		t.Errorf("Expected mode to remain inputAcceptanceCriteriaView, got %v", m.mode)
-	}
-
-	// Text input should be reset
-	if m.textInput.Value() != "" {
-		t.Errorf("Expected text input to be reset, got %s", m.textInput.Value())
-	}
-}
-
-// Test acceptance criteria input - adding multiple criteria
-func TestAcceptanceCriteriaInputMultipleCriteria(t *testing.T) {
-	model := Model{
-		mode:                      inputAcceptanceCriteriaView,
-		pendingBallIntent:         "Test intent",
-		pendingAcceptanceCriteria: []string{"First AC"},
-		activityLog:               make([]ActivityEntry, 0),
-	}
-	model.textInput.SetValue("Second AC")
-
-	newModel, _ := model.handleAcceptanceCriteriaKey(tea.KeyMsg{Type: tea.KeyEnter})
-	m := newModel.(Model)
-
-	if len(m.pendingAcceptanceCriteria) != 2 {
-		t.Errorf("Expected 2 acceptance criteria, got %d", len(m.pendingAcceptanceCriteria))
-	}
-
-	if m.pendingAcceptanceCriteria[1] != "Second AC" {
-		t.Errorf("Expected second criterion to be 'Second AC', got %s", m.pendingAcceptanceCriteria[1])
-	}
-}
-
-// Test acceptance criteria input - cancel with esc
-func TestAcceptanceCriteriaInputCancel(t *testing.T) {
-	model := Model{
-		mode:                      inputAcceptanceCriteriaView,
-		pendingBallIntent:         "Test intent",
-		pendingAcceptanceCriteria: []string{"First AC", "Second AC"},
-		activityLog:               make([]ActivityEntry, 0),
-	}
-
-	newModel, _ := model.handleAcceptanceCriteriaKey(tea.KeyMsg{Type: tea.KeyEsc})
-	m := newModel.(Model)
-
-	if m.mode != splitView {
-		t.Errorf("Expected mode to be splitView after cancel, got %v", m.mode)
-	}
-
-	if m.pendingBallIntent != "" {
-		t.Errorf("Expected pendingBallIntent to be cleared, got %s", m.pendingBallIntent)
-	}
-
-	if m.pendingAcceptanceCriteria != nil {
-		t.Errorf("Expected pendingAcceptanceCriteria to be nil, got %v", m.pendingAcceptanceCriteria)
-	}
-
-	if m.message != "Cancelled" {
-		t.Errorf("Expected message to be 'Cancelled', got %s", m.message)
-	}
-}
-
-// Test acceptance criteria view rendering
-func TestAcceptanceCriteriaViewRendering(t *testing.T) {
-	model := Model{
-		mode:                      inputAcceptanceCriteriaView,
-		pendingBallIntent:         "Implement feature X",
-		pendingAcceptanceCriteria: []string{"AC 1", "AC 2"},
-		activityLog:               make([]ActivityEntry, 0),
-		width:                     80,
-		height:                    24,
-	}
-
-	view := model.View()
-
-	// Check for title
-	if !strings.Contains(view, "Add Acceptance Criteria") {
-		t.Error("Expected view to contain 'Add Acceptance Criteria'")
-	}
-
-	// Check for intent display
-	if !strings.Contains(view, "Title: Implement feature X") {
-		t.Error("Expected view to contain intent")
-	}
-
-	// Check for existing criteria
-	if !strings.Contains(view, "1. AC 1") {
-		t.Error("Expected view to contain first criterion")
-	}
-
-	if !strings.Contains(view, "2. AC 2") {
-		t.Error("Expected view to contain second criterion")
-	}
-
-	// Check for instruction
-	if !strings.Contains(view, "Enter empty line to finish") {
-		t.Error("Expected view to contain finish instruction")
-	}
-}
-
-// Test submitBallInput transitions to ball form view for new balls
-func TestSubmitBallInputTransitionsToBallForm(t *testing.T) {
-	ti := textinput.New()
-	ti.CharLimit = 256
-	ti.Width = 40
-
-	model := Model{
-		mode:        inputBallView,
-		inputAction: actionAdd,
-		activityLog: make([]ActivityEntry, 0),
-		textInput:   ti,
-	}
-
-	newModel, _ := model.submitBallInput("New ball intent")
-	m := newModel.(Model)
-
-	if m.mode != inputBallFormView {
-		t.Errorf("Expected mode to be inputBallFormView, got %v", m.mode)
-	}
-
-	if m.pendingBallIntent != "New ball intent" {
-		t.Errorf("Expected pendingBallIntent to be 'New ball intent', got %s", m.pendingBallIntent)
-	}
-
-	if m.pendingBallPriority != 1 {
-		t.Errorf("Expected pendingBallPriority to be 1 (medium), got %d", m.pendingBallPriority)
-	}
-
-	if len(m.pendingAcceptanceCriteria) != 0 {
-		t.Errorf("Expected pendingAcceptanceCriteria to be empty, got %d", len(m.pendingAcceptanceCriteria))
-	}
-}
-
-// Test that ball creation defaults session to currently selected session
-func TestSubmitBallInputDefaultsToSelectedSession(t *testing.T) {
-	ti := textinput.New()
-	ti.CharLimit = 256
-	ti.Width = 40
-
-	// Create real sessions (not pseudo-sessions)
-	sessions := []*session.JuggleSession{
-		{ID: PseudoSessionAll},    // pseudo-session - should be skipped
-		{ID: "session-1"},         // real session at index 0 in real list
-		{ID: "session-2"},         // real session at index 1 in real list
-		{ID: PseudoSessionUntagged}, // pseudo-session - should be skipped
-	}
-
-	// Select session-2 as the current session
-	model := Model{
-		mode:            inputBallView,
-		inputAction:     actionAdd,
-		activityLog:     make([]ActivityEntry, 0),
-		textInput:       ti,
-		sessions:        sessions,
-		selectedSession: sessions[2], // session-2
-	}
-
-	newModel, _ := model.submitBallInput("New ball intent")
-	m := newModel.(Model)
-
-	// pendingBallSession should be 2 (1-indexed: 0=none, 1=session-1, 2=session-2)
-	if m.pendingBallSession != 2 {
-		t.Errorf("Expected pendingBallSession to be 2 (session-2), got %d", m.pendingBallSession)
-	}
-}
-
-// Test that ball creation with no selected session defaults to none
-func TestSubmitBallInputNoSelectedSessionDefaultsToNone(t *testing.T) {
-	ti := textinput.New()
-	ti.CharLimit = 256
-	ti.Width = 40
-
-	model := Model{
-		mode:            inputBallView,
-		inputAction:     actionAdd,
-		activityLog:     make([]ActivityEntry, 0),
-		textInput:       ti,
-		sessions:        []*session.JuggleSession{{ID: "session-1"}},
-		selectedSession: nil, // No session selected
-	}
-
-	newModel, _ := model.submitBallInput("New ball intent")
-	m := newModel.(Model)
-
-	if m.pendingBallSession != 0 {
-		t.Errorf("Expected pendingBallSession to be 0 (none), got %d", m.pendingBallSession)
-	}
-}
-
-// Test that ball creation with pseudo-session selected defaults to none
-func TestSubmitBallInputPseudoSessionDefaultsToNone(t *testing.T) {
-	ti := textinput.New()
-	ti.CharLimit = 256
-	ti.Width = 40
-
-	sessions := []*session.JuggleSession{
-		{ID: PseudoSessionAll},
-		{ID: "session-1"},
-	}
-
-	model := Model{
-		mode:            inputBallView,
-		inputAction:     actionAdd,
-		activityLog:     make([]ActivityEntry, 0),
-		textInput:       ti,
-		sessions:        sessions,
-		selectedSession: sessions[0], // PseudoSessionAll
-	}
-
-	newModel, _ := model.submitBallInput("New ball intent")
-	m := newModel.(Model)
-
-	if m.pendingBallSession != 0 {
-		t.Errorf("Expected pendingBallSession to be 0 (none) for pseudo-session, got %d", m.pendingBallSession)
-	}
-}
-
-// Test ball form view navigation with arrow keys
-func TestBallFormNavigation(t *testing.T) {
-	ti := textinput.New()
-	ti.CharLimit = 256
-	ti.Width = 40
-
-	model := Model{
-		mode:                 inputBallFormView,
-		pendingBallIntent:    "Test ball",
-		pendingBallFormField: 0, // Start at priority
-		pendingBallPriority:  1, // medium
-		textInput:            ti,
-		sessions:             []*session.JuggleSession{},
-	}
-
-	// Test down navigation (now 3 fields: priority, tags, session)
-	newModel, _ := model.handleBallFormKey(tea.KeyMsg{Type: tea.KeyDown})
-	m := newModel.(Model)
-	if m.pendingBallFormField != 1 {
-		t.Errorf("Expected field to be 1 after down, got %d", m.pendingBallFormField)
-	}
-
-	// Test up navigation
-	newModel, _ = m.handleBallFormKey(tea.KeyMsg{Type: tea.KeyUp})
-	m = newModel.(Model)
-	if m.pendingBallFormField != 0 {
-		t.Errorf("Expected field to be 0 after up, got %d", m.pendingBallFormField)
-	}
-
-	// Test wrap around down
-	m.pendingBallFormField = 2 // session field (last, now index 2)
-	newModel, _ = m.handleBallFormKey(tea.KeyMsg{Type: tea.KeyDown})
-	m = newModel.(Model)
-	if m.pendingBallFormField != 0 {
-		t.Errorf("Expected field to wrap to 0, got %d", m.pendingBallFormField)
-	}
-
-	// Test wrap around up
-	m.pendingBallFormField = 0
-	newModel, _ = m.handleBallFormKey(tea.KeyMsg{Type: tea.KeyUp})
-	m = newModel.(Model)
-	if m.pendingBallFormField != 2 {
-		t.Errorf("Expected field to wrap to 2, got %d", m.pendingBallFormField)
-	}
-}
-
-// Test ball form priority selection
-func TestBallFormPrioritySelection(t *testing.T) {
-	ti := textinput.New()
-	ti.CharLimit = 256
-	ti.Width = 40
-
-	model := Model{
-		mode:                 inputBallFormView,
-		pendingBallFormField: 0, // priority field
-		pendingBallPriority:  1, // medium
-		textInput:            ti,
-		sessions:             []*session.JuggleSession{},
-	}
-
-	// Test right to cycle to high
-	newModel, _ := model.handleBallFormKey(tea.KeyMsg{Type: tea.KeyRight})
-	m := newModel.(Model)
-	if m.pendingBallPriority != 2 {
-		t.Errorf("Expected priority to be 2 (high) after right, got %d", m.pendingBallPriority)
-	}
-
-	// Test left to cycle back to medium
-	newModel, _ = m.handleBallFormKey(tea.KeyMsg{Type: tea.KeyLeft})
-	m = newModel.(Model)
-	if m.pendingBallPriority != 1 {
-		t.Errorf("Expected priority to be 1 (medium) after left, got %d", m.pendingBallPriority)
-	}
-
-	// Test wrap around right
-	m.pendingBallPriority = 3 // urgent
-	newModel, _ = m.handleBallFormKey(tea.KeyMsg{Type: tea.KeyRight})
-	m = newModel.(Model)
-	if m.pendingBallPriority != 0 {
-		t.Errorf("Expected priority to wrap to 0 (low), got %d", m.pendingBallPriority)
-	}
-
-	// Test wrap around left
-	m.pendingBallPriority = 0 // low
-	newModel, _ = m.handleBallFormKey(tea.KeyMsg{Type: tea.KeyLeft})
-	m = newModel.(Model)
-	if m.pendingBallPriority != 3 {
-		t.Errorf("Expected priority to wrap to 3 (urgent), got %d", m.pendingBallPriority)
-	}
-}
-
-// Test ball form enter transitions to AC input
-func TestBallFormEnterTransitionsToACInput(t *testing.T) {
-	ti := textinput.New()
-	ti.CharLimit = 256
-	ti.Width = 40
-
-	model := Model{
-		mode:                 inputBallFormView,
-		pendingBallIntent:    "Test ball",
-		pendingBallFormField: 0,
-		pendingBallPriority:  2, // high
-		pendingBallTags:      "tag1, tag2",
-		pendingBallSession:   0,
-		textInput:            ti,
-		activityLog:          make([]ActivityEntry, 0),
-		sessions:             []*session.JuggleSession{},
-	}
-
-	newModel, _ := model.handleBallFormKey(tea.KeyMsg{Type: tea.KeyEnter})
-	m := newModel.(Model)
-
-	if m.mode != inputAcceptanceCriteriaView {
-		t.Errorf("Expected mode to be inputAcceptanceCriteriaView after enter, got %v", m.mode)
-	}
-}
-
-// Test ball form escape cancels
-func TestBallFormEscapeCancels(t *testing.T) {
-	ti := textinput.New()
-	ti.CharLimit = 256
-	ti.Width = 40
-
-	model := Model{
-		mode:                 inputBallFormView,
-		pendingBallIntent:    "Test ball",
-		pendingBallFormField: 0,
-		pendingBallPriority:  2,
-		pendingBallTags:      "tag1",
-		textInput:            ti,
-		activityLog:          make([]ActivityEntry, 0),
-		sessions:             []*session.JuggleSession{},
-	}
-
-	newModel, _ := model.handleBallFormKey(tea.KeyMsg{Type: tea.KeyEscape})
-	m := newModel.(Model)
-
-	if m.mode != splitView {
-		t.Errorf("Expected mode to be splitView after escape, got %v", m.mode)
-	}
-
-	if m.pendingBallIntent != "" {
-		t.Errorf("Expected pendingBallIntent to be cleared, got %s", m.pendingBallIntent)
-	}
-
-	if m.pendingBallTags != "" {
-		t.Errorf("Expected pendingBallTags to be cleared, got %s", m.pendingBallTags)
-	}
-}
-
-// Test ball form view renders correctly (state removed - always pending)
-func TestBallFormViewRenders(t *testing.T) {
-	ti := textinput.New()
-	ti.CharLimit = 256
-	ti.Width = 40
-
-	model := Model{
-		mode:                 inputBallFormView,
-		pendingBallIntent:    "Test ball intent",
-		pendingBallFormField: 0,
-		pendingBallPriority:  1, // medium
-		pendingBallTags:      "",
-		pendingBallSession:   0,
-		textInput:            ti,
-		sessions: []*session.JuggleSession{
-			{ID: "test-session"},
-		},
-	}
-
-	view := model.renderBallFormView()
-
-	// Check title
-	if !strings.Contains(view, "Create New Ball") {
-		t.Error("Expected view to contain 'Create New Ball' title")
-	}
-
-	// Check intent is shown
-	if !strings.Contains(view, "Test ball intent") {
-		t.Error("Expected view to contain the ball intent")
-	}
-
-	// Check priority options are shown
-	if !strings.Contains(view, "low") || !strings.Contains(view, "medium") ||
-		!strings.Contains(view, "high") || !strings.Contains(view, "urgent") {
-		t.Error("Expected view to contain priority options")
-	}
-
-	// State field removed - balls always start in pending state
-
-	// Check help text
-	if !strings.Contains(view, "Enter = continue to ACs") {
-		t.Error("Expected view to contain help text")
 	}
 }
 
@@ -5145,26 +4506,6 @@ func TestActivityLogScrollingInActivityMode(t *testing.T) {
 
 // TestTUILocalScopeDefault verifies that TUI defaults to local scope (juggle-102)
 func TestTUILocalScopeDefault(t *testing.T) {
-	t.Run("InitialModel defaults to local when passed true", func(t *testing.T) {
-		var store *session.Store
-		var config *session.Config
-
-		model := InitialModel(store, config, true)
-		if !model.localOnly {
-			t.Error("Expected InitialModel with localOnly=true to have localOnly=true")
-		}
-	})
-
-	t.Run("InitialModel shows all when passed false", func(t *testing.T) {
-		var store *session.Store
-		var config *session.Config
-
-		model := InitialModel(store, config, false)
-		if model.localOnly {
-			t.Error("Expected InitialModel with localOnly=false to have localOnly=false")
-		}
-	})
-
 	t.Run("InitialSplitModel defaults to local when passed true", func(t *testing.T) {
 		var store *session.Store
 		var sessionStore *session.SessionStore
@@ -9615,48 +8956,6 @@ func TestCopyBallID_SplitView_WrongPanel(t *testing.T) {
 	// Should not set any message since we're not in the balls panel
 	if m.message != "" {
 		t.Errorf("Expected no message in SessionsPanel, got '%s'", m.message)
-	}
-}
-
-// TestCopyBallID_ListView tests that 'y' key triggers copy in list view
-func TestCopyBallID_ListView(t *testing.T) {
-	balls := []*session.Ball{
-		{ID: "test-ball-456", Title: "Test Ball", State: session.StatePending, WorkingDir: "/tmp/listproject"},
-	}
-
-	model := Model{
-		mode:          listView,
-		balls:         balls,
-		filteredBalls: balls,
-		cursor:        0,
-	}
-
-	// Press 'y' to copy ball ID
-	newModel, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
-	m := newModel.(Model)
-
-	// The message should either be "Copied: listproject:test-ball-456" or "Clipboard unavailable: ..."
-	if !strings.HasPrefix(m.message, "Copied: listproject:test-ball-456") && !strings.HasPrefix(m.message, "Clipboard unavailable:") {
-		t.Errorf("Expected copy result message with project:ballID format, got '%s'", m.message)
-	}
-}
-
-// TestCopyBallID_DetailView tests that 'y' key triggers copy in detail view
-func TestCopyBallID_DetailView(t *testing.T) {
-	ball := &session.Ball{ID: "test-ball-789", Title: "Test Ball", State: session.StatePending, WorkingDir: "/tmp/detailproject"}
-
-	model := Model{
-		mode:         detailView,
-		selectedBall: ball,
-	}
-
-	// Press 'y' to copy ball ID
-	newModel, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
-	m := newModel.(Model)
-
-	// The message should either be "Copied: detailproject:test-ball-789" or "Clipboard unavailable: ..."
-	if !strings.HasPrefix(m.message, "Copied: detailproject:test-ball-789") && !strings.HasPrefix(m.message, "Clipboard unavailable:") {
-		t.Errorf("Expected copy result message with project:ballID format, got '%s'", m.message)
 	}
 }
 

@@ -902,32 +902,6 @@ func (m *Model) handleCyclePriority() (tea.Model, tea.Cmd) {
 	return m, updateBall(store, ball)
 }
 
-func (m *Model) handleConfirmDelete() (tea.Model, tea.Cmd) {
-	ball := m.filteredBalls[m.cursor]
-
-	// Get store for this ball's working directory
-	store, err := session.NewStore(ball.WorkingDir)
-	if err != nil {
-		m.mode = listView
-		m.message = "Error: " + err.Error()
-		return m, nil
-	}
-
-	// Delete the ball
-	err = store.DeleteBall(ball.ID)
-	if err != nil {
-		m.mode = listView
-		m.message = "Error deleting ball: " + err.Error()
-		return m, nil
-	}
-
-	m.mode = listView
-	m.message = "Deleted ball: " + ball.ID
-
-	// Reload balls
-	return m, loadBalls(m.store, m.config, m.localOnly)
-}
-
 // handleSplitAddItem handles adding a new item based on active panel
 func (m Model) handleSplitAddItem() (tea.Model, tea.Cmd) {
 	m.inputAction = actionAdd
@@ -1202,35 +1176,6 @@ func (m Model) handleCopyBallID() (tea.Model, tea.Cmd) {
 
 	m.message = "Copied: " + copyText
 	m.addActivity("Copied ball ID to clipboard: " + copyText)
-	return m, nil
-}
-
-// handleCopyBallIDSimple copies the current ball's ID to clipboard (simple list/detail views)
-// Format: "projectName:ballID" (e.g., "myproject:myproject-abc123")
-func (m Model) handleCopyBallIDSimple() (tea.Model, tea.Cmd) {
-	var ball *session.Ball
-
-	// In detail view, use the selected ball
-	if m.mode == detailView && m.selectedBall != nil {
-		ball = m.selectedBall
-	} else if m.mode == listView && len(m.filteredBalls) > 0 && m.cursor < len(m.filteredBalls) {
-		// In list view, use the ball at cursor
-		ball = m.filteredBalls[m.cursor]
-	} else {
-		m.message = "No ball selected"
-		return m, nil
-	}
-
-	// Format: "projectName:ballID"
-	copyText := ball.FolderName() + ":" + ball.ID
-
-	// Copy to clipboard
-	if err := copyToClipboard(copyText); err != nil {
-		m.message = "Clipboard unavailable: " + err.Error()
-		return m, nil
-	}
-
-	m.message = "Copied: " + copyText
 	return m, nil
 }
 

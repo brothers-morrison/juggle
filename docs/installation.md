@@ -94,14 +94,19 @@ juggle projects add ~/personal-projects
 
 Juggle will search these directories for any project containing a `.juggle` folder.
 
-### 3. Start Your First Session
+### 3. Initialize Your First Project
 
 ```bash
 cd your-project
-juggle start "My first work session"
+
+# Create a session to group related work
+juggle sessions create my-feature -m "My first feature"
+
+# Create your first task (ball)
+juggle plan --session my-feature --title "First task"
 ```
 
-This creates `.juggle/balls.jsonl` in your project directory.
+This creates the `.juggle/` directory in your project with your session and ball.
 
 ## Claude Code Integration (Optional)
 
@@ -208,7 +213,7 @@ Download the latest release and replace the binary.
 
 ## Configuration
 
-Juggle stores configuration in `~/.config/juggle/config.json`:
+Juggle stores configuration in `~/.juggle/config.json`:
 
 ```json
 {
@@ -235,7 +240,7 @@ rm ~/.local/bin/juggle
 sudo rm /usr/local/bin/juggle
 
 # Remove configuration
-rm -rf ~/.config/juggle
+rm -rf ~/.juggle
 
 # Remove project data (optional - only if you want to delete all tracked sessions)
 find ~/Development -name ".juggle" -type d -exec rm -rf {} +
@@ -263,11 +268,11 @@ Add search paths:
 juggle projects add ~/Development
 ```
 
-Or start a session in a specific directory to create `.juggle`:
+Or initialize a session in a specific directory to create `.juggle`:
 
 ```bash
 cd your-project
-juggle start "Initial session"
+juggle sessions create my-feature -m "Initial feature"
 ```
 
 ### Zellij integration not working
@@ -309,4 +314,4 @@ mv juggle ~/.local/bin/
 
 - Read the [Claude Integration Guide](./claude-integration.md) for AI-assisted workflows
 - Explore commands with `juggle --help`
-- Set up your first project: `juggle start "Description of your work"`
+- Set up your first project: `juggle sessions create my-feature -m "Description"`

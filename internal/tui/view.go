@@ -14,22 +14,12 @@ func (m Model) View() string {
 	}
 
 	switch m.mode {
-	case listView:
-		return m.renderListView()
-	case detailView:
-		return m.renderDetailView()
-	case helpView:
-		return m.renderHelpView()
-	case confirmDeleteView:
-		return m.renderConfirmDeleteView()
 	case splitView:
 		return m.renderSplitView()
 	case splitHelpView:
 		return m.renderSplitHelpView()
-	case inputSessionView, inputBallView, inputBlockedView, inputAcceptanceCriteriaView:
+	case inputSessionView, inputBallView, inputBlockedView:
 		return m.renderInputView()
-	case inputBallFormView:
-		return m.renderBallFormView()
 	case unifiedBallFormView:
 		return m.renderUnifiedBallFormView()
 	case inputTagView:
@@ -53,127 +43,6 @@ func (m Model) View() string {
 	}
 }
 
-func (m Model) renderListView() string {
-	var b strings.Builder
-
-	// Title
-	title := titleStyle.Render("🎯 Juggle - Task Manager")
-	b.WriteString(title + "\n\n")
-
-	// Stats with active filters
-	var activeFilters []string
-	for state, visible := range m.filterStates {
-		if visible {
-			activeFilters = append(activeFilters, state)
-		}
-	}
-	filterStr := strings.Join(activeFilters, ", ")
-	if len(activeFilters) == 4 {
-		filterStr = "all"
-	}
-
-	stats := fmt.Sprintf("Total: %d | Pending: %d | In Progress: %d | Blocked: %d | Complete: %d | Filter: %s",
-		len(m.balls),
-		countByState(m.balls, "pending"),
-		countByState(m.balls, "in_progress"),
-		countByState(m.balls, "blocked"),
-		countByState(m.balls, "complete"),
-		filterStr,
-	)
-	b.WriteString(stats + "\n\n")
-
-	// Ball list
-	if len(m.filteredBalls) == 0 {
-		b.WriteString("No balls to display\n")
-	} else {
-		b.WriteString(renderBallList(m.filteredBalls, m.cursor, m.width))
-	}
-
-	// Footer with keybindings
-	b.WriteString("\n")
-	b.WriteString(helpStyle.Render("Navigation: ↑/k up • ↓/j down • enter details • esc exit\n"))
-	b.WriteString(helpStyle.Render("State (s+key): sc complete • ss start • sb block • sp pending • sh hold • sa archive\n"))
-	b.WriteString(helpStyle.Render("Filter (t+key): tc complete • tb blocked • ti in_progress • tp pending • th hold • ta all\n"))
-	b.WriteString(helpStyle.Render("Other: a add • e edit • d delete • o sort • R refresh • ? help • q quit\n"))
-
-	// Message
-	if m.message != "" {
-		b.WriteString("\n" + messageStyle.Render(m.message))
-	}
-
-	return b.String()
-}
-
-func (m Model) renderDetailView() string {
-	if m.selectedBall == nil {
-		return "No ball selected"
-	}
-	return renderBallDetail(m.selectedBall)
-}
-
-func (m Model) renderHelpView() string {
-	var b strings.Builder
-
-	title := titleStyle.Render("🎯 Juggle TUI - Help")
-	b.WriteString(title + "\n\n")
-
-	b.WriteString(helpSection("Navigation", []helpItem{
-		{"↑ / k", "Move up"},
-		{"↓ / j", "Move down"},
-		{"Enter", "View ball details"},
-		{"b", "Back to list"},
-		{"Esc", "Back to list (or exit from list view)"},
-	}))
-
-	b.WriteString(helpSection("State Changes (s + key)", []helpItem{
-		{"sc", "Complete ball (→ complete, archives)"},
-		{"ss", "Start ball (→ in_progress)"},
-		{"sb", "Block ball (prompts for reason)"},
-		{"sp", "Set to pending"},
-		{"sa", "Archive completed ball"},
-	}))
-
-	b.WriteString(helpSection("Toggle Filters (t + key)", []helpItem{
-		{"tc", "Toggle complete balls visibility"},
-		{"tb", "Toggle blocked balls visibility"},
-		{"ti", "Toggle in_progress balls visibility"},
-		{"tp", "Toggle pending balls visibility"},
-		{"ta", "Show all states"},
-	}))
-
-	b.WriteString(helpSection("Other", []helpItem{
-		{"a", "Add new ball"},
-		{"e", "Edit ball"},
-		{"d", "Delete ball (with confirmation)"},
-		{"o", "Cycle sort order"},
-		{"R", "Refresh/reload balls"},
-		{"?", "Toggle this help"},
-		{"q / Ctrl+C", "Quit"},
-	}))
-
-	b.WriteString("\n" + helpStyle.Render("Press 'b' or '?' to go back"))
-
-	return b.String()
-}
-
-type helpItem struct {
-	key   string
-	desc  string
-}
-
-func helpSection(title string, items []helpItem) string {
-	var b strings.Builder
-
-	b.WriteString(titleStyle.Render(title) + "\n")
-	for _, item := range items {
-		keyStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))
-		b.WriteString(fmt.Sprintf("  %s  %s\n", keyStyle.Render(item.key), item.desc))
-	}
-	b.WriteString("\n")
-
-	return b.String()
-}
-
 // renderInputView renders the text input dialog
 func (m Model) renderInputView() string {
 	var b strings.Builder
@@ -195,8 +64,6 @@ func (m Model) renderInputView() string {
 		}
 	case inputBlockedView:
 		title = "Block Ball"
-	case inputAcceptanceCriteriaView:
-		title = "Add Acceptance Criteria"
 	}
 
 	titleStyled := lipgloss.NewStyle().
@@ -223,15 +90,6 @@ func (m Model) renderInputView() string {
 			b.WriteString(fmt.Sprintf("Ball: %s\n", m.editingBall.ID))
 			b.WriteString(fmt.Sprintf("Title: %s\n\n", m.editingBall.Title))
 		}
-	case inputAcceptanceCriteriaView:
-		b.WriteString(fmt.Sprintf("Title: %s\n", m.pendingBallIntent))
-		if len(m.pendingAcceptanceCriteria) > 0 {
-			b.WriteString("\nCriteria entered:\n")
-			for i, ac := range m.pendingAcceptanceCriteria {
-				b.WriteString(fmt.Sprintf("  %d. %s\n", i+1, ac))
-			}
-		}
-		b.WriteString("\n(Enter empty line to finish)\n\n")
 	}
 
 	// Show input field
@@ -638,6 +496,26 @@ func (m Model) renderTagView() string {
 	return b.String()
 }
 
+// helpItem represents a key-description pair for help views
+type helpItem struct {
+	key  string
+	desc string
+}
+
+// helpSection formats a section of help items with a title
+func helpSection(title string, items []helpItem) string {
+	var b strings.Builder
+
+	b.WriteString(titleStyle.Render(title) + "\n")
+	for _, item := range items {
+		keyStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))
+		b.WriteString(fmt.Sprintf("  %s  %s\n", keyStyle.Render(item.key), item.desc))
+	}
+	b.WriteString("\n")
+
+	return b.String()
+}
+
 // renderSplitHelpView renders the comprehensive help view for split mode
 func (m Model) renderSplitHelpView() string {
 	var b strings.Builder
@@ -836,104 +714,6 @@ func (m Model) renderSplitHelpView() string {
 	b.WriteString("\n")
 	footerStyle := lipgloss.NewStyle().Faint(true)
 	b.WriteString(footerStyle.Render("j/k = scroll | ? or Esc = close help"))
-
-	return b.String()
-}
-
-// renderBallFormView renders the multi-field ball creation form
-func (m Model) renderBallFormView() string {
-	var b strings.Builder
-
-	titleStyled := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("6")).
-		Render("Create New Ball")
-	b.WriteString(titleStyled + "\n\n")
-
-	// Show the intent that was entered
-	b.WriteString(fmt.Sprintf("Title: %s\n\n", m.pendingBallIntent))
-
-	// Priority options
-	priorities := []string{"low", "medium", "high", "urgent"}
-
-	// Build sessions list for display
-	sessionOptions := []string{"(none)"}
-	for _, sess := range m.sessions {
-		if sess.ID != PseudoSessionAll && sess.ID != PseudoSessionUntagged {
-			sessionOptions = append(sessionOptions, sess.ID)
-		}
-	}
-
-	// Field labels and values (state removed - always pending)
-	fields := []struct {
-		label    string
-		options  []string
-		selected int
-		isText   bool
-		textVal  string
-	}{
-		{"Priority", priorities, m.pendingBallPriority, false, ""},
-		{"Tags", nil, 0, true, m.pendingBallTags},
-		{"Session", sessionOptions, m.pendingBallSession, false, ""},
-	}
-
-	selectedStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))
-	normalStyle := lipgloss.NewStyle()
-	activeFieldStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("2"))
-	optionSelectedStyle := lipgloss.NewStyle().Bold(true).Background(lipgloss.Color("6")).Foreground(lipgloss.Color("0"))
-	optionNormalStyle := lipgloss.NewStyle().Faint(true)
-
-	for i, field := range fields {
-		// Field label - highlight if active
-		labelStyle := normalStyle
-		if i == m.pendingBallFormField {
-			labelStyle = activeFieldStyle
-		}
-		b.WriteString(labelStyle.Render(fmt.Sprintf("%s: ", field.label)))
-
-		if field.isText {
-			// Text field - show text input when active
-			if i == m.pendingBallFormField {
-				b.WriteString(m.textInput.View())
-			} else {
-				if field.textVal == "" {
-					b.WriteString(optionNormalStyle.Render("(empty)"))
-				} else {
-					b.WriteString(field.textVal)
-				}
-			}
-		} else {
-			// Selection field - show all options with selected one highlighted
-			for j, opt := range field.options {
-				if j > 0 {
-					b.WriteString(" | ")
-				}
-				if j == field.selected {
-					if i == m.pendingBallFormField {
-						b.WriteString(optionSelectedStyle.Render(opt))
-					} else {
-						b.WriteString(selectedStyle.Render(opt))
-					}
-				} else {
-					b.WriteString(optionNormalStyle.Render(opt))
-				}
-			}
-		}
-		b.WriteString("\n")
-	}
-
-	b.WriteString("\n")
-
-	// Show message if any
-	if m.message != "" {
-		b.WriteString(messageStyle.Render(m.message) + "\n\n")
-	}
-
-	// Help
-	help := lipgloss.NewStyle().
-		Faint(true).
-		Render("←/→ or Tab = cycle options | ↑/↓ or j/k = change field | Enter = continue to ACs | Esc = cancel")
-	b.WriteString(help)
 
 	return b.String()
 }

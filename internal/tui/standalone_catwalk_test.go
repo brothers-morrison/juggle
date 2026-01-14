@@ -857,84 +857,6 @@ func TestAgentOutputPanelExpanded(t *testing.T) {
 	catwalk.RunModel(t, "testdata/agent_output_panel_expanded", model)
 }
 
-// TestConfirmDeleteListView tests the delete confirmation dialog in list view.
-func TestConfirmDeleteListView(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "juggle-tui-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	t.Cleanup(func() { os.RemoveAll(tmpDir) })
-
-	store, err := session.NewStore(tmpDir)
-	if err != nil {
-		t.Fatalf("failed to create store: %v", err)
-	}
-
-	// Create balls
-	balls := []*session.Ball{
-		{ID: "juggle-1", Title: "Important task", State: session.StatePending, Priority: session.PriorityHigh},
-		{ID: "juggle-2", Title: "Another task", State: session.StateInProgress, Priority: session.PriorityMedium},
-	}
-	for _, ball := range balls {
-		if err := store.AppendBall(ball); err != nil {
-			t.Fatalf("failed to append ball: %v", err)
-		}
-	}
-
-	sessionStore, err := session.NewSessionStore(tmpDir)
-	if err != nil {
-		t.Fatalf("failed to create session store: %v", err)
-	}
-
-	config := &session.Config{
-		SearchPaths: []string{tmpDir},
-	}
-
-	ti := textinput.New()
-	ti.CharLimit = 256
-	ti.Width = 60
-
-	ta := textarea.New()
-	ta.CharLimit = 2000
-	ta.SetWidth(60)
-	ta.SetHeight(1)
-
-	model := Model{
-		store:         store,
-		sessionStore:  sessionStore,
-		config:        config,
-		localOnly:     true,
-		balls:         balls,
-		filteredBalls: balls,
-		sessions:      make([]*session.JuggleSession, 0),
-		activePanel:   BallsPanel,
-		mode:          confirmDeleteView,
-		cursor:        0,
-		filterStates: map[string]bool{
-			"pending":     true,
-			"in_progress": true,
-			"blocked":     true,
-			"complete":    false,
-		},
-		textInput:           ti,
-		contextInput:        ta,
-		width:               80,
-		height:              24,
-		showPriorityColumn:  true,
-		showTagsColumn:      true,
-		agentStatus:         AgentStatus{},
-		pendingKeySequence:  "",
-		activityLog:         make([]ActivityEntry, 0),
-	}
-
-	fixedTime := time.Date(2025, 1, 13, 16, 41, 11, 0, time.UTC)
-	model.nowFunc = func() time.Time {
-		return fixedTime
-	}
-
-	catwalk.RunModel(t, "testdata/confirm_delete_list_view", model)
-}
-
 // TestConfirmDeleteSplitView tests the delete confirmation dialog in split view.
 func TestConfirmDeleteSplitView(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "juggle-tui-test-*")
@@ -986,7 +908,7 @@ func TestConfirmDeleteSplitView(t *testing.T) {
 		filteredBalls: balls,
 		sessions:      make([]*session.JuggleSession, 0),
 		activePanel:   BallsPanel,
-		mode:          confirmDeleteView,
+		mode:          confirmSplitDelete,
 		cursor:        0,
 		filterStates: map[string]bool{
 			"pending":     true,
@@ -1025,13 +947,6 @@ func TestConfirmAgentCancelDialog(t *testing.T) {
 	}
 
 	catwalk.RunModel(t, "testdata/confirm_agent_cancel", model)
-}
-
-// TestHelpViewLegacy tests the legacy help view rendering.
-func TestHelpViewLegacy(t *testing.T) {
-	model := createTestSplitViewModel(t)
-	model.mode = helpView
-	catwalk.RunModel(t, "testdata/help_view_legacy", model)
 }
 
 // TestHelpViewSplitComprehensive tests the comprehensive split help view.
@@ -1287,45 +1202,6 @@ func TestPanelSearchViewWithQuery(t *testing.T) {
 	catwalk.RunModel(t, "testdata/panel_search_with_query", model)
 }
 
-// TestInputAcceptanceCriteriaViewEmpty tests the acceptance criteria input dialog when empty.
-func TestInputAcceptanceCriteriaViewEmpty(t *testing.T) {
-	model := createTestSplitViewModel(t)
-	model.mode = inputAcceptanceCriteriaView
-	model.pendingBallIntent = "Implement user authentication"
-	model.pendingAcceptanceCriteria = []string{}
-	model.textInput.SetValue("")
-	model.textInput.Focus()
-	catwalk.RunModel(t, "testdata/input_ac_empty", model)
-}
-
-// TestInputAcceptanceCriteriaViewWithEntries tests the AC input with existing entries.
-func TestInputAcceptanceCriteriaViewWithEntries(t *testing.T) {
-	model := createTestSplitViewModel(t)
-	model.mode = inputAcceptanceCriteriaView
-	model.pendingBallIntent = "Implement user authentication"
-	model.pendingAcceptanceCriteria = []string{
-		"User can login with email and password",
-		"Password reset flow works correctly",
-		"Session tokens expire after 24 hours",
-	}
-	model.textInput.SetValue("")
-	model.textInput.Focus()
-	catwalk.RunModel(t, "testdata/input_ac_with_entries", model)
-}
-
-// TestInputAcceptanceCriteriaViewTyping tests the AC input while typing a new criterion.
-func TestInputAcceptanceCriteriaViewTyping(t *testing.T) {
-	model := createTestSplitViewModel(t)
-	model.mode = inputAcceptanceCriteriaView
-	model.pendingBallIntent = "Implement user authentication"
-	model.pendingAcceptanceCriteria = []string{
-		"User can login with email and password",
-	}
-	model.textInput.SetValue("OAuth integration supports Google")
-	model.textInput.Focus()
-	catwalk.RunModel(t, "testdata/input_ac_typing", model)
-}
-
 // TestInputTagViewEmpty tests the tag input dialog with no existing tags.
 func TestInputTagViewEmpty(t *testing.T) {
 	model := createTestSplitViewModel(t)
@@ -1573,18 +1449,6 @@ func TestHistoryOutputViewScrolling(t *testing.T) {
 	model.historyOutput = strings.Join(lines, "\n")
 	model.historyOutputOffset = 10 // Scroll to middle of content
 	catwalk.RunModel(t, "testdata/history_output_view_scrolling", model)
-}
-
-// TestBallFormPriorityCycling tests priority field cycling with left/right arrow keys in the legacy ball form.
-func TestBallFormPriorityCycling(t *testing.T) {
-	model := createTestSplitViewModel(t)
-	model.mode = inputBallFormView
-	model.pendingBallIntent = "Test task for priority cycling"
-	model.pendingBallFormField = 0 // priority field
-	model.pendingBallPriority = 1  // medium
-	model.pendingBallSession = 0   // none
-	model.pendingBallTags = ""
-	catwalk.RunModel(t, "testdata/ball_form_priority_cycling", model)
 }
 
 // TestBallFormModelSizeCycling tests model size field cycling with left/right arrow keys.

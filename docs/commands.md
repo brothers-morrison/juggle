@@ -119,29 +119,48 @@ Each ball has:
 ## TUI Keyboard Shortcuts
 
 ### Navigation
+- `Tab` / `l` - Next panel (Sessions → Balls → Activity)
+- `Shift+Tab` / `h` - Previous panel
 - `j/k` or `↓/↑` - Move up/down
-- `Enter` - View/edit ball
-- `Esc` - Back/cancel
+- `Enter` - Select item / Edit ball
+- `Space` - Go back (in Balls panel)
+- `Esc` - Back/deselect/close
 - `?` - Help
 
-### Ball State (two-key sequences)
-- `sc` - Mark complete
+### Ball State (two-key sequences with `s`)
+- `sc` - Mark complete (archives the ball)
 - `ss` - Mark in_progress (start)
-- `sb` - Mark blocked
+- `sb` - Mark blocked (prompts for reason)
 - `sp` - Mark pending
-- `sa` - Archive (complete + hide)
+- `sa` - Archive completed ball
 
-### Filters (two-key sequences)
+### Filters (two-key sequences with `t`)
 - `tc` - Toggle complete visibility
-- `tb` - Toggle blocked
-- `ti` - Toggle in_progress
-- `tp` - Toggle pending
-- `ta` - Show all
+- `tb` - Toggle blocked visibility
+- `ti` - Toggle in_progress visibility
+- `tp` - Toggle pending visibility
+- `ta` - Show all states
 
-### Agent Output
-- `O` - Toggle output panel
-- `X` - Cancel running agent
-- `H` - View agent history
+### Ball Management
+- `a` - Add new ball (tagged to current session)
+- `A` - Add followup ball (depends on selected ball)
+- `e` - Edit ball in $EDITOR (YAML format)
+- `d` - Delete ball (with confirmation)
+- `[ / ]` - Switch session (previous / next)
+- `o` - Toggle sort order
+- `/` - Filter balls
+- `Ctrl+U` - Clear filter
+
+### View Options
+- `i` - Cycle bottom pane (activity → detail → split)
+- `O` - Toggle agent output panel
+- `P` - Toggle project scope (local ↔ all projects)
+- `R` - Refresh/reload data
+
+### Agent Control
+- `X` - Cancel running agent (with confirmation)
+- `O` - Toggle agent output visibility
+- `H` - View agent run history
 
 ## Export
 
