@@ -1201,6 +1201,11 @@ func runConfigProviderSet(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid provider: %s (must be 'claude' or 'opencode')", args[0])
 	}
 
+	// Check if CLI is available in PATH
+	if _, err := exec.LookPath(provider); err != nil {
+		fmt.Printf("Warning: %s not found in PATH. Install it before running agents.\n", provider)
+	}
+
 	if configProviderProjectFlag {
 		cwd, err := GetWorkingDir()
 		if err != nil {

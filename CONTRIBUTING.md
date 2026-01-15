@@ -75,6 +75,8 @@ Juggle uses [devbox](https://www.jetify.com/devbox) to manage development depend
 
 5. **Submit the PR** against the `main` branch
 
+   A PR template will be automatically populated - fill in the requested information. You can refer to [.github/pull_request_template.md](.github/pull_request_template.md) for details on what's expected.
+
 ### What Happens After Submission
 
 - GitHub Actions automatically runs tests on Linux, Windows, and macOS

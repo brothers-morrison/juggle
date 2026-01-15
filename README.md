@@ -59,7 +59,15 @@ brew tap ohare93/tap && brew install juggle
 
 ### Linux
 
-**Install script:**
+**Download and inspect (recommended):**
+
+```bash
+curl -O https://raw.githubusercontent.com/ohare93/juggle/main/install.sh
+less install.sh
+chmod +x install.sh && ./install.sh
+```
+
+**Or if you trust the source:**
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/ohare93/juggle/main/install.sh | bash
