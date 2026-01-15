@@ -35,9 +35,11 @@ Editor mode:
 Non-interactive mode (for headless agents):
   juggle plan "Task intent" --non-interactive              # Uses defaults
   juggle plan "Task" -p high -c "AC1" --non-interactive    # With options
+  juggle plan "Task" --context "Background info" --non-interactive
 
 In non-interactive mode:
   - Intent is required (via args or --intent flag)
+  - Context provides background info for agents (highly recommended)
   - Priority defaults to 'medium' if not specified
   - State is always 'pending' (new balls start in pending state)
   - Tags, session, and acceptance criteria default to empty if not specified
@@ -49,14 +51,15 @@ Planned balls can be started later with: juggle <ball-id>`,
 var acceptanceCriteriaFlag []string
 var criteriaAliasFlag []string // Alias for --ac
 var dependsOnFlag []string
+var contextFlag string
 var nonInteractiveFlag bool
 var editFlag bool
 
 func init() {
 	planCmd.Flags().StringVarP(&intentFlag, "intent", "i", "", "What are you planning to work on?")
+	planCmd.Flags().StringVar(&contextFlag, "context", "", "Background context for the task (important for agents)")
 	planCmd.Flags().StringArrayVarP(&acceptanceCriteriaFlag, "ac", "c", []string{}, "Acceptance criteria (can be specified multiple times)")
 	planCmd.Flags().StringArrayVar(&criteriaAliasFlag, "criteria", []string{}, "Alias for --ac (acceptance criteria)")
-	planCmd.Flags().StringVarP(&descriptionFlag, "description", "d", "", "DEPRECATED: Use -c/--ac instead. Sets first acceptance criterion.")
 	planCmd.Flags().StringVarP(&priorityFlag, "priority", "p", "", "Priority: low, medium, high, urgent (default: medium)")
 	planCmd.Flags().StringSliceVarP(&tagsFlag, "tags", "t", []string{}, "Tags for categorization")
 	planCmd.Flags().StringVarP(&sessionFlag, "session", "s", "", "Session ID to link this ball to (adds session ID as tag)")
@@ -87,11 +90,6 @@ func runPlan(cmd *cobra.Command, args []string) error {
 
 	// Build acceptance criteria list from flags (merge --ac and --criteria)
 	acceptanceCriteria := append(acceptanceCriteriaFlag, criteriaAliasFlag...)
-	if descriptionFlag != "" && len(acceptanceCriteria) == 0 {
-		// Deprecated: --description flag should be replaced with --ac/-c
-		fmt.Fprintln(os.Stderr, "Warning: --description/-d is deprecated for 'plan'. Use -c/--ac for acceptance criteria.")
-		acceptanceCriteria = []string{descriptionFlag}
-	}
 
 	// Determine which mode to use
 	isTTY := term.IsTerminal(int(os.Stdin.Fd()))
@@ -131,7 +129,7 @@ func runPlanTUI(store *session.Store, cwd, intent string, acceptanceCriteria []s
 	model := tui.NewStandaloneBallModel(store, sessionStore)
 
 	// Pre-populate from flags
-	model.PrePopulate(intent, "", tagsFlag, sessionFlag, priorityFlag, modelSizeFlag, acceptanceCriteria, dependsOnFlag)
+	model.PrePopulate(intent, contextFlag, tagsFlag, sessionFlag, priorityFlag, modelSizeFlag, acceptanceCriteria, dependsOnFlag)
 
 	// Run the TUI
 	p := tea.NewProgram(model, tea.WithAltScreen())
@@ -182,7 +180,7 @@ func runPlanEditor(store *session.Store, cwd, intent string, acceptanceCriteria 
 	}
 
 	// Create YAML template
-	yamlContent := createNewBallYAMLTemplate(intent, priority, tagsFlag, sessionFlag, modelSizeFlag, acceptanceCriteria)
+	yamlContent := createNewBallYAMLTemplate(intent, contextFlag, priority, tagsFlag, sessionFlag, modelSizeFlag, acceptanceCriteria)
 
 	// Run the editor-based creation
 	result, err := runEditorForNewBall(yamlContent)
@@ -266,6 +264,11 @@ func runPlanNonInteractive(store *session.Store, cwd, intent string, acceptanceC
 
 	ball.State = session.StatePending
 
+	// Set context if provided
+	if contextFlag != "" {
+		ball.Context = contextFlag
+	}
+
 	// Set acceptance criteria if provided
 	if len(acceptanceCriteria) > 0 {
 		ball.SetAcceptanceCriteria(acceptanceCriteria)
@@ -331,7 +334,7 @@ func runPlanNonInteractive(store *session.Store, cwd, intent string, acceptanceC
 }
 
 // createNewBallYAMLTemplate creates a YAML template for new ball creation
-func createNewBallYAMLTemplate(intent, priority string, tags []string, sessionID, modelSize string, acceptanceCriteria []string) string {
+func createNewBallYAMLTemplate(intent, context, priority string, tags []string, sessionID, modelSize string, acceptanceCriteria []string) string {
 	// Add session ID to tags if provided
 	allTags := tags
 	if sessionID != "" {
@@ -368,8 +371,8 @@ func createNewBallYAMLTemplate(intent, priority string, tags []string, sessionID
 # Brief title describing what this ball is about (50 chars recommended)
 title: %s
 
-# Background context for this task (optional)
-context: ""
+# Background context for this task (important for agents to understand the task)
+context: %q
 
 # Priority: low, medium, high, urgent
 priority: %s
@@ -385,7 +388,7 @@ model_size: %s
 
 # Ball IDs this ball depends on (must complete before this one)
 depends_on: []
-`, intent, priority, tagsYAML, acYAML, modelSize)
+`, intent, context, priority, tagsYAML, acYAML, modelSize)
 }
 
 // editorResult holds the result of running the editor
