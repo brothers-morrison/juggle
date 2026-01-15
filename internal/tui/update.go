@@ -411,15 +411,30 @@ func (m Model) handleSplitViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "down", "j":
 		m.message = ""
-		// Down arrow: cycle from Sessions/Balls to Activity (unless scrolling in Activity)
-		if m.activePanel != ActivityPanel && !m.agentOutputVisible {
-			m.activePanel = ActivityPanel
-			return m, nil
-		}
 		// Route to agent output panel if visible
 		if m.agentOutputVisible {
 			return m.handleAgentOutputScrollDown()
 		}
+		// Check if at bottom of current panel before switching to Activity
+		if m.activePanel == SessionsPanel {
+			sessions := m.filterSessions()
+			if m.sessionCursor < len(sessions)-1 {
+				return m.handleSplitViewNavDown()
+			}
+			// At bottom of sessions, move to Activity
+			m.activePanel = ActivityPanel
+			return m, nil
+		}
+		if m.activePanel == BallsPanel {
+			balls := m.filterBallsForSession()
+			if m.cursor < len(balls)-1 {
+				return m.handleSplitViewNavDown()
+			}
+			// At bottom of balls, move to Activity
+			m.activePanel = ActivityPanel
+			return m, nil
+		}
+		// In ActivityPanel, scroll within it
 		return m.handleSplitViewNavDown()
 
 	case "ctrl+d":
