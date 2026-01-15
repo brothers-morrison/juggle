@@ -8,7 +8,7 @@ let agents execute autonomously, manage work via TUI while they run.
 The [Ralph Loop](https://github.com/snarktank/ralph) is powerful but raw -
 a bash script watching a prd.json file. Editing tasks while the loop runs
 means fighting the agent for file writes. No priority ordering. No way to
-refine tasks without stopping everything.
+refine tasks without stopping everything or risking multiple writes.
 
 Juggle adds the missing structure:
 
@@ -18,13 +18,11 @@ Juggle adds the missing structure:
 - **Multiple modes** - headless batch, interactive hand-holding, agent-assisted
   refinement - all in separate terminals, all on the same task list
 
-## Screenshots
-
 **TUI Main View** - Sessions on the left, balls (tasks) on the right, activity log at bottom:
 
 ![TUI Main Menu](assets/tui-main-menu.png)
 
-**Ball Creation** - Define context, acceptance criteria, priority, dependencies:
+**Task Creation** - Define context, acceptance criteria, priority, dependencies:
 
 ![Create New Ball](assets/tui-create-new-ball.png)
 
@@ -32,9 +30,18 @@ Juggle adds the missing structure:
 
 ![Agent Loops Running](assets/loop-running-with-feedback.png)
 
-**Worktree Management** - Each agent works in its own isolated worktree:
+---
 
-![JJ Commit Log with Worktrees](assets/jj-commit-log-with-3-worktrees.png)
+The feedback from the Agent running in the loop is a bit raw, but it gets the job done.
+Further work will be done to improve it from this early version.
+
+The important part it that it _works_.
+
+- Craft tasks (balls) in 5 different repos and run the loop. Update and append tasks into all of the projects at once.
+- Yet for each Ralph your tasks remain isolated - and you can update and edit the tasks at the same time as the loop without issues.
+- Quick shortcuts to run loops, run refinement for your tasks, run interactive sessions for hand-holding the Agent.
+
+After you're running a loop in 4 different repos and a double loop using workspaces in your main repo... then you're truly succeeding at Agentic Development.
 
 ## Installation
 
@@ -52,7 +59,7 @@ brew tap ohare93/tap && brew install juggle
 
 ### Linux
 
-**Install script (recommended):**
+**Install script:**
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/ohare93/juggle/main/install.sh | bash
@@ -117,13 +124,17 @@ juggle update cc58e434 --ac "juggle worktree add <path> registers worktree in ma
        --ac "devbox run test passes"
 ```
 
-## Roadmap
+## Parallel Agents with Worktrees
 
-- **More agents** - Support beyond Claude Code (Cursor, Aider, etc.)
-- **TUI-integrated loop** - Run the agent loop inside TUI with live output
-- **Workspace automation** - Automatic git worktree/branch setup per session
-- **Endless mode** - Agent stays running, polling for new tasks when queue empties
-- **Notifications** - Get notified when tasks complete or need attention
+Each agent can work in its own isolated worktree/workspace.
+
+With git/jj it's simple to setup separate workspaces so that multiple agents can work without impacting each other.
+In juggle we just need to link the two repos to the same juggle project, then they can each run on separate sessions (collections of tasks)
+
+See [Worktrees (Parallel Agent Loops)](docs/installation.md#worktrees-parallel-agent-loops)
+in the installation guide for setup instructions.
+
+![JJ Commit Log with Worktrees](assets/jj-commit-log-with-3-worktrees.png)
 
 ## Built With Itself
 
@@ -157,27 +168,13 @@ Jan 14  ████████████████████████
 Multiple agents working in parallel on isolated worktrees, each focused on
 different tasks, all managed through the same TUI and a multiplex terminal (Zellij).
 
-## Parallel Agents with Worktrees
+## Roadmap
 
-Each agent can work in its own isolated worktree, allowing multiple agents to run
-simultaneously without stepping on each other. All worktrees share the same ball
-state from the main repo's `.juggle/` directory.
-
-```bash
-# Terminal 1: Run agent in main repo
-cd ~/Development/my-project
-juggle agent run session-a
-
-# Terminal 2: Run agent in worktree
-cd ~/Development/my-project-worktree
-juggle agent run session-b
-```
-
-**Important:** The TUI is for managing tasks, not running agents. Run `juggle agent run`
-from separate terminals while using the TUI to add, edit, and monitor tasks.
-
-See [Worktrees (Parallel Agent Loops)](docs/installation.md#worktrees-parallel-agent-loops)
-in the installation guide for setup instructions.
+- **More agents** - Support beyond Claude Code (Cursor, Aider, etc.)
+- **TUI-integrated loop** - Run the agent loop inside TUI with live output
+- **Workspace automation** - Automatic git worktree/branch setup per session
+- **Endless mode** - Agent stays running, polling for new tasks when queue empties
+- **Notifications** - Get notified when tasks complete or need attention
 
 ## Agent Skill
 

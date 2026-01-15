@@ -134,7 +134,8 @@ For agents that support skills but use different installation methods, point the
 
 ## Worktrees (Parallel Agent Loops)
 
-Run multiple agent loops simultaneously using VCS worktrees. Each worktree gets its own agent while sharing the same ball state from the main repo.
+Run multiple agent loops simultaneously using VCS worktrees.
+Each worktree gets its own agent while sharing the same ball state from the main repo.
 
 ### Why Worktrees?
 
