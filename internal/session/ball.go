@@ -160,34 +160,10 @@ func (b *Ball) IncrementUpdateCount() {
 }
 
 // ValidStateTransition checks if a state transition is valid.
-// Valid transitions:
-// - pending → in_progress (start)
-// - in_progress → complete/researched (completion)
-// - in_progress → blocked (blocking)
-// - blocked → in_progress (resume)
-// - Any state → pending (reset)
+// All state transitions are allowed - balls can move freely between any states.
 func ValidStateTransition(from, to BallState) bool {
-	// Reset to pending is always allowed
-	if to == StatePending {
-		return true
-	}
-
-	switch from {
-	case StatePending:
-		// Can only start (move to in_progress)
-		return to == StateInProgress
-	case StateInProgress:
-		// Can complete, block, or mark as researched
-		return to == StateComplete || to == StateBlocked || to == StateResearched
-	case StateBlocked:
-		// Can resume (move back to in_progress)
-		return to == StateInProgress
-	case StateComplete, StateResearched:
-		// Terminal states - no transitions allowed (except reset to pending)
-		return false
-	default:
-		return false
-	}
+	// All transitions are valid
+	return true
 }
 
 // SetState sets the ball state.

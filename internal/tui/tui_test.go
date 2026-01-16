@@ -282,11 +282,8 @@ func TestTruncateID(t *testing.T) {
 }
 
 func TestStateTransitionsValidated(t *testing.T) {
-	// Tests that state transitions follow the validated state machine:
-	// - pending → in_progress (start)
-	// - in_progress → complete/blocked (complete/block)
-	// - blocked → in_progress (start)
-	// - any → pending (reset)
+	// Tests that all state transitions are allowed.
+	// Previously, some transitions were forbidden, but now all are valid.
 	tests := []struct {
 		name          string
 		initialState  session.BallState
@@ -302,11 +299,11 @@ func TestStateTransitionsValidated(t *testing.T) {
 			expectedState: session.StateInProgress,
 		},
 		{
-			name:          "start from complete - invalid transition",
+			name:          "start from complete - now allowed",
 			initialState:  session.StateComplete,
 			action:        "start",
-			expectError:   true,
-			expectedState: session.StateComplete, // unchanged
+			expectError:   false,
+			expectedState: session.StateInProgress,
 		},
 		{
 			name:          "start from blocked",
@@ -323,11 +320,11 @@ func TestStateTransitionsValidated(t *testing.T) {
 			expectedState: session.StateComplete,
 		},
 		{
-			name:          "complete from pending - invalid transition",
+			name:          "complete from pending - now allowed",
 			initialState:  session.StatePending,
 			action:        "complete",
-			expectError:   true,
-			expectedState: session.StatePending, // unchanged
+			expectError:   false,
+			expectedState: session.StateComplete,
 		},
 		{
 			name:          "block from in_progress",
@@ -337,11 +334,11 @@ func TestStateTransitionsValidated(t *testing.T) {
 			expectedState: session.StateBlocked,
 		},
 		{
-			name:          "block from complete - invalid transition",
+			name:          "block from complete - now allowed",
 			initialState:  session.StateComplete,
 			action:        "block",
-			expectError:   true,
-			expectedState: session.StateComplete, // unchanged
+			expectError:   false,
+			expectedState: session.StateBlocked,
 		},
 	}
 

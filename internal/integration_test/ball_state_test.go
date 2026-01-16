@@ -339,3 +339,93 @@ func TestBallFinalState_Dependencies(t *testing.T) {
 		t.Errorf("Expected dependency on '%s', got '%s'", ball1ID, ball.DependsOn[0])
 	}
 }
+
+// TestBallFinalState_AllStateTransitions tests that all state transitions are allowed
+func TestBallFinalState_AllStateTransitions(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	setupConfigWithTestProject(t, env)
+
+	// Create a ball
+	output := runJuggleCommand(t, env.ProjectDir, "plan",
+		"State transition test",
+		"--non-interactive",
+	)
+
+	// Extract ball ID
+	var ballID string
+	lines := strings.Split(output, "\n")
+	for _, line := range lines {
+		if strings.Contains(line, "Planned ball added:") {
+			parts := strings.Split(line, ": ")
+			if len(parts) >= 2 {
+				ballID = strings.TrimSpace(parts[len(parts)-1])
+			}
+		}
+	}
+	if ballID == "" {
+		t.Fatalf("Could not extract ball ID from output: %s", output)
+	}
+
+	// Test pending → complete (skipping in_progress)
+	runJuggleCommand(t, env.ProjectDir, "update", ballID, "--state", "complete")
+	jsonOutput := runJuggleCommand(t, env.ProjectDir, "show", ballID, "--json")
+	var ball session.Ball
+	if err := json.Unmarshal([]byte(jsonOutput), &ball); err != nil {
+		t.Fatalf("Failed to parse ball JSON: %v", err)
+	}
+	if ball.State != session.StateComplete {
+		t.Errorf("Expected state 'complete', got '%s'", ball.State)
+	}
+
+	// Test complete → blocked (previously terminal)
+	runJuggleCommand(t, env.ProjectDir, "update", ballID, "--state", "blocked", "--reason", "Test blocker")
+	jsonOutput = runJuggleCommand(t, env.ProjectDir, "show", ballID, "--json")
+	if err := json.Unmarshal([]byte(jsonOutput), &ball); err != nil {
+		t.Fatalf("Failed to parse ball JSON: %v", err)
+	}
+	if ball.State != session.StateBlocked {
+		t.Errorf("Expected state 'blocked', got '%s'", ball.State)
+	}
+
+	// Test blocked → complete (skipping in_progress)
+	runJuggleCommand(t, env.ProjectDir, "update", ballID, "--state", "complete")
+	jsonOutput = runJuggleCommand(t, env.ProjectDir, "show", ballID, "--json")
+	if err := json.Unmarshal([]byte(jsonOutput), &ball); err != nil {
+		t.Fatalf("Failed to parse ball JSON: %v", err)
+	}
+	if ball.State != session.StateComplete {
+		t.Errorf("Expected state 'complete', got '%s'", ball.State)
+	}
+
+	// Test complete → pending (reopening a completed ball)
+	runJuggleCommand(t, env.ProjectDir, "update", ballID, "--state", "pending")
+	jsonOutput = runJuggleCommand(t, env.ProjectDir, "show", ballID, "--json")
+	if err := json.Unmarshal([]byte(jsonOutput), &ball); err != nil {
+		t.Fatalf("Failed to parse ball JSON: %v", err)
+	}
+	if ball.State != session.StatePending {
+		t.Errorf("Expected state 'pending', got '%s'", ball.State)
+	}
+
+	// Test pending → researched (skipping in_progress)
+	runJuggleCommand(t, env.ProjectDir, "update", ballID, "--state", "researched")
+	jsonOutput = runJuggleCommand(t, env.ProjectDir, "show", ballID, "--json")
+	if err := json.Unmarshal([]byte(jsonOutput), &ball); err != nil {
+		t.Fatalf("Failed to parse ball JSON: %v", err)
+	}
+	if ball.State != session.StateResearched {
+		t.Errorf("Expected state 'researched', got '%s'", ball.State)
+	}
+
+	// Test researched → in_progress (previously terminal)
+	runJuggleCommand(t, env.ProjectDir, "update", ballID, "--state", "in_progress")
+	jsonOutput = runJuggleCommand(t, env.ProjectDir, "show", ballID, "--json")
+	if err := json.Unmarshal([]byte(jsonOutput), &ball); err != nil {
+		t.Fatalf("Failed to parse ball JSON: %v", err)
+	}
+	if ball.State != session.StateInProgress {
+		t.Errorf("Expected state 'in_progress', got '%s'", ball.State)
+	}
+}
