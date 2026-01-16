@@ -24,25 +24,28 @@ func isTerminal(fd uintptr) bool {
 }
 
 var (
-	agentIterations   int
-	agentTrust        bool
-	agentTimeout      time.Duration
-	agentDebug        bool
-	agentDryRun       bool
-	agentMaxWait      time.Duration
-	agentBallID       string
-	agentInteractive  bool
-	agentModel        string
-	agentDelay        int    // Delay between iterations in minutes (overrides config)
-	agentFuzz         int    // +/- variance in delay minutes (overrides config)
-	agentProvider     string // Agent provider (claude, opencode)
-	agentIgnoreLock    bool // Skip lock acquisition
-	agentClearProgress bool // Clear session progress before running
-	agentPickBall      bool // Interactive ball selection
+	agentIterations    int
+	agentTrust         bool
+	agentTimeout       time.Duration
+	agentDebug         bool
+	agentDryRun        bool
+	agentMaxWait       time.Duration
+	agentBallID        string
+	agentInteractive   bool
+	agentModel         string
+	agentDelay         int    // Delay between iterations in minutes (overrides config)
+	agentFuzz          int    // +/- variance in delay minutes (overrides config)
+	agentProvider      string // Agent provider (claude, opencode)
+	agentIgnoreLock    bool   // Skip lock acquisition
+	agentClearProgress bool   // Clear session progress before running
+	agentPickBall      bool   // Interactive ball selection
+	agentMessage       string // Message to append to agent prompt
+	agentMessageFlag   bool   // Track if -m flag was provided (for interactive mode)
 
 	// Refine command flags
 	refineProvider string // Agent provider for refine command
 	refineModel    string // Model for refine command
+	refineMessage  string // Message to append to refine prompt
 )
 
 // agentCmd is the parent command for agent operations
@@ -140,7 +143,13 @@ Examples:
   juggle agent run my-feature --delay 5 --fuzz 2
 
   # Disable delay entirely (overrides config even if set)
-  juggle agent run my-feature --delay 0`,
+  juggle agent run my-feature --delay 0
+
+  # Append a message to the agent prompt
+  juggle agent run my-feature -M "Focus on the authentication flow first"
+
+  # Open interactive prompt to enter message
+  juggle agent run my-feature -M`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runAgentRun,
 }
@@ -192,14 +201,60 @@ func init() {
 	agentRunCmd.Flags().BoolVar(&agentIgnoreLock, "ignore-lock", false, "Skip lock acquisition (use with caution)")
 	agentRunCmd.Flags().BoolVar(&agentClearProgress, "clear-progress", false, "Clear session progress before running")
 	agentRunCmd.Flags().BoolVar(&agentPickBall, "pick", false, "Interactively select a ball to work on")
+	agentRunCmd.Flags().StringVarP(&agentMessage, "message", "M", "", "Message to append to the agent prompt. If flag is provided without value, opens interactive input")
 
 	// Refine command flags
 	agentRefineCmd.Flags().StringVar(&refineProvider, "provider", "", "Agent provider to use (claude, opencode). Default: from config or claude")
 	agentRefineCmd.Flags().StringVarP(&refineModel, "model", "m", "", "Model to use (opus, sonnet, haiku). Default: sonnet")
+	agentRefineCmd.Flags().StringVarP(&refineMessage, "message", "M", "", "Message to append to the refine prompt. If flag is provided without value, opens interactive input")
 
 	agentCmd.AddCommand(agentRunCmd)
 	agentCmd.AddCommand(agentRefineCmd)
 	rootCmd.AddCommand(agentCmd)
+}
+
+// getMessageInteractive prompts the user to enter a message interactively.
+// The message can be multiple lines; an empty line followed by Enter (or Ctrl+D) completes input.
+// Returns the trimmed message or empty string if cancelled.
+func getMessageInteractive() (string, error) {
+	// Check if stdin is a terminal
+	if !isTerminal(os.Stdin.Fd()) {
+		return "", fmt.Errorf("interactive message input requires a terminal (stdin is not a tty)")
+	}
+
+	fmt.Println("Enter your message (press Enter twice to finish, or Ctrl+D):")
+	fmt.Println()
+
+	reader := bufio.NewReader(os.Stdin)
+	var lines []string
+	emptyLineCount := 0
+
+	for {
+		fmt.Print("  > ")
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			// EOF (Ctrl+D) - finish input
+			break
+		}
+
+		line = strings.TrimSuffix(line, "\n")
+		line = strings.TrimSuffix(line, "\r") // Handle Windows line endings
+
+		if line == "" {
+			emptyLineCount++
+			if emptyLineCount >= 1 {
+				// One empty line finishes input
+				break
+			}
+		} else {
+			// Reset empty line count if we get content
+			emptyLineCount = 0
+			lines = append(lines, line)
+		}
+	}
+
+	message := strings.Join(lines, "\n")
+	return strings.TrimSpace(message), nil
 }
 
 // AgentResult holds the result of an agent run
@@ -237,6 +292,7 @@ type AgentLoopConfig struct {
 	OverloadRetryMinutes int           // Minutes to wait before retrying after 529 overload exhaustion (-1 = use config default, 0 = no wait)
 	Provider             string        // Agent provider to use (claude, opencode). Empty = from config or claude
 	IgnoreLock           bool          // Skip lock acquisition (use with caution)
+	Message              string        // User message to append to the agent prompt
 }
 
 // sessionStorageID returns the session ID used for storage (progress, output, lock)
@@ -443,7 +499,7 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 		}
 
 		// Generate prompt using export command
-		prompt, err := generateAgentPrompt(config.ProjectDir, config.SessionID, config.Debug, config.BallID)
+		prompt, err := generateAgentPrompt(config.ProjectDir, config.SessionID, config.Debug, config.BallID, config.Message)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate prompt: %w", err)
 		}
@@ -1300,9 +1356,24 @@ func runAgentRun(cmd *cobra.Command, args []string) error {
 		interactive = true
 	}
 
+	// Handle --message flag
+	// If flag was provided but value is empty, prompt for interactive input
+	message := agentMessage
+	if cmd.Flags().Changed("message") && message == "" {
+		var err error
+		message, err = getMessageInteractive()
+		if err != nil {
+			return err
+		}
+		if message == "" {
+			fmt.Println("No message provided, continuing without additional context.")
+			fmt.Println()
+		}
+	}
+
 	// Handle --dry-run and --debug: show prompt info
 	if agentDryRun || agentDebug {
-		prompt, err := generateAgentPrompt(projectDir, sessionID, true, agentBallID) // debug=true for reasoning instructions
+		prompt, err := generateAgentPrompt(projectDir, sessionID, true, agentBallID, message) // debug=true for reasoning instructions
 		if err != nil {
 			return fmt.Errorf("failed to generate prompt: %w", err)
 		}
@@ -1321,6 +1392,9 @@ func runAgentRun(cmd *cobra.Command, args []string) error {
 		}
 		if agentProvider != "" {
 			fmt.Printf("Provider: %s\n", agentProvider)
+		}
+		if message != "" {
+			fmt.Printf("Message: (appended to prompt)\n")
 		}
 		if agentTimeout > 0 {
 			fmt.Printf("Timeout per iteration: %v\n", agentTimeout)
@@ -1439,6 +1513,7 @@ func runAgentRun(cmd *cobra.Command, args []string) error {
 		OverloadRetryMinutes: -1,              // Use config default
 		Provider:             agentProvider,   // Use CLI flag (empty = auto-detect from config)
 		IgnoreLock:           agentIgnoreLock, // Skip lock acquisition if set
+		Message:              message,         // User message to append to prompt
 	}
 
 	result, err := RunAgentLoop(loopConfig)
@@ -1482,8 +1557,9 @@ func runAgentRun(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// generateAgentPrompt generates the agent prompt using export command
-func generateAgentPrompt(projectDir, sessionID string, debug bool, ballID string) (string, error) {
+// generateAgentPrompt generates the agent prompt using export command.
+// The message parameter, if non-empty, is appended to the end of the generated prompt.
+func generateAgentPrompt(projectDir, sessionID string, debug bool, ballID string, message string) (string, error) {
 	// Use the export functionality directly instead of shelling out
 	// This is more efficient and avoids subprocess overhead
 
@@ -1568,7 +1644,14 @@ func generateAgentPrompt(projectDir, sessionID string, debug bool, ballID string
 		return "", err
 	}
 
-	return string(output), nil
+	prompt := string(output)
+
+	// Append user message if provided
+	if message != "" {
+		prompt += "\n<user-message>\n" + message + "\n</user-message>\n"
+	}
+
+	return prompt, nil
 }
 
 // countWorkableBalls returns counts of balls the agent can work on (pending/in_progress) vs blocked
@@ -1794,6 +1877,21 @@ func runAgentRefine(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get current directory: %w", err)
 	}
 
+	// Handle --message flag
+	// If flag was provided but value is empty, prompt for interactive input
+	message := refineMessage
+	if cmd.Flags().Changed("message") && message == "" {
+		var err error
+		message, err = getMessageInteractive()
+		if err != nil {
+			return err
+		}
+		if message == "" {
+			fmt.Println("No message provided, continuing without additional context.")
+			fmt.Println()
+		}
+	}
+
 	// Load balls based on scope
 	balls, err := loadBallsForRefine(cwd, sessionID)
 	if err != nil {
@@ -1806,7 +1904,7 @@ func runAgentRefine(cmd *cobra.Command, args []string) error {
 	}
 
 	// Generate the refinement prompt
-	prompt, err := generateRefinePrompt(cwd, sessionID, balls)
+	prompt, err := generateRefinePrompt(cwd, sessionID, balls, message)
 	if err != nil {
 		return fmt.Errorf("failed to generate prompt: %w", err)
 	}
@@ -1925,8 +2023,9 @@ func loadBallsForRefine(projectDir, sessionID string) ([]*session.Ball, error) {
 	return balls, nil
 }
 
-// generateRefinePrompt creates the prompt for the refinement session
-func generateRefinePrompt(projectDir, sessionID string, balls []*session.Ball) (string, error) {
+// generateRefinePrompt creates the prompt for the refinement session.
+// The message parameter, if non-empty, is appended to the end of the generated prompt.
+func generateRefinePrompt(projectDir, sessionID string, balls []*session.Ball, message string) (string, error) {
 	var buf strings.Builder
 
 	// Write context section with session info if available
@@ -1969,6 +2068,13 @@ func generateRefinePrompt(projectDir, sessionID string, balls []*session.Ball) (
 	}
 	buf.WriteString("</instructions>\n")
 
+	// Append user message if provided
+	if message != "" {
+		buf.WriteString("\n<user-message>\n")
+		buf.WriteString(message)
+		buf.WriteString("\n</user-message>\n")
+	}
+
 	return buf.String(), nil
 }
 
@@ -1979,7 +2085,12 @@ func LoadBallsForRefineForTest(projectDir, sessionID string) ([]*session.Ball, e
 
 // GenerateRefinePromptForTest is an exported wrapper for testing
 func GenerateRefinePromptForTest(projectDir, sessionID string, balls []*session.Ball) (string, error) {
-	return generateRefinePrompt(projectDir, sessionID, balls)
+	return generateRefinePrompt(projectDir, sessionID, balls, "")
+}
+
+// GenerateRefinePromptWithMessageForTest is an exported wrapper for testing with a message
+func GenerateRefinePromptWithMessageForTest(projectDir, sessionID string, balls []*session.Ball, message string) (string, error) {
+	return generateRefinePrompt(projectDir, sessionID, balls, message)
 }
 
 // RunAgentRefineForTest runs the agent refine logic for testing
@@ -2000,7 +2111,7 @@ func RunAgentRefineForTest(projectDir, sessionID string) error {
 	}
 
 	// Generate the refinement prompt
-	prompt, err := generateRefinePrompt(projectDir, sessionID, balls)
+	prompt, err := generateRefinePrompt(projectDir, sessionID, balls, "")
 	if err != nil {
 		return fmt.Errorf("failed to generate prompt: %w", err)
 	}
@@ -2018,7 +2129,12 @@ func RunAgentRefineForTest(projectDir, sessionID string) error {
 
 // GenerateAgentPromptForTest is an exported wrapper for testing prompt generation
 func GenerateAgentPromptForTest(projectDir, sessionID string, debug bool, ballID string) (string, error) {
-	return generateAgentPrompt(projectDir, sessionID, debug, ballID)
+	return generateAgentPrompt(projectDir, sessionID, debug, ballID, "")
+}
+
+// GenerateAgentPromptWithMessageForTest is an exported wrapper for testing prompt generation with a message
+func GenerateAgentPromptWithMessageForTest(projectDir, sessionID string, debug bool, ballID string, message string) (string, error) {
+	return generateAgentPrompt(projectDir, sessionID, debug, ballID, message)
 }
 
 // writeBallForRefine writes a single ball with all details for refinement
