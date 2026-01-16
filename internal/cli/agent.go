@@ -3,6 +3,7 @@ package cli
 import (
 	"bufio"
 	"fmt"
+	"math"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -379,6 +380,11 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 	overloadRetries := 0
 	overloadRetrying := false // Skip header when retrying after overload
 
+	// Track crash retry state
+	crashRetries := 0
+	crashRetrying := false // Skip header when retrying after crash
+	const maxCrashRetries = 3
+
 	// Load overload retry interval from config (or use provided override)
 	// -1 means "use config default", 0 means "no wait" (for testing), >0 is explicit minutes
 	overloadRetryMinutes := config.OverloadRetryMinutes
@@ -446,8 +452,8 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 	for iteration := 1; iteration <= config.MaxIterations; iteration++ {
 		result.Iterations = iteration
 
-		// Print iteration separator and header (skip when retrying after rate limit or overload)
-		if !rateLimitRetrying && !overloadRetrying {
+		// Print iteration separator and header (skip when retrying after rate limit, overload, or crash)
+		if !rateLimitRetrying && !overloadRetrying && !crashRetrying {
 			if iteration > 1 {
 				fmt.Println()
 				fmt.Println()
@@ -459,6 +465,7 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 		}
 		rateLimitRetrying = false  // Reset for next iteration
 		overloadRetrying = false   // Reset for next iteration
+		crashRetrying = false      // Reset for next iteration
 
 		// Record progress state before iteration (for validation)
 		// Use storageID (maps "all" to "_all") for progress tracking
@@ -529,6 +536,32 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 			return nil, fmt.Errorf("failed to run agent: %w", err)
 		}
 
+		// Check for subprocess crash (non-zero exit, not rate limit/overload)
+		if runResult.Error != nil && runResult.ExitCode != 0 && !runResult.RateLimited && !runResult.OverloadExhausted {
+			waitTime := time.Duration(math.Pow(2, float64(crashRetries))) * time.Second
+			if waitTime > 60*time.Second {
+				waitTime = 60 * time.Second
+			}
+
+			crashRetries++
+			if crashRetries > maxCrashRetries {
+				return nil, fmt.Errorf("agent crashed %d times, giving up (last error: %v)", crashRetries, runResult.Error)
+			}
+
+			logCrashToProgress(config.ProjectDir, storageID,
+				fmt.Sprintf("Agent crashed (exit code %d), waiting %v before retry (attempt %d/%d)",
+					runResult.ExitCode, waitTime, crashRetries, maxCrashRetries))
+
+			fmt.Printf("💥 Agent crashed (exit code %d). Waiting %v before retry (attempt %d/%d)...\n",
+				runResult.ExitCode, waitTime, crashRetries, maxCrashRetries)
+
+			waitWithCountdown(waitTime)
+			crashRetrying = true
+
+			iteration--
+			continue
+		}
+
 		// Check for rate limit
 		if runResult.RateLimited {
 			waitTime := calculateWaitTime(runResult.RetryAfter, rateLimitRetries)
@@ -560,8 +593,9 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 			continue
 		}
 
-		// Reset retry counter on successful run
+		// Reset retry counters on successful run
 		rateLimitRetries = 0
+		crashRetries = 0
 
 		// Check for 529 overload exhaustion (Claude's built-in retries exhausted)
 		if runResult.OverloadExhausted {
@@ -812,6 +846,17 @@ func logOverloadToProgress(projectDir, sessionID, message string) {
 	}
 
 	entry := fmt.Sprintf("[OVERLOAD_529] %s", message)
+	_ = sessionStore.AppendProgress(sessionID, entry)
+}
+
+// logCrashToProgress logs a crash event to the session's progress file
+func logCrashToProgress(projectDir, sessionID, message string) {
+	sessionStore, err := session.NewSessionStore(projectDir)
+	if err != nil {
+		return // Ignore errors - logging is best-effort
+	}
+
+	entry := fmt.Sprintf("[CRASH] %s", message)
 	_ = sessionStore.AppendProgress(sessionID, entry)
 }
 
