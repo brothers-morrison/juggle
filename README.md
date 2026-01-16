@@ -1,7 +1,10 @@
-# Juggle
+# Juggle - CLI Ralph Loops with Good UX
 
-A task runner for AI agent loops. Define tasks with acceptance criteria,
-let agents execute autonomously, manage work via TUI while they run.
+Run Ralph Loops while throwing in further tasks; no need to stop the loop or editing json.
+
+- Define tasks with acceptance criteria, priority, model size, ...
+- Let agents execute autonomously
+- Manage work via TUI while they run.
 
 ## Why Juggle?
 
@@ -143,6 +146,7 @@ See [Worktrees (Parallel Agent Loops)](docs/installation.md#worktrees-parallel-a
 in the installation guide for setup instructions.
 
 **Workspace management:**
+
 ```bash
 juggle worktree run "devbox run build"  # Build in all workspaces
 juggle worktree sync                     # Sync local files (e.g. .claude/settings.local.json)
@@ -195,6 +199,7 @@ different tasks, all managed through the same TUI and a multiplex terminal (Zell
 Juggle includes a skill that teaches AI agents how to manage tasks. Install it so your agent knows the CLI commands, state transitions, and best practices.
 
 **Claude Code:**
+
 ```bash
 claude plugin add github:ohare93/juggle
 ```

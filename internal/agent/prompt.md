@@ -157,11 +157,11 @@ After successfully completing ONE ball when other balls still need work:
 <promise>CONTINUE: [commit message]</promise>
 ```
 
-The commit message should be a single line summarizing what you changed. Format: `feat: ball-id - brief summary`
+**Before writing your commit message, read `internal/agent/commit-format.md` for the conventional commits format guide.**
 
 Example:
 ```
-<promise>CONTINUE: feat: juggle-92 - Add progress validation to agent loop</promise>
+<promise>CONTINUE: feat(tui): juggle-92 - Add progress validation to agent loop</promise>
 ```
 
 This signals the outer loop to call you again for the next ball. **This is the most common signal.**
