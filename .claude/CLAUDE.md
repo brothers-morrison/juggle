@@ -57,6 +57,17 @@ go fmt ./...
 
 **Juggle** runs autonomous AI agent loops with good UX. Define tasks ("balls") with acceptance criteria via TUI or CLI, start the agent loop (`juggle agent run`), and add or modify tasks while it runs. No JSON editing - the TUI and CLI handle all task management.
 
+### CLI-First Approach
+
+**Prefer `juggle` CLI commands over direct file access.** The CLI provides proper formatting, validation, and error handling. Only read `.juggle/balls.jsonl` or `.juggle/sessions/*/` files directly as a last resort when the CLI doesn't provide what you need.
+
+Prefer:
+- `juggle list --format json` over `cat .juggle/balls.jsonl`
+- `juggle show <ball-id> --json` over parsing balls.jsonl
+- `juggle sessions show <session-id>` over reading session files directly
+
+The CLI is more stable across versions and provides better error messages.
+
 For detailed architecture information, read these files as needed:
 
 ### Package Structure

@@ -7,6 +7,18 @@ description: Task management via CLI for agent loops. Balls are tasks with accep
 
 Juggle runs autonomous AI agent loops with good UX for the developer. This skill teaches you (the agent) how to use CLI commands to manage tasks - updating state, logging progress, and checking acceptance criteria as you work.
 
+## CLI-First Approach
+
+**Always prefer `juggle` CLI commands over direct file access.** While ball and session data is stored in `.juggle/balls.jsonl` and `.juggle/sessions/*/` files, you should interact with this data through CLI commands rather than reading files directly.
+
+**Use CLI commands:**
+- `juggle list --format json` - Get all balls in structured format
+- `juggle show <ball-id> --json` - Get specific ball details
+- `juggle sessions show <session-id>` - Get session with linked balls
+- `juggle export --format json` - Export all active balls
+
+**Only read files directly as a last resort** when the CLI doesn't provide the specific data or format you need. The CLI provides proper validation, error handling, and will remain stable across version changes.
+
 ## Core Concepts
 
 ### Balls = Tasks
@@ -348,6 +360,10 @@ The agent run command will error gracefully if no session is provided and stdin 
 
 ## File Locations
 
-- Balls: `.juggle/balls.jsonl`
-- Sessions: `.juggle/sessions/<id>/session.json`
-- Progress: `.juggle/sessions/<id>/progress.txt`
+Data is stored in these locations, but **prefer CLI commands over direct file access**:
+
+- Balls: `.juggle/balls.jsonl` (use `juggle list --format json` instead)
+- Sessions: `.juggle/sessions/<id>/session.json` (use `juggle sessions show <id>` instead)
+- Progress: `.juggle/sessions/<id>/progress.txt` (use `juggle sessions show <id>` instead)
+
+Direct file access should only be used as a last resort when the CLI doesn't provide the needed functionality.
