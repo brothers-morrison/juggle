@@ -19,6 +19,9 @@ var (
 
 	// ErrSessionLocked is returned when a session is already locked by another process.
 	ErrSessionLocked = errors.New("session locked")
+
+	// ErrBallLocked is returned when a ball is already locked by another process.
+	ErrBallLocked = errors.New("ball locked")
 )
 
 // BallNotFoundError provides detailed information about a ball lookup failure.
@@ -102,6 +105,7 @@ type SessionLockedError struct {
 }
 
 func (e *SessionLockedError) Error() string {
+	var msg string
 	if e.PID > 0 {
 		status := ""
 		if e.ProcessRunning != nil {
@@ -112,12 +116,15 @@ func (e *SessionLockedError) Error() string {
 			}
 		}
 		if e.Hostname != "" {
-			return fmt.Sprintf("session %s is already locked by PID %d on %s%s",
+			msg = fmt.Sprintf("session %s is already locked by PID %d on %s%s",
 				e.SessionID, e.PID, e.Hostname, status)
+		} else {
+			msg = fmt.Sprintf("session %s is already locked by PID %d%s", e.SessionID, e.PID, status)
 		}
-		return fmt.Sprintf("session %s is already locked by PID %d%s", e.SessionID, e.PID, status)
+	} else {
+		msg = fmt.Sprintf("session %s is already locked by another agent", e.SessionID)
 	}
-	return fmt.Sprintf("session %s is already locked by another agent", e.SessionID)
+	return msg + "\nUse --ignore-lock to bypass (use with caution)"
 }
 
 func (e *SessionLockedError) Is(target error) bool {
@@ -127,6 +134,57 @@ func (e *SessionLockedError) Is(target error) bool {
 // NewSessionLockedError creates a new SessionLockedError.
 func NewSessionLockedError(sessionID string, info *LockInfo) *SessionLockedError {
 	err := &SessionLockedError{SessionID: sessionID}
+	if info != nil {
+		err.PID = info.PID
+		err.Hostname = info.Hostname
+		// Check if the process is still running (local host only)
+		currentHostname, _ := os.Hostname()
+		if info.Hostname == currentHostname && info.PID > 0 {
+			running := isProcessRunning(info.PID)
+			err.ProcessRunning = &running
+		}
+	}
+	return err
+}
+
+// BallLockedError provides detailed information about a ball lock conflict.
+type BallLockedError struct {
+	BallID         string // The ball that is locked
+	PID            int    // The process ID holding the lock (0 if unknown)
+	Hostname       string // The hostname where the lock was acquired
+	ProcessRunning *bool  // True if PID is still running, false if dead, nil if unknown
+}
+
+func (e *BallLockedError) Error() string {
+	var msg string
+	if e.PID > 0 {
+		status := ""
+		if e.ProcessRunning != nil {
+			if *e.ProcessRunning {
+				status = " (process running)"
+			} else {
+				status = " (process not running - stale lock?)"
+			}
+		}
+		if e.Hostname != "" {
+			msg = fmt.Sprintf("ball %s is already locked by PID %d on %s%s",
+				e.BallID, e.PID, e.Hostname, status)
+		} else {
+			msg = fmt.Sprintf("ball %s is already locked by PID %d%s", e.BallID, e.PID, status)
+		}
+	} else {
+		msg = fmt.Sprintf("ball %s is already locked by another agent", e.BallID)
+	}
+	return msg + "\nUse --ignore-lock to bypass (use with caution)"
+}
+
+func (e *BallLockedError) Is(target error) bool {
+	return target == ErrBallLocked
+}
+
+// NewBallLockedError creates a new BallLockedError.
+func NewBallLockedError(ballID string, info *LockInfo) *BallLockedError {
+	err := &BallLockedError{BallID: ballID}
 	if info != nil {
 		err.PID = info.PID
 		err.Hostname = info.Hostname

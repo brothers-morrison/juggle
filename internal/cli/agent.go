@@ -36,6 +36,7 @@ var (
 	agentDelay       int    // Delay between iterations in minutes (overrides config)
 	agentFuzz        int    // +/- variance in delay minutes (overrides config)
 	agentProvider    string // Agent provider (claude, opencode)
+	agentIgnoreLock  bool   // Skip lock acquisition
 
 	// Refine command flags
 	refineProvider string // Agent provider for refine command
@@ -177,6 +178,7 @@ func init() {
 	agentRunCmd.Flags().IntVar(&agentDelay, "delay", 0, "Delay between iterations in minutes (overrides config, 0 = no delay)")
 	agentRunCmd.Flags().IntVar(&agentFuzz, "fuzz", 0, "Random +/- variance in delay minutes (overrides config)")
 	agentRunCmd.Flags().StringVar(&agentProvider, "provider", "", "Agent provider to use (claude, opencode). Default: from config or claude")
+	agentRunCmd.Flags().BoolVar(&agentIgnoreLock, "ignore-lock", false, "Skip lock acquisition (use with caution)")
 
 	// Refine command flags
 	agentRefineCmd.Flags().StringVar(&refineProvider, "provider", "", "Agent provider to use (claude, opencode). Default: from config or claude")
@@ -221,6 +223,7 @@ type AgentLoopConfig struct {
 	Model                string        // Model to use (opus, sonnet, haiku). Empty = auto-select based on ball model_size
 	OverloadRetryMinutes int           // Minutes to wait before retrying after 529 overload exhaustion (-1 = use config default, 0 = no wait)
 	Provider             string        // Agent provider to use (claude, opencode). Empty = from config or claude
+	IgnoreLock           bool          // Skip lock acquisition (use with caution)
 }
 
 // sessionStorageID returns the session ID used for storage (progress, output, lock)
@@ -255,14 +258,33 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 		}
 	}
 
-	// Acquire exclusive lock on session to prevent concurrent agent runs
-	// For "all" meta-session, we lock with "_all" as the storage ID
+	// storageID is used for output paths and progress tracking
+	// For "all" meta-session, this returns "_all"
 	storageID := sessionStorageID(config.SessionID)
-	lock, err := sessionStore.AcquireSessionLock(storageID)
-	if err != nil {
-		return nil, err
+
+	// Acquire exclusive lock to prevent concurrent agent runs
+	// - If IgnoreLock is true, skip locking entirely
+	// - If BallID is specified, use per-ball locking (allows different balls to run concurrently)
+	// - Otherwise, use session-level locking
+	var lockRelease func() error
+	if config.IgnoreLock {
+		lockRelease = func() error { return nil }
+	} else if config.BallID != "" {
+		// Per-ball locking for --ball runs
+		ballLock, err := session.AcquireBallLock(config.ProjectDir, config.BallID)
+		if err != nil {
+			return nil, err
+		}
+		lockRelease = ballLock.Release
+	} else {
+		// Session-level locking for full session runs
+		lock, err := sessionStore.AcquireSessionLock(storageID)
+		if err != nil {
+			return nil, err
+		}
+		lockRelease = lock.Release
 	}
-	defer lock.Release()
+	defer lockRelease()
 
 	// Create output file path using storage ID
 	// For "all" meta-session, ensure the _all session directory exists
@@ -1111,8 +1133,9 @@ func runAgentRun(cmd *cobra.Command, args []string) error {
 		BallID:               agentBallID,
 		Interactive:          interactive,
 		Model:                agentModel,
-		OverloadRetryMinutes: -1,           // Use config default
-		Provider:             agentProvider, // Use CLI flag (empty = auto-detect from config)
+		OverloadRetryMinutes: -1,              // Use config default
+		Provider:             agentProvider,   // Use CLI flag (empty = auto-detect from config)
+		IgnoreLock:           agentIgnoreLock, // Skip lock acquisition if set
 	}
 
 	result, err := RunAgentLoop(loopConfig)

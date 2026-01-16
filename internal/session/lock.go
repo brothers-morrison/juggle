@@ -161,3 +161,115 @@ func readLockInfo(lockPath string) (*LockInfo, error) {
 
 	return &info, nil
 }
+
+// BallLock represents a lock on a specific ball to prevent concurrent agent runs
+type BallLock struct {
+	ballID       string
+	workDir      string
+	lockPath     string
+	lockInfoPath string
+	fileLock     *flock.Flock
+}
+
+// AcquireBallLock acquires an exclusive lock on a specific ball.
+// The lock file is stored in .juggle/balls/<ballID>.lock within the ball's project directory.
+func AcquireBallLock(workDir string, ballID string) (*BallLock, error) {
+	lockDir := filepath.Join(workDir, ".juggle", "balls")
+	if err := os.MkdirAll(lockDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create balls lock directory: %w", err)
+	}
+
+	lockPath := filepath.Join(lockDir, ballID+".lock")
+	lockInfoPath := filepath.Join(lockDir, ballID+".lock.info")
+
+	// Create the flock
+	fileLock := flock.New(lockPath)
+
+	// Try to acquire exclusive lock (non-blocking)
+	locked, err := fileLock.TryLock()
+	if err != nil {
+		return nil, fmt.Errorf("failed to acquire ball lock: %w", err)
+	}
+	if !locked {
+		// Lock is held by another process - read lock info
+		info, _ := readLockInfo(lockInfoPath)
+		return nil, NewBallLockedError(ballID, info)
+	}
+
+	// Write lock info to the info file
+	hostname, _ := os.Hostname()
+	info := LockInfo{
+		PID:       os.Getpid(),
+		Hostname:  hostname,
+		StartedAt: time.Now(),
+	}
+
+	data, err := json.Marshal(info)
+	if err != nil {
+		fileLock.Unlock()
+		return nil, fmt.Errorf("failed to marshal lock info: %w", err)
+	}
+
+	if err := os.WriteFile(lockInfoPath, data, 0644); err != nil {
+		fileLock.Unlock()
+		return nil, fmt.Errorf("failed to write lock info: %w", err)
+	}
+
+	return &BallLock{
+		ballID:       ballID,
+		workDir:      workDir,
+		lockPath:     lockPath,
+		lockInfoPath: lockInfoPath,
+		fileLock:     fileLock,
+	}, nil
+}
+
+// Release releases the ball lock
+func (l *BallLock) Release() error {
+	if l.fileLock == nil {
+		return nil // Already released
+	}
+
+	// Release the flock
+	if err := l.fileLock.Unlock(); err != nil {
+		return fmt.Errorf("failed to release ball lock: %w", err)
+	}
+
+	// Remove the lock files (best-effort cleanup)
+	_ = os.Remove(l.lockPath)
+	_ = os.Remove(l.lockInfoPath)
+
+	l.fileLock = nil
+	return nil
+}
+
+// IsBallLocked checks if a ball currently has an active lock
+func IsBallLocked(workDir string, ballID string) (bool, *LockInfo) {
+	lockDir := filepath.Join(workDir, ".juggle", "balls")
+	lockPath := filepath.Join(lockDir, ballID+".lock")
+	lockInfoPath := filepath.Join(lockDir, ballID+".lock.info")
+
+	// Check if lock file exists
+	if _, err := os.Stat(lockPath); os.IsNotExist(err) {
+		return false, nil
+	}
+
+	// Try to acquire lock (non-blocking)
+	fileLock := flock.New(lockPath)
+	locked, err := fileLock.TryLock()
+	if err != nil {
+		// Error acquiring lock - assume it's locked
+		info, _ := readLockInfo(lockInfoPath)
+		return true, info
+	}
+
+	if !locked {
+		// Lock is held by another process
+		info, _ := readLockInfo(lockInfoPath)
+		return true, info
+	}
+
+	// We got the lock - release it immediately
+	fileLock.Unlock()
+	return false, nil
+}
