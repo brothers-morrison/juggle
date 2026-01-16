@@ -162,3 +162,113 @@ func TestProjectAcceptanceCriteria_Clear(t *testing.T) {
 		t.Errorf("expected 0 ACs after clear, got %d", len(loaded))
 	}
 }
+
+// TestProjectConfig_RunAliases tests the run alias functionality
+func TestProjectConfig_RunAliases(t *testing.T) {
+	config := DefaultProjectConfig()
+
+	// Test initial state
+	if config.HasRunAliases() {
+		t.Error("expected HasRunAliases to return false for empty config")
+	}
+
+	if alias := config.GetRunAlias("build"); alias != "" {
+		t.Errorf("expected empty string for non-existent alias, got %q", alias)
+	}
+
+	// Test setting an alias
+	config.SetRunAlias("build", "devbox run build")
+	if !config.HasRunAliases() {
+		t.Error("expected HasRunAliases to return true after setting alias")
+	}
+
+	if alias := config.GetRunAlias("build"); alias != "devbox run build" {
+		t.Errorf("expected 'devbox run build', got %q", alias)
+	}
+
+	// Test updating an alias
+	config.SetRunAlias("build", "go build ./...")
+	if alias := config.GetRunAlias("build"); alias != "go build ./..." {
+		t.Errorf("expected updated alias 'go build ./...', got %q", alias)
+	}
+
+	// Test deleting an alias
+	if !config.DeleteRunAlias("build") {
+		t.Error("expected DeleteRunAlias to return true for existing alias")
+	}
+
+	if config.DeleteRunAlias("build") {
+		t.Error("expected DeleteRunAlias to return false for non-existent alias")
+	}
+
+	if config.HasRunAliases() {
+		t.Error("expected HasRunAliases to return false after deleting last alias")
+	}
+}
+
+// TestProjectConfig_RunAliases_GetAll tests GetRunAliases
+func TestProjectConfig_RunAliases_GetAll(t *testing.T) {
+	config := DefaultProjectConfig()
+
+	config.SetRunAlias("build", "go build ./...")
+	config.SetRunAlias("test", "go test ./...")
+	config.SetRunAlias("lint", "golangci-lint run")
+
+	aliases := config.GetRunAliases()
+	if len(aliases) != 3 {
+		t.Errorf("expected 3 aliases, got %d", len(aliases))
+	}
+
+	if aliases["build"] != "go build ./..." {
+		t.Errorf("expected build alias, got %q", aliases["build"])
+	}
+	if aliases["test"] != "go test ./..." {
+		t.Errorf("expected test alias, got %q", aliases["test"])
+	}
+	if aliases["lint"] != "golangci-lint run" {
+		t.Errorf("expected lint alias, got %q", aliases["lint"])
+	}
+}
+
+// TestProjectConfig_RunAliases_Persistence tests aliases survive save/load
+func TestProjectConfig_RunAliases_Persistence(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "juggle-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Ensure .juggle directory exists
+	juggleDir := filepath.Join(tmpDir, ".juggle")
+	if err := os.MkdirAll(juggleDir, 0755); err != nil {
+		t.Fatalf("failed to create .juggle dir: %v", err)
+	}
+
+	// Create config with aliases
+	config := DefaultProjectConfig()
+	config.SetRunAlias("build", "devbox run build")
+	config.SetRunAlias("test", "go test -v ./...")
+
+	// Save
+	if err := SaveProjectConfig(tmpDir, config); err != nil {
+		t.Fatalf("failed to save config: %v", err)
+	}
+
+	// Load and verify
+	loaded, err := LoadProjectConfig(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	if !loaded.HasRunAliases() {
+		t.Error("expected loaded config to have run aliases")
+	}
+
+	if alias := loaded.GetRunAlias("build"); alias != "devbox run build" {
+		t.Errorf("expected 'devbox run build', got %q", alias)
+	}
+
+	if alias := loaded.GetRunAlias("test"); alias != "go test -v ./..." {
+		t.Errorf("expected 'go test -v ./...', got %q", alias)
+	}
+}

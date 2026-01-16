@@ -9,7 +9,8 @@ import (
 
 func TestNewAgentRunRecord(t *testing.T) {
 	startTime := time.Now()
-	record := NewAgentRunRecord("test-session", "/test/project", startTime)
+	testDir := filepath.Join(os.TempDir(), "test", "project")
+	record := NewAgentRunRecord("test-session", testDir, startTime)
 
 	if record.ID == "" {
 		t.Error("Expected ID to be set")
@@ -17,8 +18,8 @@ func TestNewAgentRunRecord(t *testing.T) {
 	if record.SessionID != "test-session" {
 		t.Errorf("Expected session ID 'test-session', got '%s'", record.SessionID)
 	}
-	if record.ProjectDir != "/test/project" {
-		t.Errorf("Expected project dir '/test/project', got '%s'", record.ProjectDir)
+	if record.ProjectDir != testDir {
+		t.Errorf("Expected project dir '%s', got '%s'", testDir, record.ProjectDir)
 	}
 	if !record.StartedAt.Equal(startTime) {
 		t.Errorf("Expected start time %v, got %v", startTime, record.StartedAt)
@@ -26,7 +27,7 @@ func TestNewAgentRunRecord(t *testing.T) {
 }
 
 func TestAgentRunRecord_SetComplete(t *testing.T) {
-	record := NewAgentRunRecord("test", "/test", time.Now())
+	record := NewAgentRunRecord("test", os.TempDir(), time.Now())
 	record.SetComplete(5, 10, 2, 12)
 
 	if record.Result != "complete" {
@@ -50,7 +51,7 @@ func TestAgentRunRecord_SetComplete(t *testing.T) {
 }
 
 func TestAgentRunRecord_SetBlocked(t *testing.T) {
-	record := NewAgentRunRecord("test", "/test", time.Now())
+	record := NewAgentRunRecord("test", os.TempDir(), time.Now())
 	record.SetBlocked(3, "API key missing", 5, 1, 10)
 
 	if record.Result != "blocked" {
@@ -65,7 +66,7 @@ func TestAgentRunRecord_SetBlocked(t *testing.T) {
 }
 
 func TestAgentRunRecord_SetTimeout(t *testing.T) {
-	record := NewAgentRunRecord("test", "/test", time.Now())
+	record := NewAgentRunRecord("test", os.TempDir(), time.Now())
 	record.SetTimeout(2, "Iteration 2 timed out after 5m", 3, 0, 8)
 
 	if record.Result != "timeout" {
@@ -77,7 +78,7 @@ func TestAgentRunRecord_SetTimeout(t *testing.T) {
 }
 
 func TestAgentRunRecord_SetMaxIterations(t *testing.T) {
-	record := NewAgentRunRecord("test", "/test", time.Now())
+	record := NewAgentRunRecord("test", os.TempDir(), time.Now())
 	record.SetMaxIterations(10, 8, 0, 10)
 
 	if record.Result != "max_iterations" {
@@ -86,7 +87,7 @@ func TestAgentRunRecord_SetMaxIterations(t *testing.T) {
 }
 
 func TestAgentRunRecord_SetRateLimitExceeded(t *testing.T) {
-	record := NewAgentRunRecord("test", "/test", time.Now())
+	record := NewAgentRunRecord("test", os.TempDir(), time.Now())
 	record.SetRateLimitExceeded(4, 10*time.Minute, 6, 1, 12)
 
 	if record.Result != "rate_limit" {
@@ -98,7 +99,7 @@ func TestAgentRunRecord_SetRateLimitExceeded(t *testing.T) {
 }
 
 func TestAgentRunRecord_SetCancelled(t *testing.T) {
-	record := NewAgentRunRecord("test", "/test", time.Now())
+	record := NewAgentRunRecord("test", os.TempDir(), time.Now())
 	record.SetCancelled(1, 0, 0, 5)
 
 	if record.Result != "cancelled" {
@@ -107,7 +108,7 @@ func TestAgentRunRecord_SetCancelled(t *testing.T) {
 }
 
 func TestAgentRunRecord_SetError(t *testing.T) {
-	record := NewAgentRunRecord("test", "/test", time.Now())
+	record := NewAgentRunRecord("test", os.TempDir(), time.Now())
 	record.SetError(1, "command failed", 0, 0, 5)
 
 	if record.Result != "error" {
@@ -120,7 +121,7 @@ func TestAgentRunRecord_SetError(t *testing.T) {
 
 func TestAgentRunRecord_Duration(t *testing.T) {
 	startTime := time.Now().Add(-5 * time.Minute)
-	record := NewAgentRunRecord("test", "/test", startTime)
+	record := NewAgentRunRecord("test", os.TempDir(), startTime)
 	record.EndedAt = time.Now()
 
 	duration := record.Duration()
@@ -146,7 +147,7 @@ func TestAgentHistoryStore_AppendAndLoad(t *testing.T) {
 	// Create and append a record
 	record1 := NewAgentRunRecord("session1", tmpDir, time.Now().Add(-2*time.Hour))
 	record1.SetComplete(5, 10, 2, 12)
-	record1.OutputFile = "/path/to/output1.txt"
+	record1.OutputFile = filepath.Join(tmpDir, "output1.txt")
 
 	if err := store.AppendRecord(record1); err != nil {
 		t.Fatalf("Failed to append record: %v", err)
@@ -155,7 +156,7 @@ func TestAgentHistoryStore_AppendAndLoad(t *testing.T) {
 	// Append another record
 	record2 := NewAgentRunRecord("session2", tmpDir, time.Now().Add(-1*time.Hour))
 	record2.SetBlocked(3, "API error", 5, 1, 10)
-	record2.OutputFile = "/path/to/output2.txt"
+	record2.OutputFile = filepath.Join(tmpDir, "output2.txt")
 
 	if err := store.AppendRecord(record2); err != nil {
 		t.Fatalf("Failed to append second record: %v", err)

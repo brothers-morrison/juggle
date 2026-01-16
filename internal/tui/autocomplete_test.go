@@ -7,7 +7,7 @@ import (
 )
 
 func TestAutocompleteStateReset(t *testing.T) {
-	ac := NewAutocompleteState("/tmp/test")
+	ac := NewAutocompleteState(filepath.Join(os.TempDir(), "test"))
 	ac.Active = true
 	ac.Query = "test"
 	ac.QueryStart = 5
@@ -66,7 +66,7 @@ func TestAutocompleteUpdateFromTextActivates(t *testing.T) {
 }
 
 func TestAutocompleteUpdateFromTextDeactivates(t *testing.T) {
-	ac := NewAutocompleteState("/tmp")
+	ac := NewAutocompleteState(os.TempDir())
 	ac.Active = true
 	ac.Query = "test"
 	ac.QueryStart = 5
@@ -84,7 +84,7 @@ func TestAutocompleteUpdateFromTextDeactivates(t *testing.T) {
 }
 
 func TestAutocompleteDeactivate(t *testing.T) {
-	ac := NewAutocompleteState("/tmp")
+	ac := NewAutocompleteState(os.TempDir())
 	ac.Active = true
 	ac.Query = "test"
 	ac.QueryStart = 5
@@ -102,7 +102,7 @@ func TestAutocompleteDeactivate(t *testing.T) {
 }
 
 func TestAutocompleteSelectNextPrev(t *testing.T) {
-	ac := NewAutocompleteState("/tmp")
+	ac := NewAutocompleteState(os.TempDir())
 	ac.Active = true
 	ac.Suggestions = []string{"file1.go", "file2.go", "file3.go"}
 	ac.Selected = 0
@@ -137,7 +137,7 @@ func TestAutocompleteSelectNextPrev(t *testing.T) {
 }
 
 func TestAutocompleteGetSelectedSuggestion(t *testing.T) {
-	ac := NewAutocompleteState("/tmp")
+	ac := NewAutocompleteState(os.TempDir())
 	ac.Suggestions = []string{"file1.go", "file2.go"}
 
 	// Selected 0
@@ -160,7 +160,7 @@ func TestAutocompleteGetSelectedSuggestion(t *testing.T) {
 }
 
 func TestAutocompleteApplyCompletion(t *testing.T) {
-	ac := NewAutocompleteState("/tmp")
+	ac := NewAutocompleteState(os.TempDir())
 	ac.Active = true
 	ac.Query = "main"
 	ac.QueryStart = 10 // Position of @ in "Reference @main"
@@ -177,7 +177,7 @@ func TestAutocompleteApplyCompletion(t *testing.T) {
 }
 
 func TestAutocompleteApplyCompletionMiddleOfText(t *testing.T) {
-	ac := NewAutocompleteState("/tmp")
+	ac := NewAutocompleteState(os.TempDir())
 	ac.Active = true
 	ac.Query = "ut"
 	ac.QueryStart = 4 // Position of @ in "See @ut for details" (S=0,e=1,e=2, =3,@=4)
@@ -194,7 +194,7 @@ func TestAutocompleteApplyCompletionMiddleOfText(t *testing.T) {
 }
 
 func TestAutocompleteNoApplyWhenInactive(t *testing.T) {
-	ac := NewAutocompleteState("/tmp")
+	ac := NewAutocompleteState(os.TempDir())
 	ac.Active = false
 	ac.Suggestions = []string{"file.go"}
 
@@ -207,7 +207,7 @@ func TestAutocompleteNoApplyWhenInactive(t *testing.T) {
 }
 
 func TestAutocompleteNoApplyWhenNoSuggestions(t *testing.T) {
-	ac := NewAutocompleteState("/tmp")
+	ac := NewAutocompleteState(os.TempDir())
 	ac.Active = true
 	ac.Suggestions = []string{}
 
@@ -319,7 +319,7 @@ func TestFindMatchingFilesExcludesGit(t *testing.T) {
 }
 
 func TestAutocompleteAtPrecededByWhitespace(t *testing.T) {
-	ac := NewAutocompleteState("/tmp")
+	ac := NewAutocompleteState(os.TempDir())
 
 	// @ at start of text should work
 	text1 := "@main"

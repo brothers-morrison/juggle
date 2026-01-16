@@ -1,6 +1,8 @@
 package integration_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -387,7 +389,7 @@ func TestAgentLoopConfig_MessageField(t *testing.T) {
 	// Test that AgentLoopConfig properly accepts and stores Message field
 	config := cli.AgentLoopConfig{
 		SessionID:     "test-session",
-		ProjectDir:    "/tmp/test",
+		ProjectDir:    filepath.Join(os.TempDir(), "test"),
 		MaxIterations: 10,
 		Message:       "Test message content",
 	}
@@ -401,7 +403,7 @@ func TestAgentLoopConfig_EmptyMessage(t *testing.T) {
 	// Test that AgentLoopConfig handles empty Message field
 	config := cli.AgentLoopConfig{
 		SessionID:     "test-session",
-		ProjectDir:    "/tmp/test",
+		ProjectDir:    filepath.Join(os.TempDir(), "test"),
 		MaxIterations: 10,
 		Message:       "",
 	}

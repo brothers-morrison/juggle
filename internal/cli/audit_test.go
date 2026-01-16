@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -90,23 +92,26 @@ func TestCalculateProjectMetrics(t *testing.T) {
 	staleTime := now.Add(-35 * 24 * time.Hour) // 35 days ago
 	recentTime := now.Add(-10 * 24 * time.Hour) // 10 days ago
 
+	pathA := filepath.Join(os.TempDir(), "path", "to", "a")
+	pathB := filepath.Join(os.TempDir(), "path", "to", "b")
+
 	balls := []*session.Ball{
 		// Project A
-		createTestBall(t, "project-a", "/path/to/a", session.StatePending, recentTime),
-		createTestBall(t, "project-a", "/path/to/a", session.StatePending, staleTime),
-		createTestBall(t, "project-a", "/path/to/a", session.StateInProgress, now),
-		createTestBall(t, "project-a", "/path/to/a", session.StateComplete, now),
-		createTestBall(t, "project-a", "/path/to/a", session.StateBlocked, now),
+		createTestBall(t, "project-a", pathA, session.StatePending, recentTime),
+		createTestBall(t, "project-a", pathA, session.StatePending, staleTime),
+		createTestBall(t, "project-a", pathA, session.StateInProgress, now),
+		createTestBall(t, "project-a", pathA, session.StateComplete, now),
+		createTestBall(t, "project-a", pathA, session.StateBlocked, now),
 		// Project B
-		createTestBall(t, "project-b", "/path/to/b", session.StatePending, staleTime),
-		createTestBall(t, "project-b", "/path/to/b", session.StatePending, staleTime),
-		createTestBall(t, "project-b", "/path/to/b", session.StateComplete, now),
+		createTestBall(t, "project-b", pathB, session.StatePending, staleTime),
+		createTestBall(t, "project-b", pathB, session.StatePending, staleTime),
+		createTestBall(t, "project-b", pathB, session.StateComplete, now),
 	}
 
 	metricsMap := calculateProjectMetrics(balls)
 
 	// Verify Project A
-	metricsA := metricsMap["/path/to/a"]
+	metricsA := metricsMap[pathA]
 	if metricsA == nil {
 		t.Fatal("expected metrics for project A")
 	}
@@ -130,7 +135,7 @@ func TestCalculateProjectMetrics(t *testing.T) {
 	}
 
 	// Verify Project B
-	metricsB := metricsMap["/path/to/b"]
+	metricsB := metricsMap[pathB]
 	if metricsB == nil {
 		t.Fatal("expected metrics for project B")
 	}
@@ -357,15 +362,17 @@ func TestStalePendingDetection(t *testing.T) {
 	staleTime := now.Add(-35 * 24 * time.Hour)   // 35 days ago - stale
 	veryStaleTime := now.Add(-90 * 24 * time.Hour) // 90 days ago - very stale
 
+	projectPath := filepath.Join(os.TempDir(), "path", "to", "project")
+
 	balls := []*session.Ball{
-		createTestBall(t, "project", "/path/to/project", session.StatePending, recentTime),
-		createTestBall(t, "project", "/path/to/project", session.StatePending, staleTime),
-		createTestBall(t, "project", "/path/to/project", session.StatePending, veryStaleTime),
-		createTestBall(t, "project", "/path/to/project", session.StateInProgress, staleTime), // Not counted as stale (not pending)
+		createTestBall(t, "project", projectPath, session.StatePending, recentTime),
+		createTestBall(t, "project", projectPath, session.StatePending, staleTime),
+		createTestBall(t, "project", projectPath, session.StatePending, veryStaleTime),
+		createTestBall(t, "project", projectPath, session.StateInProgress, staleTime), // Not counted as stale (not pending)
 	}
 
 	metricsMap := calculateProjectMetrics(balls)
-	metrics := metricsMap["/path/to/project"]
+	metrics := metricsMap[projectPath]
 
 	if metrics.PendingCount != 3 {
 		t.Errorf("expected 3 pending balls, got %d", metrics.PendingCount)

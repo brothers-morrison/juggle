@@ -8,6 +8,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -83,18 +85,32 @@ or if it's a main repo, show registered worktrees.`,
 }
 
 var worktreeRunCmd = &cobra.Command{
-	Use:   "run <command>",
+	Use:   "run <command-or-alias>",
 	Short: "Run a command in all workspaces",
 	Long: `Run a command in the main repo and all registered worktrees.
 
 The command is executed sequentially in each workspace. Use --continue-on-error
 to continue execution even if a command fails in one workspace.
 
+You can also use named aliases defined in .juggle/config.json under "run_aliases".
+If the argument matches an alias name, the alias command is executed.
+
 Examples:
   juggle worktree run "devbox run build"
   juggle worktree run "go test ./..." --continue-on-error
-  juggle worktree run "git status"`,
-	Args: cobra.ExactArgs(1),
+  juggle worktree run "git status"
+
+  # Using aliases (defined in .juggle/config.json)
+  juggle worktree run build    # Runs the "build" alias
+  juggle worktree run test     # Runs the "test" alias
+
+  # List available aliases
+  juggle worktree run --list
+
+  # Set an alias
+  juggle worktree run --set build "devbox run build"
+  juggle worktree run --set test "go test ./..."`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: runWorktreeRun,
 }
 
@@ -115,8 +131,39 @@ Examples:
 	RunE: runWorktreeSync,
 }
 
+var worktreeJumpCmd = &cobra.Command{
+	Use:   "jump [worktree-name]",
+	Short: "Output cd command to jump to a worktree",
+	Long: `Output a cd command that can be eval'd to jump to a registered worktree.
+
+Without arguments, lists worktrees with numbers for selection. With an argument,
+outputs the cd command for that worktree (by name or number).
+
+Usage with shell eval:
+  eval $(juggle worktree jump 1)           # Jump to worktree #1
+  eval $(juggle worktree jump my-feature)  # Jump by name
+  cd $(juggle worktree jump 1 --print)     # Just print the path
+
+Add to your shell config for convenience:
+  jj() { eval "$(juggle worktree jump "$@")"; }
+
+Examples:
+  juggle worktree jump              # List worktrees with numbers
+  juggle worktree jump 1            # Output: cd /path/to/worktree
+  juggle worktree jump my-feature   # Match by directory name
+  juggle worktree jump --print 1    # Output just the path
+  juggle worktree jump main         # Jump to main repo`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: runWorktreeJump,
+}
+
 // Flags for run command
-var worktreeRunContinueOnError bool
+var (
+	worktreeRunContinueOnError bool
+	worktreeRunList            bool
+	worktreeRunSet             string
+	worktreeRunDelete          string
+)
 
 // Flags for sync command
 var (
@@ -124,13 +171,22 @@ var (
 	worktreeSyncYes    bool
 )
 
+// Flags for jump command
+var worktreeJumpPrint bool
+
 func init() {
 	// Add flags for run command
 	worktreeRunCmd.Flags().BoolVar(&worktreeRunContinueOnError, "continue-on-error", false, "Continue running in other workspaces even if a command fails")
+	worktreeRunCmd.Flags().BoolVarP(&worktreeRunList, "list", "l", false, "List available run aliases")
+	worktreeRunCmd.Flags().StringVarP(&worktreeRunSet, "set", "s", "", "Set an alias (usage: --set <name> <command>)")
+	worktreeRunCmd.Flags().StringVarP(&worktreeRunDelete, "delete", "d", "", "Delete an alias by name")
 
 	// Add flags for sync command
 	worktreeSyncCmd.Flags().BoolVar(&worktreeSyncDryRun, "dry-run", false, "Show what would be done without making changes")
 	worktreeSyncCmd.Flags().BoolVarP(&worktreeSyncYes, "yes", "y", false, "Auto-confirm all symlink operations")
+
+	// Add flags for jump command
+	worktreeJumpCmd.Flags().BoolVarP(&worktreeJumpPrint, "print", "p", false, "Print only the path (no cd command)")
 
 	worktreeCmd.AddCommand(worktreeAddCmd)
 	worktreeCmd.AddCommand(worktreeForgetCmd)
@@ -138,6 +194,7 @@ func init() {
 	worktreeCmd.AddCommand(worktreeStatusCmd)
 	worktreeCmd.AddCommand(worktreeRunCmd)
 	worktreeCmd.AddCommand(worktreeSyncCmd)
+	worktreeCmd.AddCommand(worktreeJumpCmd)
 	rootCmd.AddCommand(worktreeCmd)
 }
 
@@ -298,13 +355,58 @@ func runWorktreeStatus(cmd *cobra.Command, args []string) error {
 
 // runWorktreeRun executes a command in all workspaces (main + worktrees)
 func runWorktreeRun(cmd *cobra.Command, args []string) error {
+	// Get main directory for config
+	cwd, err := GetWorkingDir()
+	if err != nil {
+		return fmt.Errorf("failed to get working directory: %w", err)
+	}
+
+	juggleDirName := GetStoreConfig().JuggleDirName
+	mainDir, err := session.ResolveStorageDir(cwd, juggleDirName)
+	if err != nil {
+		mainDir = cwd
+	}
+
+	// Handle --list flag
+	if worktreeRunList {
+		return runWorktreeRunList(mainDir)
+	}
+
+	// Handle --set flag
+	if worktreeRunSet != "" {
+		if len(args) == 0 {
+			return fmt.Errorf("--set requires a command argument: --set <alias-name> <command>")
+		}
+		return runWorktreeRunSetAlias(mainDir, worktreeRunSet, args[0])
+	}
+
+	// Handle --delete flag
+	if worktreeRunDelete != "" {
+		return runWorktreeRunDeleteAlias(mainDir, worktreeRunDelete)
+	}
+
+	// Normal run mode requires a command
+	if len(args) == 0 {
+		return fmt.Errorf("command or alias name required\n\nUsage:\n  juggle worktree run <command-or-alias>\n  juggle worktree run --list")
+	}
+
 	command := strings.TrimSpace(args[0])
 	if command == "" {
 		return fmt.Errorf("command cannot be empty")
 	}
 
+	// Check if command matches an alias
+	projectConfig, err := session.LoadProjectConfig(mainDir)
+	if err == nil && projectConfig.HasRunAliases() {
+		if aliasCmd := projectConfig.GetRunAlias(command); aliasCmd != "" {
+			dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+			fmt.Printf("%s\n", dimStyle.Render(fmt.Sprintf("Using alias %q → %s", command, aliasCmd)))
+			command = aliasCmd
+		}
+	}
+
 	// Get all workspaces
-	workspaces, mainDir, err := getAllWorkspaces()
+	workspaces, wsMainDir, err := getAllWorkspaces()
 	if err != nil {
 		return err
 	}
@@ -326,7 +428,7 @@ func runWorktreeRun(cmd *cobra.Command, args []string) error {
 		// Validate workspace exists
 		if _, err := os.Stat(ws); os.IsNotExist(err) {
 			label := ws
-			if ws == mainDir {
+			if ws == wsMainDir {
 				label = ws + " (main)"
 			}
 			fmt.Printf("\n%s\n", skipStyle.Render("=== "+label+" === SKIPPED (directory not found)"))
@@ -336,7 +438,7 @@ func runWorktreeRun(cmd *cobra.Command, args []string) error {
 
 		// Print header
 		label := ws
-		if ws == mainDir {
+		if ws == wsMainDir {
 			label = ws + " (main)"
 		}
 		fmt.Printf("\n%s\n", headerStyle.Render("=== "+label+" ==="))
@@ -374,6 +476,84 @@ func runWorktreeRun(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Done: %s\n", successStyle.Render(fmt.Sprintf("%d/%d succeeded", succeeded, total)))
 	}
 
+	return nil
+}
+
+// runWorktreeRunList lists all run aliases
+func runWorktreeRunList(mainDir string) error {
+	projectConfig, err := session.LoadProjectConfig(mainDir)
+	if err != nil {
+		return fmt.Errorf("failed to load project config: %w", err)
+	}
+
+	aliases := projectConfig.GetRunAliases()
+	if len(aliases) == 0 {
+		fmt.Println("No run aliases defined.")
+		fmt.Println("\nTo create an alias:")
+		fmt.Println("  juggle worktree run --set <name> <command>")
+		fmt.Println("\nExample:")
+		fmt.Println("  juggle worktree run --set build \"devbox run build\"")
+		return nil
+	}
+
+	nameStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true)
+	cmdStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+
+	// Sort alias names for consistent output
+	names := make([]string, 0, len(aliases))
+	for name := range aliases {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	fmt.Println("Run aliases:")
+	for _, name := range names {
+		fmt.Printf("  %s: %s\n", nameStyle.Render(name), cmdStyle.Render(aliases[name]))
+	}
+
+	return nil
+}
+
+// runWorktreeRunSetAlias sets or updates a run alias
+func runWorktreeRunSetAlias(mainDir, name, command string) error {
+	projectConfig, err := session.LoadProjectConfig(mainDir)
+	if err != nil {
+		return fmt.Errorf("failed to load project config: %w", err)
+	}
+
+	// Check if alias already exists
+	existing := projectConfig.GetRunAlias(name)
+	if existing != "" {
+		fmt.Printf("Updating alias %q: %s → %s\n", name, existing, command)
+	} else {
+		fmt.Printf("Created alias %q: %s\n", name, command)
+	}
+
+	projectConfig.SetRunAlias(name, command)
+
+	if err := session.SaveProjectConfig(mainDir, projectConfig); err != nil {
+		return fmt.Errorf("failed to save project config: %w", err)
+	}
+
+	return nil
+}
+
+// runWorktreeRunDeleteAlias deletes a run alias
+func runWorktreeRunDeleteAlias(mainDir, name string) error {
+	projectConfig, err := session.LoadProjectConfig(mainDir)
+	if err != nil {
+		return fmt.Errorf("failed to load project config: %w", err)
+	}
+
+	if !projectConfig.DeleteRunAlias(name) {
+		return fmt.Errorf("alias %q not found", name)
+	}
+
+	if err := session.SaveProjectConfig(mainDir, projectConfig); err != nil {
+		return fmt.Errorf("failed to save project config: %w", err)
+	}
+
+	fmt.Printf("Deleted alias %q\n", name)
 	return nil
 }
 
@@ -639,4 +819,104 @@ func promptSyncAction(prompt string) (string, error) {
 	default:
 		return "n", nil // Default to no
 	}
+}
+
+// runWorktreeJump outputs a cd command to jump to a worktree
+func runWorktreeJump(cmd *cobra.Command, args []string) error {
+	workspaces, mainDir, err := getAllWorkspaces()
+	if err != nil {
+		return err
+	}
+
+	if len(workspaces) == 0 {
+		return fmt.Errorf("no workspaces found")
+	}
+
+	// If no argument, list workspaces with numbers
+	if len(args) == 0 {
+		// Output to stderr so it doesn't interfere with eval
+		dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+		mainStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
+
+		fmt.Fprintln(os.Stderr, "Workspaces:")
+		for i, ws := range workspaces {
+			name := filepath.Base(ws)
+			if ws == mainDir {
+				fmt.Fprintf(os.Stderr, "  %s  %s\n", dimStyle.Render(fmt.Sprintf("%d.", i+1)), mainStyle.Render(name+" (main)"))
+			} else {
+				fmt.Fprintf(os.Stderr, "  %s  %s\n", dimStyle.Render(fmt.Sprintf("%d.", i+1)), name)
+			}
+		}
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "Usage: eval $(juggle worktree jump <number-or-name>)")
+		return nil
+	}
+
+	// Find the target workspace
+	target := args[0]
+	var targetPath string
+
+	// Try to parse as number first
+	if num, err := strconv.Atoi(target); err == nil {
+		if num < 1 || num > len(workspaces) {
+			return fmt.Errorf("invalid workspace number: %d (valid: 1-%d)", num, len(workspaces))
+		}
+		targetPath = workspaces[num-1]
+	} else {
+		// Try to match by name
+		targetLower := strings.ToLower(target)
+
+		// Special case: "main" matches the main repo
+		if targetLower == "main" {
+			targetPath = mainDir
+		} else {
+			// Try exact match first, then prefix match
+			for _, ws := range workspaces {
+				name := filepath.Base(ws)
+				if strings.ToLower(name) == targetLower {
+					targetPath = ws
+					break
+				}
+			}
+
+			// If no exact match, try prefix match
+			if targetPath == "" {
+				var matches []string
+				for _, ws := range workspaces {
+					name := filepath.Base(ws)
+					if strings.HasPrefix(strings.ToLower(name), targetLower) {
+						matches = append(matches, ws)
+					}
+				}
+
+				if len(matches) == 1 {
+					targetPath = matches[0]
+				} else if len(matches) > 1 {
+					names := make([]string, len(matches))
+					for i, m := range matches {
+						names[i] = filepath.Base(m)
+					}
+					return fmt.Errorf("ambiguous name %q matches: %s", target, strings.Join(names, ", "))
+				}
+			}
+		}
+
+		if targetPath == "" {
+			return fmt.Errorf("no workspace matching %q", target)
+		}
+	}
+
+	// Validate the path exists
+	if _, err := os.Stat(targetPath); os.IsNotExist(err) {
+		return fmt.Errorf("workspace directory does not exist: %s", targetPath)
+	}
+
+	// Output the cd command or just the path
+	if worktreeJumpPrint {
+		fmt.Println(targetPath)
+	} else {
+		fmt.Printf("cd %q\n", targetPath)
+	}
+
+	return nil
 }

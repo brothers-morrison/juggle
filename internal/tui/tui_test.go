@@ -2766,7 +2766,7 @@ func TestTagKeyOpensSessionSelector(t *testing.T) {
 	}
 
 	balls := []*session.Ball{
-		{ID: "ball-1", Title: "Test task", Tags: []string{}, WorkingDir: "/tmp"},
+		{ID: "ball-1", Title: "Test task", Tags: []string{}, WorkingDir: os.TempDir()},
 	}
 
 	model := Model{
@@ -2805,7 +2805,7 @@ func TestTagKeyBallAlreadyInAllSessions(t *testing.T) {
 	}
 
 	balls := []*session.Ball{
-		{ID: "ball-1", Title: "Test task", Tags: []string{"session-a"}, WorkingDir: "/tmp"},
+		{ID: "ball-1", Title: "Test task", Tags: []string{"session-a"}, WorkingDir: os.TempDir()},
 	}
 
 	model := Model{
@@ -2839,7 +2839,7 @@ func TestTagKeyFiltersExistingSessions(t *testing.T) {
 	}
 
 	balls := []*session.Ball{
-		{ID: "ball-1", Title: "Test task", Tags: []string{"session-a"}, WorkingDir: "/tmp"},
+		{ID: "ball-1", Title: "Test task", Tags: []string{"session-a"}, WorkingDir: os.TempDir()},
 	}
 
 	model := Model{
@@ -2889,7 +2889,7 @@ func TestSessionSelectorNavigation(t *testing.T) {
 		{ID: "session-c", Description: "Third session"},
 	}
 
-	ball := &session.Ball{ID: "ball-1", Title: "Test task", Tags: []string{}, WorkingDir: "/tmp"}
+	ball := &session.Ball{ID: "ball-1", Title: "Test task", Tags: []string{}, WorkingDir: os.TempDir()}
 
 	model := Model{
 		mode:               sessionSelectorView,
@@ -2938,7 +2938,7 @@ func TestSessionSelectorBoundaries(t *testing.T) {
 		{ID: "session-b", Description: "Second session"},
 	}
 
-	ball := &session.Ball{ID: "ball-1", Title: "Test task", Tags: []string{}, WorkingDir: "/tmp"}
+	ball := &session.Ball{ID: "ball-1", Title: "Test task", Tags: []string{}, WorkingDir: os.TempDir()}
 
 	model := Model{
 		mode:               sessionSelectorView,
@@ -2973,7 +2973,7 @@ func TestSessionSelectorCancel(t *testing.T) {
 		{ID: "session-a", Description: "First session"},
 	}
 
-	ball := &session.Ball{ID: "ball-1", Title: "Test task", Tags: []string{}, WorkingDir: "/tmp"}
+	ball := &session.Ball{ID: "ball-1", Title: "Test task", Tags: []string{}, WorkingDir: os.TempDir()}
 
 	model := Model{
 		mode:               sessionSelectorView,
@@ -3005,7 +3005,7 @@ func TestSessionSelectorCancelWithQ(t *testing.T) {
 		{ID: "session-a", Description: "First session"},
 	}
 
-	ball := &session.Ball{ID: "ball-1", Title: "Test task", Tags: []string{}, WorkingDir: "/tmp"}
+	ball := &session.Ball{ID: "ball-1", Title: "Test task", Tags: []string{}, WorkingDir: os.TempDir()}
 
 	model := Model{
 		mode:               sessionSelectorView,
@@ -3034,7 +3034,7 @@ func TestSessionSelectorSelectWithEnter(t *testing.T) {
 		{ID: "session-b", Description: "Second session"},
 	}
 
-	ball := &session.Ball{ID: "ball-1", Title: "Test task", Tags: []string{}, WorkingDir: "/tmp"}
+	ball := &session.Ball{ID: "ball-1", Title: "Test task", Tags: []string{}, WorkingDir: os.TempDir()}
 
 	model := Model{
 		mode:               sessionSelectorView,
@@ -3072,7 +3072,7 @@ func TestSessionSelectorSelectWithSpace(t *testing.T) {
 		{ID: "session-b", Description: "Second session"},
 	}
 
-	ball := &session.Ball{ID: "ball-1", Title: "Test task", Tags: []string{}, WorkingDir: "/tmp"}
+	ball := &session.Ball{ID: "ball-1", Title: "Test task", Tags: []string{}, WorkingDir: os.TempDir()}
 
 	model := Model{
 		mode:                sessionSelectorView,
@@ -3121,7 +3121,7 @@ func TestSessionSelectorViewRendering(t *testing.T) {
 		{ID: "session-b", Description: "Second session"},
 	}
 
-	ball := &session.Ball{ID: "ball-1", Title: "Test task", Tags: []string{"existing-tag"}, WorkingDir: "/tmp"}
+	ball := &session.Ball{ID: "ball-1", Title: "Test task", Tags: []string{"existing-tag"}, WorkingDir: os.TempDir()}
 
 	model := Model{
 		mode:               sessionSelectorView,
@@ -3175,7 +3175,7 @@ func TestSessionSelectorViewShowsCursor(t *testing.T) {
 		{ID: "session-b", Description: "Second session"},
 	}
 
-	ball := &session.Ball{ID: "ball-1", Title: "Test task", Tags: []string{}, WorkingDir: "/tmp"}
+	ball := &session.Ball{ID: "ball-1", Title: "Test task", Tags: []string{}, WorkingDir: os.TempDir()}
 
 	model := Model{
 		mode:                sessionSelectorView,
@@ -3203,7 +3203,7 @@ func TestTagKeyOnlyWorksInBallsPanel(t *testing.T) {
 	}
 
 	balls := []*session.Ball{
-		{ID: "ball-1", Title: "Test task", Tags: []string{}, WorkingDir: "/tmp"},
+		{ID: "ball-1", Title: "Test task", Tags: []string{}, WorkingDir: os.TempDir()},
 	}
 
 	model := Model{
@@ -3254,7 +3254,7 @@ func TestTagKeyNoBallSelected(t *testing.T) {
 
 // Test submitSessionSelection with empty items
 func TestSubmitSessionSelectionEmpty(t *testing.T) {
-	ball := &session.Ball{ID: "ball-1", Title: "Test task", Tags: []string{}, WorkingDir: "/tmp"}
+	ball := &session.Ball{ID: "ball-1", Title: "Test task", Tags: []string{}, WorkingDir: os.TempDir()}
 
 	model := Model{
 		mode:               sessionSelectorView,
@@ -3306,7 +3306,7 @@ func TestSessionSelectorIndexCorrection(t *testing.T) {
 		{ID: "session-a", Description: "First session"},
 	}
 
-	ball := &session.Ball{ID: "ball-1", Title: "Test task", Tags: []string{}, WorkingDir: "/tmp"}
+	ball := &session.Ball{ID: "ball-1", Title: "Test task", Tags: []string{}, WorkingDir: os.TempDir()}
 
 	model := Model{
 		mode:               sessionSelectorView,
@@ -6964,10 +6964,10 @@ func TestToggleFilter_UpdatesFilteredBalls(t *testing.T) {
 	// Create model with balls of different states
 	model := Model{
 		balls: []*session.Ball{
-			{ID: "ball-1", Title: "Pending Ball", State: session.StatePending, WorkingDir: "/tmp"},
-			{ID: "ball-2", Title: "In Progress Ball", State: session.StateInProgress, WorkingDir: "/tmp"},
-			{ID: "ball-3", Title: "Blocked Ball", State: session.StateBlocked, WorkingDir: "/tmp"},
-			{ID: "ball-4", Title: "Complete Ball", State: session.StateComplete, WorkingDir: "/tmp"},
+			{ID: "ball-1", Title: "Pending Ball", State: session.StatePending, WorkingDir: os.TempDir()},
+			{ID: "ball-2", Title: "In Progress Ball", State: session.StateInProgress, WorkingDir: os.TempDir()},
+			{ID: "ball-3", Title: "Blocked Ball", State: session.StateBlocked, WorkingDir: os.TempDir()},
+			{ID: "ball-4", Title: "Complete Ball", State: session.StateComplete, WorkingDir: os.TempDir()},
 		},
 		filterStates: map[string]bool{
 			"pending":     true,
@@ -7013,8 +7013,8 @@ func TestToggleFilter_UpdatesFilteredBalls(t *testing.T) {
 func TestToggleFilter_AllFiltersOff(t *testing.T) {
 	model := Model{
 		balls: []*session.Ball{
-			{ID: "ball-1", Title: "Pending Ball", State: session.StatePending, WorkingDir: "/tmp"},
-			{ID: "ball-2", Title: "In Progress Ball", State: session.StateInProgress, WorkingDir: "/tmp"},
+			{ID: "ball-1", Title: "Pending Ball", State: session.StatePending, WorkingDir: os.TempDir()},
+			{ID: "ball-2", Title: "In Progress Ball", State: session.StateInProgress, WorkingDir: os.TempDir()},
 		},
 		filterStates: map[string]bool{
 			"pending":     true,
@@ -7090,10 +7090,10 @@ func TestToggleFilter_StatusBarShowsMessage(t *testing.T) {
 func TestToggleFilter_ShowAll(t *testing.T) {
 	model := Model{
 		balls: []*session.Ball{
-			{ID: "ball-1", Title: "Pending Ball", State: session.StatePending, WorkingDir: "/tmp"},
-			{ID: "ball-2", Title: "In Progress Ball", State: session.StateInProgress, WorkingDir: "/tmp"},
-			{ID: "ball-3", Title: "Blocked Ball", State: session.StateBlocked, WorkingDir: "/tmp"},
-			{ID: "ball-4", Title: "Complete Ball", State: session.StateComplete, WorkingDir: "/tmp"},
+			{ID: "ball-1", Title: "Pending Ball", State: session.StatePending, WorkingDir: os.TempDir()},
+			{ID: "ball-2", Title: "In Progress Ball", State: session.StateInProgress, WorkingDir: os.TempDir()},
+			{ID: "ball-3", Title: "Blocked Ball", State: session.StateBlocked, WorkingDir: os.TempDir()},
+			{ID: "ball-4", Title: "Complete Ball", State: session.StateComplete, WorkingDir: os.TempDir()},
 		},
 		filterStates: map[string]bool{
 			"pending":     false,
@@ -7133,10 +7133,10 @@ func TestToggleFilter_ShowAll(t *testing.T) {
 func TestToggleFilter_CursorReset(t *testing.T) {
 	model := Model{
 		balls: []*session.Ball{
-			{ID: "ball-1", Title: "Pending 1", State: session.StatePending, WorkingDir: "/tmp"},
-			{ID: "ball-2", Title: "Pending 2", State: session.StatePending, WorkingDir: "/tmp"},
-			{ID: "ball-3", Title: "Pending 3", State: session.StatePending, WorkingDir: "/tmp"},
-			{ID: "ball-4", Title: "In Progress", State: session.StateInProgress, WorkingDir: "/tmp"},
+			{ID: "ball-1", Title: "Pending 1", State: session.StatePending, WorkingDir: os.TempDir()},
+			{ID: "ball-2", Title: "Pending 2", State: session.StatePending, WorkingDir: os.TempDir()},
+			{ID: "ball-3", Title: "Pending 3", State: session.StatePending, WorkingDir: os.TempDir()},
+			{ID: "ball-4", Title: "In Progress", State: session.StateInProgress, WorkingDir: os.TempDir()},
 		},
 		filterStates: map[string]bool{
 			"pending":     true,
@@ -8874,7 +8874,7 @@ func TestEditBallFormPrepopulatesFields(t *testing.T) {
 		ModelSize:          session.ModelSizeMedium,
 		AcceptanceCriteria: []string{"AC1", "AC2"},
 		DependsOn:          []string{"dep-1"},
-		WorkingDir:         "/tmp/test",
+		WorkingDir:         filepath.Join(os.TempDir(), "test"),
 	}
 
 	model := Model{
@@ -9811,7 +9811,7 @@ func TestEditBallBlockingReasonLoadsFromBall(t *testing.T) {
 		Priority:      session.PriorityMedium,
 		State:         session.StateBlocked,
 		BlockedReason: "Human needed",
-		WorkingDir:    "/tmp/test",
+		WorkingDir:    filepath.Join(os.TempDir(), "test"),
 	}
 
 	model := Model{
@@ -9851,7 +9851,7 @@ func TestEditBallBlockingReasonCustomLoadsFromBall(t *testing.T) {
 		Priority:      session.PriorityMedium,
 		State:         session.StateBlocked,
 		BlockedReason: "My custom reason",
-		WorkingDir:    "/tmp/test",
+		WorkingDir:    filepath.Join(os.TempDir(), "test"),
 	}
 
 	model := Model{

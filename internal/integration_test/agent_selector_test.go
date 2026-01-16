@@ -1,6 +1,8 @@
 package integration_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -163,16 +165,17 @@ func TestSessionSelection_StructFields(t *testing.T) {
 	// This is a compile-time test that ensures the struct is properly defined
 
 	// Create a mock selection to test struct fields
+	testDir := filepath.Join(os.TempDir(), "test")
 	selection := &cli.SessionSelection{
 		SessionID:  "test-session",
-		ProjectDir: "/tmp/test",
+		ProjectDir: testDir,
 	}
 
 	if selection.SessionID != "test-session" {
 		t.Error("SessionID field not accessible")
 	}
 
-	if selection.ProjectDir != "/tmp/test" {
+	if selection.ProjectDir != testDir {
 		t.Error("ProjectDir field not accessible")
 	}
 }

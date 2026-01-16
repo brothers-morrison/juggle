@@ -716,7 +716,7 @@ func TestLegacyBallIDCompatibility(t *testing.T) {
 	}
 
 	// Test FolderName still works
-	legacyBall.WorkingDir = "/home/user/myproject"
+	legacyBall.WorkingDir = filepath.Join(os.TempDir(), "user", "myproject")
 	if legacyBall.FolderName() != "myproject" {
 		t.Errorf("expected FolderName 'myproject', got '%s'", legacyBall.FolderName())
 	}

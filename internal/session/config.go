@@ -345,6 +345,7 @@ func EnsureProjectInSearchPaths(projectDir string) error {
 //   - VCS: project-specific VCS preference (overrides global)
 //   - AgentProvider: project-specific agent CLI (overrides global)
 //   - ModelOverrides: project-specific model mappings (merged with global)
+//   - RunAliases: named command aliases for `juggle worktree run`
 //
 // These settings apply to all balls and sessions within the project.
 type ProjectConfig struct {
@@ -353,6 +354,7 @@ type ProjectConfig struct {
 	VCS                       string            `json:"vcs,omitempty"`                         // Version control system: "git" or "jj"
 	AgentProvider             string            `json:"agent_provider,omitempty"`              // Agent CLI: "claude" or "opencode"
 	ModelOverrides            map[string]string `json:"model_overrides,omitempty"`             // Custom model mappings
+	RunAliases                map[string]string `json:"run_aliases,omitempty"`                 // Named command aliases for worktree run
 }
 
 // DefaultProjectConfig returns a new project config with initial values
@@ -451,6 +453,44 @@ func (c *ProjectConfig) GetVCS() string {
 // ClearVCS removes the project VCS preference.
 func (c *ProjectConfig) ClearVCS() {
 	c.VCS = ""
+}
+
+// SetRunAlias sets a run alias for worktree run commands.
+func (c *ProjectConfig) SetRunAlias(name, command string) {
+	if c.RunAliases == nil {
+		c.RunAliases = make(map[string]string)
+	}
+	c.RunAliases[name] = command
+}
+
+// GetRunAlias returns the command for a run alias, or empty if not found.
+func (c *ProjectConfig) GetRunAlias(name string) string {
+	if c.RunAliases == nil {
+		return ""
+	}
+	return c.RunAliases[name]
+}
+
+// GetRunAliases returns all run aliases.
+func (c *ProjectConfig) GetRunAliases() map[string]string {
+	return c.RunAliases
+}
+
+// DeleteRunAlias removes a run alias.
+func (c *ProjectConfig) DeleteRunAlias(name string) bool {
+	if c.RunAliases == nil {
+		return false
+	}
+	if _, exists := c.RunAliases[name]; exists {
+		delete(c.RunAliases, name)
+		return true
+	}
+	return false
+}
+
+// HasRunAliases returns true if any run aliases are defined.
+func (c *ProjectConfig) HasRunAliases() bool {
+	return len(c.RunAliases) > 0
 }
 
 // UpdateProjectAcceptanceCriteria updates the repo-level acceptance criteria
