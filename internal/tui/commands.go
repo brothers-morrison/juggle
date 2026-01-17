@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -481,6 +483,133 @@ func loadHistoryOutput(outputFile string) tea.Cmd {
 // readFile is a helper to read file content
 func readFile(path string) ([]byte, error) {
 	return os.ReadFile(path)
+}
+
+// Log tail messages and commands
+
+// logTailLineMsg is sent when a new line is read from the agent log file
+type logTailLineMsg struct {
+	line    string
+	isError bool
+}
+
+// logTailErrorMsg is sent when there's an error reading the log file
+type logTailErrorMsg struct {
+	err error
+}
+
+// logTailClosedMsg is sent when the log tail is closed
+type logTailClosedMsg struct{}
+
+// retryLogTailMsg is sent to retry starting the log tailer
+type retryLogTailMsg struct{}
+
+// LogTailer reads lines from a log file and streams them via a channel
+type LogTailer struct {
+	file     *os.File
+	done     chan struct{}
+	closed   bool
+	mu       sync.Mutex
+	offset   int64
+	filePath string
+}
+
+// NewLogTailer creates a new log tailer for the given file path
+func NewLogTailer(filePath string) (*LogTailer, error) {
+	// Open file for reading
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	// Seek to end of file (we only want new content)
+	offset, err := file.Seek(0, io.SeekEnd)
+	if err != nil {
+		file.Close()
+		return nil, err
+	}
+
+	return &LogTailer{
+		file:     file,
+		done:     make(chan struct{}),
+		offset:   offset,
+		filePath: filePath,
+	}, nil
+}
+
+// Close stops the log tailer
+func (t *LogTailer) Close() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closed {
+		return nil
+	}
+	t.closed = true
+	close(t.done)
+	return t.file.Close()
+}
+
+// IsClosed returns whether the tailer is closed
+func (t *LogTailer) IsClosed() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.closed
+}
+
+// startLogTailCmd creates a command that starts tailing a log file
+func startLogTailCmd(projectDir, sessionID string) tea.Cmd {
+	return func() tea.Msg {
+		logPath := filepath.Join(projectDir, ".juggle", "sessions", sessionID, "agent.log")
+
+		tailer, err := NewLogTailer(logPath)
+		if err != nil {
+			// Log file might not exist yet - that's OK, we'll try again
+			return logTailErrorMsg{err: err}
+		}
+
+		return logTailerStartedMsg{tailer: tailer}
+	}
+}
+
+// logTailerStartedMsg is sent when a log tailer has been started
+type logTailerStartedMsg struct {
+	tailer *LogTailer
+}
+
+// listenForLogTailCmd creates a command that reads new lines from the log file
+func listenForLogTailCmd(tailer *LogTailer) tea.Cmd {
+	return func() tea.Msg {
+		if tailer == nil || tailer.IsClosed() {
+			return logTailClosedMsg{}
+		}
+
+		// Check for new content
+		buf := make([]byte, 4096)
+		n, err := tailer.file.Read(buf)
+		if err != nil {
+			if err == io.EOF {
+				// No new content - wait a bit and try again
+				time.Sleep(100 * time.Millisecond)
+				return nil // Return nil to keep the listener alive
+			}
+			return logTailErrorMsg{err: err}
+		}
+
+		if n > 0 {
+			// Parse lines from the buffer
+			content := string(buf[:n])
+			lines := strings.Split(content, "\n")
+
+			// Return the first non-empty line
+			for _, line := range lines {
+				if line != "" {
+					return logTailLineMsg{line: line, isError: false}
+				}
+			}
+		}
+
+		return nil
+	}
 }
 
 // Daemon control messages and commands

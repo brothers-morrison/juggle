@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbletea"
@@ -327,6 +328,42 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.agentStatus.Iteration = msg.iteration
 		m.agentStatus.MaxIterations = msg.maxIterations
 		m.agentMonitorPaused = msg.paused
+		return m, nil
+
+	case logTailerStartedMsg:
+		// Store the log tailer and start listening for log lines
+		m.agentLogTailer = msg.tailer
+		return m, listenForLogTailCmd(m.agentLogTailer)
+
+	case logTailLineMsg:
+		// Add the log line to the agent output buffer
+		m.addAgentOutput(msg.line, msg.isError)
+		// Continue listening for more log lines if in monitor mode
+		if m.mode == agentMonitorView && m.agentLogTailer != nil && !m.agentLogTailer.IsClosed() {
+			return m, listenForLogTailCmd(m.agentLogTailer)
+		}
+		return m, nil
+
+	case logTailErrorMsg:
+		// Log file error - might not exist yet, retry after a delay
+		if m.mode == agentMonitorView && m.store != nil && m.agentStatus.SessionID != "" {
+			// Retry starting the log tail after a brief delay
+			return m, tea.Tick(500*time.Millisecond, func(t time.Time) tea.Msg {
+				return retryLogTailMsg{}
+			})
+		}
+		return m, nil
+
+	case retryLogTailMsg:
+		// Retry starting the log tailer
+		if m.mode == agentMonitorView && m.store != nil && m.agentStatus.SessionID != "" {
+			return m, startLogTailCmd(m.store.ProjectDir(), m.agentStatus.SessionID)
+		}
+		return m, nil
+
+	case logTailClosedMsg:
+		// Log tailer was closed - cleanup
+		m.agentLogTailer = nil
 		return m, nil
 	}
 
@@ -738,7 +775,12 @@ func (m Model) handleSplitViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.agentStatus.Running {
 			m.mode = agentMonitorView
 			m.agentMonitorStartTime = m.nowFunc()
-			return m, m.agentSpinner.Tick
+			// Start spinner and log tail
+			cmds := []tea.Cmd{m.agentSpinner.Tick}
+			if m.store != nil && m.agentStatus.SessionID != "" {
+				cmds = append(cmds, startLogTailCmd(m.store.ProjectDir(), m.agentStatus.SessionID))
+			}
+			return m, tea.Batch(cmds...)
 		}
 		m.message = "No agent running. Press 'A' on a session to start."
 		return m, nil

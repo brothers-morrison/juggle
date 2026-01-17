@@ -10,12 +10,22 @@ func (m Model) handleAgentMonitorKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		// Return to split view (agent keeps running)
 		m.mode = splitView
+		// Close log tailer when leaving monitor view
+		if m.agentLogTailer != nil {
+			m.agentLogTailer.Close()
+			m.agentLogTailer = nil
+		}
 		return m, nil
 
 	case "q":
 		// Detach from monitor - agent keeps running as daemon
 		m.mode = splitView
 		m.message = "Agent continues running in background"
+		// Close log tailer when leaving monitor view
+		if m.agentLogTailer != nil {
+			m.agentLogTailer.Close()
+			m.agentLogTailer = nil
+		}
 		return m, nil
 
 	case "X":

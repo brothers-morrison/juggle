@@ -236,6 +236,7 @@ type Model struct {
 	agentMonitorReconnected bool            // True if reconnected to existing daemon
 	agentMonitorStartTime   time.Time       // When the current agent run started
 	agentSpinner            spinner.Model   // Spinner for agent running animation
+	agentLogTailer          *LogTailer      // Log file tailer for streaming agent output
 
 	// Time provider for testability
 	nowFunc func() time.Time // Can be overridden in tests
@@ -350,10 +351,11 @@ func (m Model) Init() tea.Cmd {
 	if m.fileWatcher != nil {
 		cmds = append(cmds, listenForWatcherEvents(m.fileWatcher))
 	}
-	// If starting in monitor mode with a session, load daemon state and start spinner
+	// If starting in monitor mode with a session, load daemon state, start spinner, and start log tail
 	if m.mode == agentMonitorView && m.agentStatus.SessionID != "" && m.store != nil {
 		cmds = append(cmds, loadDaemonStateCmd(m.store.ProjectDir(), m.agentStatus.SessionID))
 		cmds = append(cmds, m.agentSpinner.Tick)
+		cmds = append(cmds, startLogTailCmd(m.store.ProjectDir(), m.agentStatus.SessionID))
 	}
 	return tea.Batch(cmds...)
 }
