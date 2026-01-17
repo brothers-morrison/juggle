@@ -327,6 +327,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.agentStatus.Running = msg.running
 		m.agentStatus.Iteration = msg.iteration
 		m.agentStatus.MaxIterations = msg.maxIterations
+		m.agentStatus.CurrentBallID = msg.currentBallID
+		m.agentStatus.CurrentBallTitle = msg.currentBallTitle
+		m.agentStatus.ACsComplete = msg.acsComplete
+		m.agentStatus.ACsTotal = msg.acsTotal
+		m.agentStatus.Model = msg.model
+		m.agentStatus.Provider = msg.provider
 		m.agentMonitorPaused = msg.paused
 		return m, nil
 

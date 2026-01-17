@@ -195,10 +195,16 @@ type agentProcessStartedMsg struct {
 
 // AgentStatus tracks the state of a running agent
 type AgentStatus struct {
-	Running       bool
-	SessionID     string
-	Iteration     int
-	MaxIterations int
+	Running          bool
+	SessionID        string
+	Iteration        int
+	MaxIterations    int
+	CurrentBallID    string
+	CurrentBallTitle string
+	ACsComplete      int
+	ACsTotal         int
+	Model            string
+	Provider         string
 }
 
 // AgentProcess holds state for a running agent with output streaming
@@ -632,6 +638,8 @@ type daemonStateLoadedMsg struct {
 	currentBallTitle string
 	iteration        int
 	maxIterations    int
+	acsComplete      int
+	acsTotal         int
 	model            string
 	provider         string
 	err              error
@@ -668,6 +676,8 @@ func loadDaemonStateCmd(projectDir, sessionID string) tea.Cmd {
 			currentBallTitle: state.CurrentBallTitle,
 			iteration:        state.Iteration,
 			maxIterations:    state.MaxIterations,
+			acsComplete:      state.ACsComplete,
+			acsTotal:         state.ACsTotal,
 			model:            state.Model,
 			provider:         state.Provider,
 		}

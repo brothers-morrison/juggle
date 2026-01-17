@@ -55,7 +55,7 @@ func (m Model) renderAgentMonitorView() string {
 	b.WriteString("\n")
 
 	// Calculate output section height
-	outputHeight := m.height - 12 // title(2) + progress(2) + metrics(4) + controls(2) + margins
+	outputHeight := m.height - 14 // title(2) + progress(2) + metrics(6) + controls(2) + margins
 	if outputHeight < 5 {
 		outputHeight = 5
 	}
@@ -235,14 +235,37 @@ func (m Model) renderMonitorOutputSection(height int) string {
 func (m Model) renderMonitorMetricsPanel() string {
 	var b strings.Builder
 
-	// Get current ball info from agent status or output
+	// Get current ball info from agent status
+	sessionID := "—"
 	ballID := "—"
+	ballTitle := "—"
+	acProgress := "—"
 	startTime := "—"
 	elapsed := "—"
 	model := "—"
 
-	if m.agentStatus.Running || m.agentStatus.SessionID != "" {
-		ballID = m.agentStatus.SessionID
+	if m.agentStatus.SessionID != "" {
+		sessionID = m.agentStatus.SessionID
+	}
+
+	if m.agentStatus.CurrentBallID != "" {
+		ballID = m.agentStatus.CurrentBallID
+		if m.agentStatus.CurrentBallTitle != "" {
+			// Truncate title if too long
+			title := m.agentStatus.CurrentBallTitle
+			if len(title) > 30 {
+				title = title[:27] + "..."
+			}
+			ballTitle = title
+		}
+	}
+
+	if m.agentStatus.ACsTotal > 0 {
+		acProgress = fmt.Sprintf("%d/%d", m.agentStatus.ACsComplete, m.agentStatus.ACsTotal)
+	}
+
+	if m.agentStatus.Model != "" {
+		model = m.agentStatus.Model
 	}
 
 	if !m.agentMonitorStartTime.IsZero() {
@@ -253,14 +276,26 @@ func (m Model) renderMonitorMetricsPanel() string {
 	// Row 1: Session and Started
 	b.WriteString(fmt.Sprintf("  %s %s    %s %s\n",
 		monitorMetricLabelStyle.Render("Session:"),
-		monitorMetricValueStyle.Render(ballID),
+		monitorMetricValueStyle.Render(sessionID),
 		monitorMetricLabelStyle.Render("Started:"),
 		monitorMetricValueStyle.Render(startTime)))
 
-	// Row 2: Elapsed and Model
+	// Row 2: Ball ID and AC Progress
 	b.WriteString(fmt.Sprintf("  %s %s    %s %s\n",
+		monitorMetricLabelStyle.Render("Ball:"),
+		monitorMetricValueStyle.Render(ballID),
+		monitorMetricLabelStyle.Render("ACs:"),
+		monitorMetricValueStyle.Render(acProgress)))
+
+	// Row 3: Ball Title and Elapsed
+	b.WriteString(fmt.Sprintf("  %s %s    %s %s\n",
+		monitorMetricLabelStyle.Render("Title:"),
+		monitorMetricValueStyle.Render(ballTitle),
 		monitorMetricLabelStyle.Render("Elapsed:"),
-		monitorMetricValueStyle.Render(elapsed),
+		monitorMetricValueStyle.Render(elapsed)))
+
+	// Row 4: Model
+	b.WriteString(fmt.Sprintf("  %s %s\n",
 		monitorMetricLabelStyle.Render("Model:"),
 		monitorMetricValueStyle.Render(model)))
 
