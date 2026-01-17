@@ -2,6 +2,9 @@ package integration_test
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -1580,6 +1583,120 @@ func TestAgentLoop_BlockedSignalAcceptedWithProgress(t *testing.T) {
 	// Should have only called once (signal accepted)
 	if mock.NextIndex != 1 {
 		t.Errorf("Expected 1 call to runner, got %d", mock.NextIndex)
+	}
+}
+
+// TestAgentLoop_BlockedWithVCSChanges_Accepted verifies that when an agent signals BLOCKED
+// without updating progress, but VCS shows uncommitted changes, the BLOCKED signal is accepted
+// and the work is isolated via IsolateAndReset.
+func TestAgentLoop_BlockedWithVCSChanges_Accepted(t *testing.T) {
+	skipIfNoClaudeCLI(t)
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	// Initialize git repo for VCS detection
+	cmd := exec.Command("git", "init")
+	cmd.Dir = env.ProjectDir
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("Failed to init git: %v", err)
+	}
+	// Configure git user for commits
+	cmd = exec.Command("git", "config", "user.email", "test@test.com")
+	cmd.Dir = env.ProjectDir
+	_ = cmd.Run()
+	cmd = exec.Command("git", "config", "user.name", "Test User")
+	cmd.Dir = env.ProjectDir
+	_ = cmd.Run()
+	// Create initial commit
+	initFile := filepath.Join(env.ProjectDir, ".gitkeep")
+	if err := os.WriteFile(initFile, []byte(""), 0644); err != nil {
+		t.Fatalf("Failed to create .gitkeep: %v", err)
+	}
+	cmd = exec.Command("git", "add", "-A")
+	cmd.Dir = env.ProjectDir
+	_ = cmd.Run()
+	cmd = exec.Command("git", "commit", "-m", "initial commit")
+	cmd.Dir = env.ProjectDir
+	_ = cmd.Run()
+
+	// Create a session
+	env.CreateSession(t, "test-session", "Test session for agent")
+
+	// Create a pending ball
+	ball := env.CreateBall(t, "Test ball", session.PriorityMedium)
+	ball.Tags = []string{"test-session"}
+	ball.State = session.StatePending
+	store := env.GetStore(t)
+	if err := store.UpdateBall(ball); err != nil {
+		t.Fatalf("Failed to update ball: %v", err)
+	}
+
+	// Create uncommitted changes in the working directory to simulate agent work
+	testFile := filepath.Join(env.ProjectDir, "agent-work-in-progress.txt")
+	if err := os.WriteFile(testFile, []byte("work in progress\n"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+	// Stage the file so git sees it as a change
+	cmd = exec.Command("git", "add", testFile)
+	cmd.Dir = env.ProjectDir
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("Failed to stage test file: %v", err)
+	}
+
+	// Setup mock runner that returns BLOCKED without updating progress
+	mock := agent.NewMockRunner(
+		&agent.RunResult{
+			Output:        "Sandbox blocked me\n<promise>BLOCKED: cannot modify settings.local.json</promise>",
+			Blocked:       true,
+			BlockedReason: "cannot modify settings.local.json",
+		},
+	)
+	agent.SetRunner(mock)
+	defer agent.ResetRunner()
+
+	// Run the agent loop - BLOCKED should be accepted due to VCS changes
+	config := cli.AgentLoopConfig{
+		SessionID:     "test-session",
+		ProjectDir:    env.ProjectDir,
+		MaxIterations: 2,
+		Trust:         false,
+		IterDelay:     0,
+	}
+
+	result, err := cli.RunAgentLoop(config)
+	if err != nil {
+		t.Fatalf("Agent run failed: %v", err)
+	}
+
+	// Should be blocked (signal accepted due to VCS changes)
+	if !result.Blocked {
+		t.Error("Expected result.Blocked=true (BLOCKED signal accepted due to VCS changes)")
+	}
+	if result.BlockedReason != "cannot modify settings.local.json" {
+		t.Errorf("Expected BlockedReason 'cannot modify settings.local.json', got '%s'", result.BlockedReason)
+	}
+
+	// Should have only called once (signal accepted on first try)
+	if len(mock.Calls) != 1 {
+		t.Errorf("Expected 1 call to runner (BLOCKED accepted due to VCS), got %d", len(mock.Calls))
+	}
+
+	// Verify the test file is no longer in working copy after IsolateAndReset
+	// Note: .juggle/ directory may still show as untracked - that's fine
+	cmd = exec.Command("git", "status", "--porcelain")
+	cmd.Dir = env.ProjectDir
+	output, _ := cmd.Output()
+	statusOutput := string(output)
+	if strings.Contains(statusOutput, "agent-work-in-progress.txt") {
+		t.Errorf("Expected test file to be removed from working copy after IsolateAndReset, got: %s", statusOutput)
+	}
+
+	// Verify blocked branch was created
+	cmd = exec.Command("git", "branch", "--list", "blocked-*")
+	cmd.Dir = env.ProjectDir
+	output, _ = cmd.Output()
+	if !strings.Contains(string(output), "blocked-") {
+		t.Error("Expected blocked-* branch to be created for isolated work")
 	}
 }
 

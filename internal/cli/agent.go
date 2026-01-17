@@ -727,6 +727,50 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 			// VALIDATE: Check if progress was updated this iteration
 			progressAfter := getProgressLineCount(sessionStore, storageID)
 			if progressAfter <= progressBefore {
+				// No progress file update - but check VCS for uncommitted work
+				// This handles cases where agent hit a blocker before running `juggle blocked`
+				globalVCS, gErr := session.GetGlobalVCSWithOptions(GetConfigOptions())
+				if gErr != nil {
+					globalVCS = "" // Fall back to auto-detection
+				}
+				projectVCS, pErr := session.GetProjectVCS(config.ProjectDir)
+				if pErr != nil {
+					projectVCS = "" // Fall back to auto-detection
+				}
+				backend := vcs.GetBackendForProject(config.ProjectDir, vcs.VCSType(projectVCS), vcs.VCSType(globalVCS))
+
+				hasChanges, vcsErr := backend.HasChanges(config.ProjectDir)
+				if vcsErr == nil && hasChanges {
+					// VCS shows uncommitted changes - agent was working when it hit blocker
+					fmt.Println()
+					fmt.Printf("🔍 Detected uncommitted changes despite no progress update\n")
+					fmt.Printf("📊 Backing out work and accepting BLOCKED signal...\n")
+
+					// Describe the working copy with BLOCKED reason
+					descMsg := fmt.Sprintf("BLOCKED: %s", runResult.BlockedReason)
+					if err := backend.DescribeWorkingCopy(config.ProjectDir, descMsg); err != nil {
+						fmt.Fprintf(os.Stderr, "Warning: failed to describe working copy: %v\n", err)
+					}
+
+					// Isolate work and reset to clean state
+					isolatedRev, err := backend.IsolateAndReset(config.ProjectDir, "")
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "Warning: failed to isolate work: %v\n", err)
+					} else if isolatedRev != "" {
+						fmt.Printf("✓ Isolated work in revision: %s\n", isolatedRev)
+
+						// Verify working copy is clean after reset
+						if stillDirty, checkErr := backend.HasChanges(config.ProjectDir); checkErr == nil && stillDirty {
+							fmt.Fprintf(os.Stderr, "Warning: working copy still has changes after reset\n")
+						}
+					}
+
+					result.Blocked = true
+					result.BlockedReason = runResult.BlockedReason
+					break
+				}
+
+				// No VCS changes either - truly no progress
 				fmt.Println()
 				fmt.Printf("⚠️  Agent signaled BLOCKED but did not update progress. Continuing iteration...\n")
 				// Don't accept the signal - fall through to terminal state check
