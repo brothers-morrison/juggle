@@ -237,7 +237,7 @@ func (m Model) renderMonitorMetricsPanel() string {
 
 	// Get current ball info from agent status or output
 	ballID := "—"
-	ballTitle := "—"
+	startTime := "—"
 	elapsed := "—"
 	model := "—"
 
@@ -246,16 +246,18 @@ func (m Model) renderMonitorMetricsPanel() string {
 	}
 
 	if !m.agentMonitorStartTime.IsZero() {
+		startTime = m.agentMonitorStartTime.Format("15:04:05")
 		elapsed = formatDuration(time.Since(m.agentMonitorStartTime))
 	}
 
-	// Row 1
-	b.WriteString(fmt.Sprintf("  %s %s  %s\n",
+	// Row 1: Session and Started
+	b.WriteString(fmt.Sprintf("  %s %s    %s %s\n",
 		monitorMetricLabelStyle.Render("Session:"),
 		monitorMetricValueStyle.Render(ballID),
-		monitorMetricValueStyle.Render(ballTitle)))
+		monitorMetricLabelStyle.Render("Started:"),
+		monitorMetricValueStyle.Render(startTime)))
 
-	// Row 2
+	// Row 2: Elapsed and Model
 	b.WriteString(fmt.Sprintf("  %s %s    %s %s\n",
 		monitorMetricLabelStyle.Render("Elapsed:"),
 		monitorMetricValueStyle.Render(elapsed),
