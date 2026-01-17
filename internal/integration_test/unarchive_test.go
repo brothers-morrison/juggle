@@ -1,6 +1,7 @@
 package integration_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -651,11 +652,17 @@ func setupConfigWithTestProject(t *testing.T, env *TestEnv) {
 	}
 
 	configPath := filepath.Join(juggleConfigDir, "config.json")
-	configContent := fmt.Sprintf(`{
-  "search_paths": ["%s"]
-}`, env.ProjectDir)
 
-	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+	// Use json.Marshal to properly escape paths (especially Windows backslashes)
+	config := map[string][]string{
+		"search_paths": {env.ProjectDir},
+	}
+	configContent, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		t.Fatalf("Failed to marshal config: %v", err)
+	}
+
+	if err := os.WriteFile(configPath, configContent, 0644); err != nil {
 		t.Fatalf("Failed to create config file: %v", err)
 	}
 }

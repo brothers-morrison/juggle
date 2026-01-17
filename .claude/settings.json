@@ -6,6 +6,11 @@
     "excludedCommands": [],
     "network": {
       "allowLocalBinding": true
+    },
+    "filesystem": {
+      "write": {
+        "additionalAllow": ["~/.cache/nix"]
+      }
     }
   },
   "permissions": {
