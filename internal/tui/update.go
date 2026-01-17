@@ -74,6 +74,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleHistoryOutputViewKey(msg)
 		}
 
+		// Handle agent monitor view keys
+		if m.mode == agentMonitorView {
+			return m.handleAgentMonitorKey(msg)
+		}
+
 	case ballsLoadedMsg:
 		if msg.err != nil {
 			m.err = msg.err
@@ -289,6 +294,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.historyOutputOffset = 0
 		m.mode = historyOutputView
+		return m, nil
+
+	case daemonControlSentMsg:
+		// Control command was sent successfully
+		m.addActivity("Sent daemon command: " + msg.command)
+		return m, nil
+
+	case daemonControlErrorMsg:
+		// Control command failed
+		m.message = "Daemon control error: " + msg.err.Error()
+		m.addActivity("Daemon control error: " + msg.err.Error())
+		return m, nil
+
+	case daemonStateLoadedMsg:
+		if msg.err != nil {
+			m.message = "Failed to load daemon state"
+			return m, nil
+		}
+		// Update agent status from daemon state
+		m.agentStatus.Running = msg.running
+		m.agentStatus.Iteration = msg.iteration
+		m.agentStatus.MaxIterations = msg.maxIterations
+		m.agentMonitorPaused = msg.paused
 		return m, nil
 	}
 
@@ -695,6 +723,16 @@ func (m Model) handleSplitViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Show agent history view
 		return m.handleShowHistory()
 
+	case "W":
+		// Enter agent monitor view (only if agent is running)
+		if m.agentStatus.Running {
+			m.mode = agentMonitorView
+			m.agentMonitorStartTime = m.nowFunc()
+			return m, nil
+		}
+		m.message = "No agent running. Press 'A' on a session to start."
+		return m, nil
+
 	case "y":
 		// Copy ball ID to clipboard (in balls panel)
 		if m.activePanel == BallsPanel {
@@ -1092,6 +1130,13 @@ func (m Model) handleWatcherEvent(event watcher.Event) (tea.Model, tea.Cmd) {
 		m.addActivity(msg)
 		// Progress changes don't require reloading UI data,
 		// but log it for awareness
+
+	case watcher.AgentStateChanged:
+		// Daemon state file changed - update monitor view if active
+		if event.SessionID != "" && event.SessionID == m.agentStatus.SessionID {
+			// Load the updated daemon state
+			cmds = append(cmds, loadDaemonStateCmd(m.store.ProjectDir(), event.SessionID))
+		}
 	}
 
 	// Continue listening for more events

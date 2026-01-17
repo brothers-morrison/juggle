@@ -6,15 +6,22 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/ohare93/juggle/internal/agent"
+	"github.com/ohare93/juggle/internal/agent/daemon"
 	"github.com/ohare93/juggle/internal/agent/provider"
 	"github.com/ohare93/juggle/internal/session"
+	"github.com/ohare93/juggle/internal/tui"
 	"github.com/ohare93/juggle/internal/vcs"
+	"github.com/ohare93/juggle/internal/watcher"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -42,6 +49,8 @@ var (
 	agentPickBall      bool   // Interactive ball selection
 	agentMessage       string // Message to append to agent prompt
 	agentMessageFlag   bool   // Track if -m flag was provided (for interactive mode)
+	agentDaemon        bool   // Run in daemon mode (persists after TUI exits)
+	agentMonitor       bool   // Open monitor TUI (connects to running daemon)
 
 	// Refine command flags
 	refineProvider string // Agent provider for refine command
@@ -203,6 +212,8 @@ func init() {
 	agentRunCmd.Flags().BoolVar(&agentClearProgress, "clear-progress", false, "Clear session progress before running")
 	agentRunCmd.Flags().BoolVar(&agentPickBall, "pick", false, "Interactively select a ball to work on")
 	agentRunCmd.Flags().StringVarP(&agentMessage, "message", "M", "", "Message to append to the agent prompt. If flag is provided without value, opens interactive input")
+	agentRunCmd.Flags().BoolVar(&agentDaemon, "daemon", false, "Run agent as background daemon (persists when TUI exits)")
+	agentRunCmd.Flags().BoolVar(&agentMonitor, "monitor", false, "Open monitor TUI (connects to running daemon if exists)")
 
 	// Refine command flags
 	agentRefineCmd.Flags().StringVar(&refineProvider, "provider", "", "Agent provider to use (claude, opencode). Default: from config or claude")
@@ -294,6 +305,7 @@ type AgentLoopConfig struct {
 	Provider             string        // Agent provider to use (claude, opencode). Empty = from config or claude
 	IgnoreLock           bool          // Skip lock acquisition (use with caution)
 	Message              string        // User message to append to the agent prompt
+	DaemonMode           bool          // Run in daemon mode with file-based state and control
 }
 
 // sessionStorageID returns the session ID used for storage (progress, output, lock)
@@ -368,6 +380,26 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 
 	result := &AgentResult{
 		StartedAt: startTime,
+	}
+
+	// Daemon mode setup: write PID file and initial state
+	var daemonPaused bool // Track pause state for daemon mode
+	if config.DaemonMode {
+		// Write PID file so TUI can find us
+		daemonInfo := &daemon.Info{
+			PID:           os.Getpid(),
+			SessionID:     config.SessionID,
+			ProjectDir:    config.ProjectDir,
+			StartedAt:     startTime,
+			MaxIterations: config.MaxIterations,
+			Model:         config.Model,
+			Provider:      config.Provider,
+		}
+		if err := daemon.WritePIDFile(config.ProjectDir, storageID, daemonInfo); err != nil {
+			return nil, fmt.Errorf("failed to write daemon PID file: %w", err)
+		}
+		// Ensure cleanup on exit
+		defer daemon.Cleanup(config.ProjectDir, storageID)
 	}
 
 	// Track rate limit state
@@ -471,6 +503,46 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 		// Use storageID (maps "all" to "_all") for progress tracking
 		progressBefore := getProgressLineCount(sessionStore, storageID)
 
+		// Daemon mode: check for control commands and update state
+		if config.DaemonMode {
+			// Check for pause - wait until resumed
+			for daemonPaused {
+				time.Sleep(500 * time.Millisecond)
+				ctrl, _ := daemon.ReadControlCommand(config.ProjectDir, storageID)
+				if ctrl != nil && ctrl.Command == daemon.CmdResume {
+					daemonPaused = false
+					fmt.Println("▶️  Resumed by user")
+				}
+			}
+
+			// Check for control commands
+			ctrl, _ := daemon.ReadControlCommand(config.ProjectDir, storageID)
+			if ctrl != nil {
+				switch ctrl.Command {
+				case daemon.CmdCancel:
+					fmt.Println("🛑 Cancelled by user")
+					result.Blocked = true
+					result.BlockedReason = "Cancelled by user via monitor TUI"
+					result.EndedAt = time.Now()
+					return result, nil
+				case daemon.CmdPause:
+					daemonPaused = true
+					fmt.Println("⏸️  Pausing after this iteration...")
+				case daemon.CmdChangeModel:
+					if ctrl.Args != "" {
+						config.Model = ctrl.Args
+						fmt.Printf("🔧 Model changed to %s for next iteration\n", ctrl.Args)
+					}
+				case daemon.CmdSkipBall:
+					// Mark current ball as blocked and continue
+					if config.BallID != "" {
+						fmt.Printf("⏭️  Skipping ball %s by user request\n", config.BallID)
+						// Ball skip will be handled by marking it blocked - for now just log
+					}
+				}
+			}
+		}
+
 		// Load balls for model selection
 		balls, err := loadBallsForModelSelection(config.ProjectDir, config.SessionID, config.BallID)
 		if err != nil {
@@ -503,6 +575,32 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 		// Log model selection (only if not explicitly set)
 		if config.Model == "" {
 			fmt.Printf("🤖 Model: %s (%s)\n\n", modelSelection.Model, modelSelection.Reason)
+		}
+
+		// Daemon mode: update state file for TUI to read
+		if config.DaemonMode {
+			var currentBallID, currentBallTitle string
+			var acsTotal int
+			if len(activeBalls) > 0 {
+				currentBallID = activeBalls[0].ShortID()
+				currentBallTitle = activeBalls[0].Title
+				acsTotal = len(activeBalls[0].AcceptanceCriteria)
+			}
+			state := &daemon.State{
+				Running:          true,
+				Paused:           daemonPaused,
+				CurrentBallID:    currentBallID,
+				CurrentBallTitle: currentBallTitle,
+				Iteration:        iteration,
+				MaxIterations:    config.MaxIterations,
+				ACsComplete:      0,      // AC completion not tracked per-item currently
+				ACsTotal:         acsTotal,
+				Model:            modelSelection.Model,
+				Provider:         string(providerType),
+				StartedAt:        startTime,
+			}
+			// Best effort - don't fail if state write fails
+			_ = daemon.WriteStateFile(config.ProjectDir, storageID, state)
 		}
 
 		// Generate prompt using export command
@@ -1339,6 +1437,69 @@ func runAgentRun(cmd *cobra.Command, args []string) error {
 	// Track which project directory to use (may change if session is in different project)
 	projectDir := cwd
 
+	// Handle --monitor flag: start daemon if needed and open monitor TUI
+	if agentMonitor {
+		if len(args) == 0 {
+			return fmt.Errorf("--monitor requires a session ID argument")
+		}
+		sessionID := args[0]
+		storageID := sessionStorageID(sessionID)
+
+		// Check if a daemon is running for this session
+		running, _, err := daemon.IsRunning(projectDir, storageID)
+		if err != nil {
+			return fmt.Errorf("failed to check daemon status: %w", err)
+		}
+
+		if !running {
+			// No daemon running - start one in the background
+			fmt.Printf("Starting agent daemon for session %s...\n", sessionID)
+
+			// Ensure session directory exists for log file
+			logPath := filepath.Join(projectDir, ".juggle", "sessions", storageID, "agent.log")
+			if err := os.MkdirAll(filepath.Dir(logPath), 0755); err != nil {
+				return fmt.Errorf("failed to create session directory: %w", err)
+			}
+
+			logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+			if err != nil {
+				return fmt.Errorf("failed to create log file: %w", err)
+			}
+
+			// Build daemon command - reuse same args but replace --monitor with --daemon
+			daemonArgs := make([]string, 0, len(os.Args))
+			for _, arg := range os.Args[1:] {
+				if arg == "--monitor" || arg == "-monitor" {
+					continue // Skip --monitor flag
+				}
+				daemonArgs = append(daemonArgs, arg)
+			}
+			// Add --daemon flag
+			daemonArgs = append([]string{os.Args[0], "agent", "run", "--daemon", sessionID}, daemonArgs[2:]...)
+
+			daemonCmd := exec.Command(daemonArgs[0], daemonArgs[1:]...)
+			daemonCmd.Env = append(os.Environ(), "JUGGLE_DAEMON_CHILD=1")
+			daemonCmd.Stdout = logFile
+			daemonCmd.Stderr = logFile
+			daemonCmd.Dir = projectDir
+
+			if err := daemonCmd.Start(); err != nil {
+				logFile.Close()
+				return fmt.Errorf("failed to start daemon: %w", err)
+			}
+
+			fmt.Printf("Agent daemon started (PID %d)\n", daemonCmd.Process.Pid)
+			logFile.Close()
+
+			// Give the daemon a moment to initialize and write PID file
+			time.Sleep(500 * time.Millisecond)
+			running = true
+		}
+
+		// Launch monitor TUI
+		return launchMonitorTUI(projectDir, sessionID, storageID, running)
+	}
+
 	// Handle --pick flag (interactive ball selection)
 	if agentPickBall {
 		// --pick and --ball are mutually exclusive
@@ -1586,6 +1747,54 @@ func runAgentRun(cmd *cobra.Command, args []string) error {
 		fmt.Println()
 	}
 
+	// Handle daemon mode: fork to background if not already the child process
+	storageID := sessionStorageID(sessionID)
+	if os.Getenv("JUGGLE_DAEMON_CHILD") == "1" {
+		// We are the daemon child process - clear the env var and continue
+		os.Unsetenv("JUGGLE_DAEMON_CHILD")
+
+		// Set up signal handling for graceful shutdown
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
+		go func() {
+			<-sigChan
+			// Send cancel command to self via control file
+			daemon.SendControlCommand(projectDir, storageID, daemon.CmdCancel, "signal")
+		}()
+	} else if agentDaemon {
+		// We are the parent - fork a child process and exit
+
+		// Ensure session directory exists for log file
+		logPath := filepath.Join(projectDir, ".juggle", "sessions", storageID, "agent.log")
+		if err := os.MkdirAll(filepath.Dir(logPath), 0755); err != nil {
+			return fmt.Errorf("failed to create session directory: %w", err)
+		}
+
+		logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+		if err != nil {
+			return fmt.Errorf("failed to create log file: %w", err)
+		}
+
+		// Re-exec ourselves with the same arguments
+		daemonCmd := exec.Command(os.Args[0], os.Args[1:]...)
+		daemonCmd.Env = append(os.Environ(), "JUGGLE_DAEMON_CHILD=1")
+		daemonCmd.Stdout = logFile
+		daemonCmd.Stderr = logFile
+		daemonCmd.Dir = projectDir
+
+		if err := daemonCmd.Start(); err != nil {
+			logFile.Close()
+			return fmt.Errorf("failed to start daemon: %w", err)
+		}
+
+		fmt.Printf("Agent daemon started (PID %d)\n", daemonCmd.Process.Pid)
+		fmt.Printf("Log file: %s\n", logPath)
+		fmt.Printf("Monitor with: juggle agent run --monitor %s\n", sessionID)
+
+		logFile.Close()
+		return nil // Parent exits here
+	}
+
 	// Run the agent loop
 	loopConfig := AgentLoopConfig{
 		SessionID:            sessionID,
@@ -1603,6 +1812,7 @@ func runAgentRun(cmd *cobra.Command, args []string) error {
 		Provider:             agentProvider,   // Use CLI flag (empty = auto-detect from config)
 		IgnoreLock:           agentIgnoreLock, // Skip lock acquisition if set
 		Message:              message,         // User message to append to prompt
+		DaemonMode:           agentDaemon,     // Run as daemon with file-based state/control
 	}
 
 	result, err := RunAgentLoop(loopConfig)
@@ -1644,6 +1854,52 @@ func runAgentRun(cmd *cobra.Command, args []string) error {
 	fmt.Printf("\nOutput saved to: %s\n", outputPath)
 
 	return nil
+}
+
+// launchMonitorTUI launches the TUI in agent monitor mode
+func launchMonitorTUI(projectDir, sessionID, storageID string, daemonRunning bool) error {
+	// Load config
+	config, err := session.LoadConfig()
+	if err != nil {
+		return err
+	}
+
+	// Create store
+	store, err := session.NewStore(projectDir)
+	if err != nil {
+		return err
+	}
+
+	// Create session store
+	sessionStore, err := session.NewSessionStore(projectDir)
+	if err != nil {
+		return err
+	}
+
+	// Create file watcher
+	w, err := watcher.New()
+	if err != nil {
+		return err
+	}
+	defer w.Close()
+
+	// Watch the project directory
+	if err := w.WatchProject(projectDir); err != nil {
+		// Non-fatal: continue without watching if it fails
+		w = nil
+	} else {
+		w.Start()
+	}
+
+	// Create model in monitor mode
+	model := tui.InitialMonitorModel(store, sessionStore, config, true, w, storageID, daemonRunning)
+
+	// Create program with alternate screen
+	p := tea.NewProgram(model, tea.WithAltScreen())
+
+	// Run
+	_, err = p.Run()
+	return err
 }
 
 // generateAgentPrompt generates the agent prompt using export command.

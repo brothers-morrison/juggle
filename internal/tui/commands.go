@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbletea"
+	"github.com/ohare93/juggle/internal/agent/daemon"
 	"github.com/ohare93/juggle/internal/session"
 	"github.com/ohare93/juggle/internal/watcher"
 )
@@ -480,4 +481,66 @@ func loadHistoryOutput(outputFile string) tea.Cmd {
 // readFile is a helper to read file content
 func readFile(path string) ([]byte, error) {
 	return os.ReadFile(path)
+}
+
+// Daemon control messages and commands
+
+// daemonControlSentMsg is sent when a control command was sent to the daemon
+type daemonControlSentMsg struct {
+	command string
+}
+
+// daemonControlErrorMsg is sent when sending a control command fails
+type daemonControlErrorMsg struct {
+	err error
+}
+
+// daemonStateLoadedMsg is sent when daemon state is loaded
+type daemonStateLoadedMsg struct {
+	running          bool
+	paused           bool
+	currentBallID    string
+	currentBallTitle string
+	iteration        int
+	maxIterations    int
+	model            string
+	provider         string
+	err              error
+}
+
+// sendDaemonControlCmd creates a command that sends a control command to the daemon
+func sendDaemonControlCmd(projectDir, sessionID, command, args string) tea.Cmd {
+	return func() tea.Msg {
+		err := sendDaemonControl(projectDir, sessionID, command, args)
+		if err != nil {
+			return daemonControlErrorMsg{err: err}
+		}
+		return daemonControlSentMsg{command: command}
+	}
+}
+
+// sendDaemonControl writes a control command to the daemon control file
+func sendDaemonControl(projectDir, sessionID, command, args string) error {
+	return daemon.SendControlCommand(projectDir, sessionID, command, args)
+}
+
+// loadDaemonStateCmd creates a command that loads the daemon state from the state file
+func loadDaemonStateCmd(projectDir, sessionID string) tea.Cmd {
+	return func() tea.Msg {
+		state, err := daemon.ReadStateFile(projectDir, sessionID)
+		if err != nil {
+			return daemonStateLoadedMsg{err: err}
+		}
+
+		return daemonStateLoadedMsg{
+			running:          state.Running,
+			paused:           state.Paused,
+			currentBallID:    state.CurrentBallID,
+			currentBallTitle: state.CurrentBallTitle,
+			iteration:        state.Iteration,
+			maxIterations:    state.MaxIterations,
+			model:            state.Model,
+			provider:         state.Provider,
+		}
+	}
 }

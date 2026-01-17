@@ -17,6 +17,7 @@ const (
 	BallsChanged EventType = iota
 	ProgressChanged
 	SessionChanged
+	AgentStateChanged // Daemon state file (agent.state) changed
 )
 
 // Event represents a file change event
@@ -178,6 +179,19 @@ func (w *Watcher) classifyEvent(path string) *Event {
 		if strings.Contains(path, "sessions") {
 			return &Event{
 				Type:      SessionChanged,
+				Path:      path,
+				SessionID: sessionID,
+			}
+		}
+	}
+
+	// Check for agent.state changes (daemon state file)
+	if base == "agent.state" {
+		dir := filepath.Dir(path)
+		sessionID := filepath.Base(dir)
+		if strings.Contains(path, "sessions") {
+			return &Event{
+				Type:      AgentStateChanged,
 				Path:      path,
 				SessionID: sessionID,
 			}

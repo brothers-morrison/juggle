@@ -39,6 +39,8 @@ func (m Model) View() string {
 		return m.renderHistoryView()
 	case historyOutputView:
 		return m.renderHistoryOutputView()
+	case agentMonitorView:
+		return m.renderAgentMonitorView()
 	default:
 		return "Unknown view"
 	}

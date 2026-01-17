@@ -16,6 +16,7 @@ const (
 	splitView viewMode = iota // Three-panel split view (default)
 	splitHelpView             // Comprehensive help view for split mode
 	historyView               // Agent run history view
+	agentMonitorView          // Full-screen agent monitoring dashboard
 
 	// Input modes for CRUD operations
 	inputSessionView           // Add/edit session
@@ -229,6 +230,11 @@ type Model struct {
 	historyOutput       string                    // Content of selected history's output file
 	historyOutputOffset int                       // Scroll offset for output view
 
+	// Agent monitor state
+	agentMonitorPaused      bool      // Whether pause-on-next-iteration is pending
+	agentMonitorReconnected bool      // True if reconnected to existing daemon
+	agentMonitorStartTime   time.Time // When the current agent run started
+
 	// Time provider for testability
 	nowFunc func() time.Time // Can be overridden in tests
 }
@@ -284,6 +290,46 @@ func InitialSplitModelWithWatcher(store *session.Store, sessionStore *session.Se
 	}
 }
 
+// InitialMonitorModel creates a model that starts directly in agent monitor view
+// This is used when launching from `juggle agent run --monitor`
+func InitialMonitorModel(store *session.Store, sessionStore *session.SessionStore, config *session.Config, localOnly bool, w *watcher.Watcher, sessionID string, daemonRunning bool) Model {
+	ti := textinput.New()
+	ti.CharLimit = 256
+	ti.Width = 40
+
+	return Model{
+		store:            store,
+		sessionStore:     sessionStore,
+		config:           config,
+		localOnly:        localOnly,
+		mode:             agentMonitorView,
+		activePanel:      BallsPanel,
+		initialSessionID: sessionID,
+		filterStates: map[string]bool{
+			"pending":     true,
+			"in_progress": true,
+			"blocked":     true,
+			"complete":    false,
+		},
+		showPriorityColumn:  false,
+		showTagsColumn:      false,
+		showModelSizeColumn: false,
+		cursor:              0,
+		selectedBalls:       make(map[string]bool),
+		sessionCursor:       0,
+		activityLog:         make([]ActivityEntry, 0),
+		textInput:           ti,
+		contextInput:        newContextTextarea(),
+		fileWatcher:         w,
+		nowFunc:             time.Now,
+		// Set agent status so monitor view knows what to display
+		agentStatus: AgentStatus{
+			Running:   daemonRunning,
+			SessionID: sessionID,
+		},
+	}
+}
+
 func (m Model) Init() tea.Cmd {
 	cmds := []tea.Cmd{
 		loadBalls(m.store, m.config, m.localOnly),
@@ -292,6 +338,10 @@ func (m Model) Init() tea.Cmd {
 	// Start file watcher if available
 	if m.fileWatcher != nil {
 		cmds = append(cmds, listenForWatcherEvents(m.fileWatcher))
+	}
+	// If starting in monitor mode with a session, load daemon state
+	if m.mode == agentMonitorView && m.agentStatus.SessionID != "" && m.store != nil {
+		cmds = append(cmds, loadDaemonStateCmd(m.store.ProjectDir(), m.agentStatus.SessionID))
 	}
 	return tea.Batch(cmds...)
 }
