@@ -78,16 +78,18 @@ func (m Model) renderAgentMonitorView() string {
 
 // renderMonitorTitleBar renders the top title bar with status
 func (m Model) renderMonitorTitleBar() string {
-	status := "Running"
+	var status string
 	statusColor := lipgloss.Color("2") // Green
 
 	if m.agentMonitorPaused {
 		status = "Pausing..."
 		statusColor = lipgloss.Color("3") // Yellow
-	}
-	if !m.agentStatus.Running {
+	} else if !m.agentStatus.Running {
 		status = "Stopped"
 		statusColor = lipgloss.Color("1") // Red
+	} else {
+		// Running with spinner animation
+		status = m.agentSpinner.View() + " Running"
 	}
 
 	statusStyle := lipgloss.NewStyle().

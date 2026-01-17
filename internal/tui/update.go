@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbletea"
 	"github.com/ohare93/juggle/internal/session"
 	"github.com/ohare93/juggle/internal/watcher"
@@ -16,6 +17,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		return m, nil
+
+	case spinner.TickMsg:
+		// Update spinner only when in monitor view and agent is running
+		if m.mode == agentMonitorView && m.agentStatus.Running && !m.agentMonitorPaused {
+			var cmd tea.Cmd
+			m.agentSpinner, cmd = m.agentSpinner.Update(msg)
+			return m, cmd
+		}
 		return m, nil
 
 	case tea.KeyMsg:
@@ -728,7 +738,7 @@ func (m Model) handleSplitViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.agentStatus.Running {
 			m.mode = agentMonitorView
 			m.agentMonitorStartTime = m.nowFunc()
-			return m, nil
+			return m, m.agentSpinner.Tick
 		}
 		m.message = "No agent running. Press 'A' on a session to start."
 		return m, nil

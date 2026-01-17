@@ -3,6 +3,7 @@ package tui
 import (
 	"time"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbletea"
@@ -231,12 +232,20 @@ type Model struct {
 	historyOutputOffset int                       // Scroll offset for output view
 
 	// Agent monitor state
-	agentMonitorPaused      bool      // Whether pause-on-next-iteration is pending
-	agentMonitorReconnected bool      // True if reconnected to existing daemon
-	agentMonitorStartTime   time.Time // When the current agent run started
+	agentMonitorPaused      bool            // Whether pause-on-next-iteration is pending
+	agentMonitorReconnected bool            // True if reconnected to existing daemon
+	agentMonitorStartTime   time.Time       // When the current agent run started
+	agentSpinner            spinner.Model   // Spinner for agent running animation
 
 	// Time provider for testability
 	nowFunc func() time.Time // Can be overridden in tests
+}
+
+// newAgentSpinner creates a spinner for the agent monitor view
+func newAgentSpinner() spinner.Model {
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	return s
 }
 
 // newContextTextarea creates a textarea for the context field with appropriate settings
@@ -282,11 +291,12 @@ func InitialSplitModelWithWatcher(store *session.Store, sessionStore *session.Se
 		cursor:              0,
 		selectedBalls:       make(map[string]bool),
 		sessionCursor:       0,
-		activityLog:        make([]ActivityEntry, 0),
-		textInput:          ti,
-		contextInput:       newContextTextarea(),
-		fileWatcher:        w,
-		nowFunc:            time.Now,
+		activityLog:         make([]ActivityEntry, 0),
+		textInput:           ti,
+		contextInput:        newContextTextarea(),
+		fileWatcher:         w,
+		nowFunc:             time.Now,
+		agentSpinner:        newAgentSpinner(),
 	}
 }
 
@@ -322,6 +332,7 @@ func InitialMonitorModel(store *session.Store, sessionStore *session.SessionStor
 		contextInput:        newContextTextarea(),
 		fileWatcher:         w,
 		nowFunc:             time.Now,
+		agentSpinner:        newAgentSpinner(),
 		// Set agent status so monitor view knows what to display
 		agentStatus: AgentStatus{
 			Running:   daemonRunning,
@@ -339,9 +350,10 @@ func (m Model) Init() tea.Cmd {
 	if m.fileWatcher != nil {
 		cmds = append(cmds, listenForWatcherEvents(m.fileWatcher))
 	}
-	// If starting in monitor mode with a session, load daemon state
+	// If starting in monitor mode with a session, load daemon state and start spinner
 	if m.mode == agentMonitorView && m.agentStatus.SessionID != "" && m.store != nil {
 		cmds = append(cmds, loadDaemonStateCmd(m.store.ProjectDir(), m.agentStatus.SessionID))
+		cmds = append(cmds, m.agentSpinner.Tick)
 	}
 	return tea.Batch(cmds...)
 }
