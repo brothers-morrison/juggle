@@ -195,8 +195,9 @@ func (m Model) renderSessionsPanel(width, height int) string {
 				displayName = "○ Untagged"
 			}
 
-			// Check if agent is running for this session
-			agentRunningForSession := m.agentStatus.Running && m.agentStatus.SessionID == sess.ID
+			// Check if agent is running for this session (from current agentStatus or runningDaemons)
+			agentRunningForSession := (m.agentStatus.Running && m.agentStatus.SessionID == sess.ID) ||
+				(m.runningDaemons != nil && m.runningDaemons[sess.ID] != nil && m.runningDaemons[sess.ID].Running)
 
 			// Build shortcut prefix (number for real sessions, space for pseudo)
 			shortcutPrefix := "  "
@@ -870,11 +871,22 @@ func (m Model) renderStatusBar() string {
 
 	// Add agent status indicator if running
 	if m.agentStatus.Running {
-		agentIndicator := fmt.Sprintf("[Agent: %s %d/%d | X:cancel]",
+		agentIndicator := fmt.Sprintf("[Agent: %s %d/%d | X:cancel W:monitor]",
 			m.agentStatus.SessionID,
 			m.agentStatus.Iteration,
 			m.agentStatus.MaxIterations)
 		status = agentIndicator + " " + status
+	} else if m.runningDaemons != nil && len(m.runningDaemons) > 0 {
+		// Show indicator for background daemons discovered on startup
+		daemonList := make([]string, 0, len(m.runningDaemons))
+		for sessID := range m.runningDaemons {
+			daemonList = append(daemonList, sessID)
+		}
+		if len(daemonList) == 1 {
+			status = fmt.Sprintf("[▶ Agent: %s | W:monitor] ", daemonList[0]) + status
+		} else {
+			status = fmt.Sprintf("[▶ %d agents | W:monitor] ", len(daemonList)) + status
+		}
 	}
 
 	// Add filter indicator if active

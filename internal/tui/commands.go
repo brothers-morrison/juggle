@@ -207,6 +207,15 @@ type AgentStatus struct {
 	Provider         string
 }
 
+// DaemonInfo stores information about a running daemon for a session
+type DaemonInfo struct {
+	SessionID  string
+	ProjectDir string
+	Running    bool
+	Iteration  int
+	MaxIter    int
+}
+
 // AgentProcess holds state for a running agent with output streaming
 type AgentProcess struct {
 	cmd        *exec.Cmd
@@ -619,6 +628,53 @@ func listenForLogTailCmd(tailer *LogTailer) tea.Cmd {
 }
 
 // Daemon control messages and commands
+
+// runningDaemonsScannedMsg is sent when daemon scan completes on startup
+type runningDaemonsScannedMsg struct {
+	daemons map[string]*DaemonInfo
+	err     error
+}
+
+// scanRunningDaemonsCmd scans all sessions for running daemons
+func scanRunningDaemonsCmd(projectDir string, sessions []*session.JuggleSession) tea.Cmd {
+	return func() tea.Msg {
+		daemons := make(map[string]*DaemonInfo)
+
+		for _, sess := range sessions {
+			// Skip pseudo-sessions
+			if sess.ID == "__all__" || sess.ID == "__untagged__" {
+				continue
+			}
+
+			running, info, err := daemon.IsRunning(projectDir, sess.ID)
+			if err != nil {
+				continue // Skip this session on error
+			}
+			if running && info != nil {
+				// Read current state to get iteration info
+				state, _ := daemon.ReadStateFile(projectDir, sess.ID)
+				iteration := 0
+				maxIter := 0
+				if state != nil {
+					iteration = state.Iteration
+					maxIter = state.MaxIterations
+				} else if info != nil {
+					maxIter = info.MaxIterations
+				}
+
+				daemons[sess.ID] = &DaemonInfo{
+					SessionID:  sess.ID,
+					ProjectDir: projectDir,
+					Running:    true,
+					Iteration:  iteration,
+					MaxIter:    maxIter,
+				}
+			}
+		}
+
+		return runningDaemonsScannedMsg{daemons: daemons}
+	}
+}
 
 // daemonControlSentMsg is sent when a control command was sent to the daemon
 type daemonControlSentMsg struct {

@@ -3416,9 +3416,9 @@ func TestStatusBarWithRunningAgent(t *testing.T) {
 
 	statusBar := model.renderStatusBar()
 
-	// Should show agent status with cancel hint
-	if !strings.Contains(statusBar, "[Agent: test-session 3/10 | X:cancel]") {
-		t.Errorf("Expected status bar to show agent status with cancel hint, got: %s", statusBar)
+	// Should show agent status with cancel and monitor hints
+	if !strings.Contains(statusBar, "[Agent: test-session 3/10 | X:cancel W:monitor]") {
+		t.Errorf("Expected status bar to show agent status with cancel and monitor hints, got: %s", statusBar)
 	}
 }
 

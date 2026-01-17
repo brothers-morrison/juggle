@@ -160,6 +160,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.addActivity("Sessions loaded")
+
+		// Scan for running daemons after sessions are loaded
+		if m.store != nil {
+			return m, scanRunningDaemonsCmd(m.store.ProjectDir(), m.sessions)
+		}
+		return m, nil
+
+	case runningDaemonsScannedMsg:
+		if msg.err != nil {
+			m.addActivity("Error scanning daemons: " + msg.err.Error())
+			return m, nil
+		}
+		m.runningDaemons = msg.daemons
+		if len(msg.daemons) > 0 {
+			m.addActivity(fmt.Sprintf("Found %d running agent daemon(s)", len(msg.daemons)))
+		}
 		return m, nil
 
 	case ballUpdatedMsg:
@@ -205,6 +221,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			Iteration:     0,
 			MaxIterations: 10, // Default
 		}
+		// Add to runningDaemons
+		if m.runningDaemons == nil {
+			m.runningDaemons = make(map[string]*DaemonInfo)
+		}
+		projectDir := ""
+		if m.store != nil {
+			projectDir = m.store.ProjectDir()
+		}
+		m.runningDaemons[msg.sessionID] = &DaemonInfo{
+			SessionID:  msg.sessionID,
+			ProjectDir: projectDir,
+			Running:    true,
+			Iteration:  0,
+			MaxIter:    10,
+		}
 		m.addActivity("Agent started for session: " + msg.sessionID)
 		m.message = "Agent running..."
 		return m, nil
@@ -217,6 +248,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			SessionID:     msg.sessionID,
 			Iteration:     0,
 			MaxIterations: 10, // Default
+		}
+		// Add to runningDaemons
+		if m.runningDaemons == nil {
+			m.runningDaemons = make(map[string]*DaemonInfo)
+		}
+		projectDir := ""
+		if m.store != nil {
+			projectDir = m.store.ProjectDir()
+		}
+		m.runningDaemons[msg.sessionID] = &DaemonInfo{
+			SessionID:  msg.sessionID,
+			ProjectDir: projectDir,
+			Running:    true,
+			Iteration:  0,
+			MaxIter:    10,
 		}
 		m.addActivity("Agent process started for session: " + msg.sessionID)
 		m.message = "Agent running... (X to cancel)"
@@ -233,6 +279,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.agentOutputCh != nil {
 			close(m.agentOutputCh)
 			m.agentOutputCh = nil
+		}
+		// Remove from runningDaemons
+		if m.runningDaemons != nil {
+			delete(m.runningDaemons, msg.sessionID)
 		}
 		m.message = "Agent cancelled"
 		m.addActivity("Agent cancelled for session: " + msg.sessionID)
@@ -253,6 +303,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.agentOutputCh != nil {
 			close(m.agentOutputCh)
 			m.agentOutputCh = nil
+		}
+		// Remove from runningDaemons
+		if m.runningDaemons != nil {
+			delete(m.runningDaemons, msg.sessionID)
 		}
 		if msg.err != nil {
 			m.message = "Agent error: " + msg.err.Error()
@@ -777,7 +831,8 @@ func (m Model) handleSplitViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleShowHistory()
 
 	case "W":
-		// Enter agent monitor view (only if agent is running)
+		// Enter agent monitor view for a running daemon
+		// First check if we have an active agentStatus (from current TUI session)
 		if m.agentStatus.Running {
 			m.mode = agentMonitorView
 			m.agentMonitorStartTime = m.nowFunc()
@@ -788,7 +843,50 @@ func (m Model) handleSplitViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, tea.Batch(cmds...)
 		}
-		m.message = "No agent running. Press 'A' on a session to start."
+
+		// Check for running daemon on the currently highlighted session (if in sessions panel)
+		// or on the selected session
+		var targetSessionID string
+		if m.activePanel == SessionsPanel {
+			sessions := m.filterSessions()
+			if m.sessionCursor < len(sessions) {
+				targetSessionID = sessions[m.sessionCursor].ID
+			}
+		} else if m.selectedSession != nil {
+			targetSessionID = m.selectedSession.ID
+		}
+
+		// Check if this session has a running daemon
+		if targetSessionID != "" && m.runningDaemons != nil {
+			if daemonInfo, ok := m.runningDaemons[targetSessionID]; ok && daemonInfo.Running {
+				// Set up agentStatus from daemon info
+				m.agentStatus = AgentStatus{
+					Running:       true,
+					SessionID:     targetSessionID,
+					Iteration:     daemonInfo.Iteration,
+					MaxIterations: daemonInfo.MaxIter,
+				}
+				m.agentMonitorReconnected = true
+				m.mode = agentMonitorView
+				m.agentMonitorStartTime = m.nowFunc()
+
+				// Start spinner and log tail, load daemon state for full info
+				cmds := []tea.Cmd{m.agentSpinner.Tick}
+				if m.store != nil {
+					cmds = append(cmds, loadDaemonStateCmd(m.store.ProjectDir(), targetSessionID))
+					cmds = append(cmds, startLogTailCmd(m.store.ProjectDir(), targetSessionID))
+				}
+				return m, tea.Batch(cmds...)
+			}
+		}
+
+		// Check if any daemon is running at all (for helpful message)
+		if m.runningDaemons != nil && len(m.runningDaemons) > 0 {
+			// There are daemons running, but not for this session
+			m.message = "Press W on a session with ▶ to monitor it"
+		} else {
+			m.message = "No agent running. Press 'A' on a session to start."
+		}
 		return m, nil
 
 	case "y":

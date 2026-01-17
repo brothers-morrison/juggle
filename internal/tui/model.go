@@ -211,6 +211,9 @@ type Model struct {
 	// Agent state
 	agentStatus AgentStatus // Status of running agent
 
+	// Running daemons across all sessions (discovered on startup and updated via file watcher)
+	runningDaemons map[string]*DaemonInfo // Map of sessionID -> daemon info
+
 	// Agent output panel state
 	agentOutputVisible  bool               // Whether agent output panel is shown
 	agentOutputExpanded bool               // Whether agent output panel is expanded (half screen)
@@ -298,6 +301,7 @@ func InitialSplitModelWithWatcher(store *session.Store, sessionStore *session.Se
 		fileWatcher:         w,
 		nowFunc:             time.Now,
 		agentSpinner:        newAgentSpinner(),
+		runningDaemons:      make(map[string]*DaemonInfo),
 	}
 }
 
@@ -334,6 +338,7 @@ func InitialMonitorModel(store *session.Store, sessionStore *session.SessionStor
 		fileWatcher:         w,
 		nowFunc:             time.Now,
 		agentSpinner:        newAgentSpinner(),
+		runningDaemons:      make(map[string]*DaemonInfo),
 		// Set agent status so monitor view knows what to display
 		agentStatus: AgentStatus{
 			Running:   daemonRunning,
