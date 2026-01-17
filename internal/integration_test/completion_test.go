@@ -3,7 +3,6 @@ package integration_test
 import (
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -347,13 +346,12 @@ func testCompleteWithShortID(t *testing.T) {
 func runCompletionCommand(t *testing.T, env *TestEnv, shell string) string {
 	t.Helper()
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// Build juggle binary if it doesn't exist
 	if _, err := os.Stat(juggleBinary); os.IsNotExist(err) {
-		buildCmd := exec.Command("go", "build", "-o", "juggle", "./cmd/juggle")
-		buildCmd.Dir = juggleRoot
+		buildCmd := exec.Command("go", "build", "-o", GetJuggleBinaryName(), "./cmd/juggle")
+		buildCmd.Dir = GetRepoRoot(t)
 		if output, err := buildCmd.CombinedOutput(); err != nil {
 			t.Fatalf("Failed to build juggle: %v\nOutput: %s", err, output)
 		}
@@ -373,13 +371,12 @@ func runCompletionCommand(t *testing.T, env *TestEnv, shell string) string {
 func runCompletionCommandWithError(t *testing.T, env *TestEnv, shell string) (string, int) {
 	t.Helper()
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// Build binary if needed
 	if _, err := os.Stat(juggleBinary); os.IsNotExist(err) {
-		buildCmd := exec.Command("go", "build", "-o", "juggle", "./cmd/juggle")
-		buildCmd.Dir = juggleRoot
+		buildCmd := exec.Command("go", "build", "-o", GetJuggleBinaryName(), "./cmd/juggle")
+		buildCmd.Dir = GetRepoRoot(t)
 		if output, err := buildCmd.CombinedOutput(); err != nil {
 			t.Fatalf("Failed to build juggle: %v\nOutput: %s", err, output)
 		}

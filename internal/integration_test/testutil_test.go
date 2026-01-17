@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/ohare93/juggle/internal/cli"
@@ -340,4 +341,25 @@ func GetRepoRoot(t *testing.T) string {
 		}
 		current = parent
 	}
+}
+
+// GetJuggleBinaryPath returns the path to the juggle binary with the correct
+// extension for the current OS (.exe on Windows, no extension on Unix).
+func GetJuggleBinaryPath(t *testing.T) string {
+	t.Helper()
+	repoRoot := GetRepoRoot(t)
+	binaryName := "juggle"
+	if runtime.GOOS == "windows" {
+		binaryName = "juggle.exe"
+	}
+	return filepath.Join(repoRoot, binaryName)
+}
+
+// GetJuggleBinaryName returns just the binary name with the correct
+// extension for the current OS (.exe on Windows, no extension on Unix).
+func GetJuggleBinaryName() string {
+	if runtime.GOOS == "windows" {
+		return "juggle.exe"
+	}
+	return "juggle"
 }

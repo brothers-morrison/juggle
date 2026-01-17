@@ -577,13 +577,12 @@ func runJuggleCommand(t *testing.T, workingDir string, args ...string) string {
 	t.Helper()
 
 	// Find juggle binary in the repo root
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// Build juggle binary if it doesn't exist
 	if _, err := os.Stat(juggleBinary); os.IsNotExist(err) {
-		buildCmd := exec.Command("go", "build", "-o", "juggle", "./cmd/juggle")
-		buildCmd.Dir = juggleRoot
+		buildCmd := exec.Command("go", "build", "-o", GetJuggleBinaryName(), "./cmd/juggle")
+		buildCmd.Dir = GetRepoRoot(t)
 		if output, err := buildCmd.CombinedOutput(); err != nil {
 			t.Fatalf("Failed to build juggle: %v\nOutput: %s", err, output)
 		}
@@ -608,13 +607,12 @@ func runJuggleCommand(t *testing.T, workingDir string, args ...string) string {
 func runJuggleCommandWithError(t *testing.T, workingDir string, args ...string) (string, int) {
 	t.Helper()
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// Build binary if needed
 	if _, err := os.Stat(juggleBinary); os.IsNotExist(err) {
-		buildCmd := exec.Command("go", "build", "-o", "juggle", "./cmd/juggle")
-		buildCmd.Dir = juggleRoot
+		buildCmd := exec.Command("go", "build", "-o", GetJuggleBinaryName(), "./cmd/juggle")
+		buildCmd.Dir = GetRepoRoot(t)
 		if output, err := buildCmd.CombinedOutput(); err != nil {
 			t.Fatalf("Failed to build juggle: %v\nOutput: %s", err, output)
 		}

@@ -813,13 +813,12 @@ func TestPlanOutputDoesNotRepeatAcceptanceCriteria(t *testing.T) {
 func runPlanCommand(t *testing.T, env *TestEnv, intent string, args ...string) string {
 	t.Helper()
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// Build juggle binary if needed
 	if _, err := os.Stat(juggleBinary); os.IsNotExist(err) {
-		buildCmd := exec.Command("go", "build", "-o", "juggle", "./cmd/juggle")
-		buildCmd.Dir = juggleRoot
+		buildCmd := exec.Command("go", "build", "-o", GetJuggleBinaryName(), "./cmd/juggle")
+		buildCmd.Dir = GetRepoRoot(t)
 		if output, err := buildCmd.CombinedOutput(); err != nil {
 			t.Fatalf("Failed to build juggle: %v\nOutput: %s", err, output)
 		}
@@ -845,13 +844,12 @@ func TestSessionAliasForSessionsCommand(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// Build juggle binary if needed
 	if _, err := os.Stat(juggleBinary); os.IsNotExist(err) {
-		buildCmd := exec.Command("go", "build", "-o", "juggle", "./cmd/juggle")
-		buildCmd.Dir = juggleRoot
+		buildCmd := exec.Command("go", "build", "-o", GetJuggleBinaryName(), "./cmd/juggle")
+		buildCmd.Dir = GetRepoRoot(t)
 		if output, err := buildCmd.CombinedOutput(); err != nil {
 			t.Fatalf("Failed to build juggle: %v\nOutput: %s", err, output)
 		}
@@ -885,8 +883,7 @@ func TestSessionAliasCreateCommand(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// Create a session using the alias
 	createCmd := exec.Command(juggleBinary, "--config-home", env.ConfigHome, "session", "create", "test-alias-session", "-m", "Test description")
@@ -919,8 +916,7 @@ func TestSessionAliasShowCommand(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// Create a session using 'sessions'
 	createCmd := exec.Command(juggleBinary, "--config-home", env.ConfigHome, "sessions", "create", "alias-show-test", "-m", "Test for show alias")
@@ -951,8 +947,7 @@ func TestSessionAliasContextCommand(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// Create a session
 	createCmd := exec.Command(juggleBinary, "--config-home", env.ConfigHome, "sessions", "create", "context-alias-test", "-m", "Test context alias")
@@ -983,8 +978,7 @@ func TestSessionAliasContextCommand(t *testing.T) {
 
 // TestSessionAliasHelpShowsAlias tests that help text shows the alias
 func TestSessionAliasHelpShowsAlias(t *testing.T) {
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// Get help for 'session' command
 	helpCmd := exec.Command(juggleBinary, "session", "--help")
@@ -1007,8 +1001,7 @@ func TestSessionsCommandStillWorks(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// Create session using 'sessions'
 	createCmd := exec.Command(juggleBinary, "--config-home", env.ConfigHome, "sessions", "create", "original-cmd-test", "-m", "Original command test")
@@ -1036,8 +1029,7 @@ func TestBallOutputJSONFlag(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// Create and start a ball
 	ball := env.CreateBall(t, "JSON output test ball", session.PriorityHigh)
@@ -1076,8 +1068,7 @@ func TestBallOutputConsistency(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// Create a ball with various properties
 	ball := env.CreateBall(t, "Consistency test ball", session.PriorityMedium)
@@ -1131,8 +1122,7 @@ func TestBallOutputJSONConsistency(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// Create a ball
 	ball := env.CreateBall(t, "JSON consistency test", session.PriorityHigh)
@@ -1187,8 +1177,7 @@ func TestBallOutputWithAllFields(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// Create a ball with all possible fields populated
 	ball := env.CreateBall(t, "Full fields test", session.PriorityUrgent)
@@ -1251,8 +1240,7 @@ func TestBallOutputPendingVsStarted(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// Create a pending ball
 	pendingBall := env.CreateBall(t, "Pending ball test", session.PriorityMedium)
@@ -1298,8 +1286,7 @@ func TestSessionsProgressCommand(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// Create session
 	createCmd := exec.Command(juggleBinary, "--config-home", env.ConfigHome, "sessions", "create", "progress-test", "-m", "Test session")
@@ -1357,8 +1344,7 @@ func TestSessionsProgressWithAlias(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// Create session using alias
 	createCmd := exec.Command(juggleBinary, "--config-home", env.ConfigHome, "session", "create", "alias-progress-test", "-m", "Test with alias")
@@ -1394,8 +1380,7 @@ func TestSessionsProgressNonexistent(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// Try to view progress for nonexistent session
 	cmd := exec.Command(juggleBinary, "--config-home", env.ConfigHome, "sessions", "progress", "nonexistent-session")
@@ -1416,8 +1401,7 @@ func TestSessionsProgressHelp(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	cmd := exec.Command(juggleBinary, "--config-home", env.ConfigHome, "sessions", "progress", "--help")
 	cmd.Dir = env.ProjectDir
@@ -1436,13 +1420,12 @@ func TestPlanNonInteractiveFlag(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// Build juggle binary if needed
 	if _, err := os.Stat(juggleBinary); os.IsNotExist(err) {
-		buildCmd := exec.Command("go", "build", "-o", "juggle", "./cmd/juggle")
-		buildCmd.Dir = juggleRoot
+		buildCmd := exec.Command("go", "build", "-o", GetJuggleBinaryName(), "./cmd/juggle")
+		buildCmd.Dir = GetRepoRoot(t)
 		if output, err := buildCmd.CombinedOutput(); err != nil {
 			t.Fatalf("Failed to build juggle: %v\nOutput: %s", err, output)
 		}
@@ -1487,8 +1470,7 @@ func TestPlanNonInteractiveWithAllFlags(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	cmd := exec.Command(juggleBinary, "--config-home", env.ConfigHome, "plan",
 		"Full flags test",
@@ -1543,8 +1525,7 @@ func TestPlanAcceptanceCriteriaWithCommas(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// Use an AC with commas - should stay as ONE criterion
 	cmd := exec.Command(juggleBinary, "--config-home", env.ConfigHome, "plan",
@@ -1585,8 +1566,7 @@ func TestPlanNonInteractiveNoIntent(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	cmd := exec.Command(juggleBinary, "--config-home", env.ConfigHome, "plan", "--non-interactive")
 	cmd.Dir = env.ProjectDir
@@ -1606,8 +1586,7 @@ func TestPlanAlwaysCreatesPendingState(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	cmd := exec.Command(juggleBinary, "--config-home", env.ConfigHome, "plan",
 		"Test always pending",
@@ -1643,8 +1622,7 @@ func TestPlanCriteriaAliasFlag(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// Test --criteria alone
 	cmd := exec.Command(juggleBinary, "--config-home", env.ConfigHome, "plan",
@@ -1690,8 +1668,7 @@ func TestPlanCriteriaAndACTogether(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	cmd := exec.Command(juggleBinary, "--config-home", env.ConfigHome, "plan",
 		"Both flags test",
@@ -1728,8 +1705,7 @@ func TestPlanStateFlagRemoved(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	cmd := exec.Command(juggleBinary, "--config-home", env.ConfigHome, "plan",
 		"Test state flag removed",
@@ -1753,8 +1729,7 @@ func TestSessionDeleteYesFlag(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// Create a session
 	createCmd := exec.Command(juggleBinary, "--config-home", env.ConfigHome, "sessions", "create", "delete-yes-test", "-m", "Test for --yes flag")
@@ -1789,8 +1764,7 @@ func TestSessionDeleteYesShortFlag(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// Create a session
 	createCmd := exec.Command(juggleBinary, "--config-home", env.ConfigHome, "sessions", "create", "delete-y-test", "-m", "Test for -y flag")
@@ -1817,8 +1791,7 @@ func TestConfigACClearYesFlag(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// Add some acceptance criteria first
 	addCmd := exec.Command(juggleBinary, "--config-home", env.ConfigHome, "config", "ac", "add", "Test AC")
@@ -1857,8 +1830,7 @@ func TestPlanHelpShowsNonInteractiveFlag(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	cmd := exec.Command(juggleBinary, "plan", "--help")
 	cmd.Dir = env.ProjectDir
@@ -1880,8 +1852,7 @@ func TestSessionDeleteHelpShowsYesFlag(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	cmd := exec.Command(juggleBinary, "sessions", "delete", "--help")
 	cmd.Dir = env.ProjectDir
@@ -1903,8 +1874,7 @@ func TestSessionCreateACFlagSkipsPrompt(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// Create session with --ac flag - should not prompt
 	cmd := exec.Command(juggleBinary, "--config-home", env.ConfigHome, "sessions", "create", "ac-flag-test", "-m", "Test session", "--ac", "AC 1", "--ac", "AC 2")
@@ -1940,8 +1910,7 @@ func TestSessionCreateNonInteractiveSkipsPrompt(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// Create session with --non-interactive - should not prompt for anything
 	cmd := exec.Command(juggleBinary, "--config-home", env.ConfigHome, "sessions", "create", "non-interactive-test", "-m", "Test session", "--non-interactive")
@@ -1962,8 +1931,7 @@ func TestSessionCreateNonInteractiveWithRepoDefaults(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// First, set up repo-level ACs
 	configAddCmd := exec.Command(juggleBinary, "--config-home", env.ConfigHome, "config", "ac", "add", "Run tests")
@@ -2003,8 +1971,7 @@ func TestSessionCreateHelpShowsNonInteractiveFlag(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	cmd := exec.Command(juggleBinary, "sessions", "create", "--help")
 	cmd.Dir = env.ProjectDir
@@ -2180,8 +2147,7 @@ func TestCLIBallCommandWithMinimalID(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	ball := env.CreateBall(t, "Test CLI minimal ID", session.PriorityMedium)
 	store := env.GetStore(t)
@@ -2222,8 +2188,7 @@ func TestCLIUpdateWithMinimalID(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	ball := env.CreateBall(t, "Test update minimal ID", session.PriorityMedium)
 	store := env.GetStore(t)
@@ -2252,8 +2217,7 @@ func TestPlanHelpShowsEditFlag(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	cmd := exec.Command(juggleBinary, "plan", "--help")
 	cmd.Dir = env.ProjectDir
@@ -2275,8 +2239,7 @@ func TestPlanHelpShowsTUIDefault(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	cmd := exec.Command(juggleBinary, "plan", "--help")
 	cmd.Dir = env.ProjectDir
@@ -2296,8 +2259,7 @@ func TestPlanNonInteractiveDoesNotLaunchTUI(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// Run without a TTY - should work with --non-interactive
 	cmd := exec.Command(juggleBinary, "--config-home", env.ConfigHome, "plan",
@@ -2415,8 +2377,7 @@ func TestPlanWithIntentButNoTTY(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// Run with intent but simulate non-TTY (no stdin)
 	cmd := exec.Command(juggleBinary, "--config-home", env.ConfigHome, "plan",
@@ -2440,8 +2401,7 @@ func TestPlanWithoutIntentAndNoTTYFails(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	juggleRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(juggleRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// Run without intent and simulate non-TTY
 	cmd := exec.Command(juggleBinary, "--config-home", env.ConfigHome, "plan")

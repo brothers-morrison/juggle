@@ -3,7 +3,6 @@ package integration_test
 import (
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -14,8 +13,7 @@ func TestConfigPathsList(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	repoRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(repoRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// Add some paths to config
 	config, err := session.LoadConfigWithOptions(session.ConfigOptions{
@@ -59,8 +57,7 @@ func TestConfigPathsPrune(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	repoRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(repoRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// Add some paths to config
 	config, err := session.LoadConfigWithOptions(session.ConfigOptions{
@@ -117,8 +114,7 @@ func TestConfigPathsPruneNothingToRemove(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	repoRoot := GetRepoRoot(t)
-	juggleBinary := filepath.Join(repoRoot, "juggle")
+	juggleBinary := GetJuggleBinaryPath(t)
 
 	// Add only existing path
 	config, err := session.LoadConfigWithOptions(session.ConfigOptions{
