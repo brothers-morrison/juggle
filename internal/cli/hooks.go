@@ -32,14 +32,15 @@ These hooks automatically track:
   - Turn counts
   - Session end events
 
-The hooks are installed to ~/.claude/settings.json and will be merged
-with any existing hook configuration without overwriting.
+By default, hooks are installed to .claude/settings.local.json in the current
+project directory. This file is typically gitignored.
 
 A backup is created before modifying the settings file.
 
 Examples:
-  juggle hooks install              # Install hooks to user settings
-  juggle hooks install --project    # Install hooks to project .claude/settings.json`,
+  juggle hooks install              # Install to .claude/settings.local.json (default)
+  juggle hooks install --project    # Install to .claude/settings.json (version controlled)
+  juggle hooks install --global     # Install to ~/.claude/settings.json (all projects)`,
 	RunE: runHooksInstall,
 }
 
@@ -49,10 +50,14 @@ var hooksStatusCmd = &cobra.Command{
 	RunE:  runHooksStatus,
 }
 
-var hooksProjectFlag bool
+var (
+	hooksProjectFlag bool
+	hooksGlobalFlag  bool
+)
 
 func init() {
-	hooksInstallCmd.Flags().BoolVar(&hooksProjectFlag, "project", false, "Install to project .claude/settings.json instead of user settings")
+	hooksInstallCmd.Flags().BoolVar(&hooksProjectFlag, "project", false, "Install to project .claude/settings.json (version controlled)")
+	hooksInstallCmd.Flags().BoolVar(&hooksGlobalFlag, "global", false, "Install to ~/.claude/settings.json (all projects)")
 	hooksCmd.AddCommand(hooksInstallCmd)
 	hooksCmd.AddCommand(hooksStatusCmd)
 	rootCmd.AddCommand(hooksCmd)
@@ -169,63 +174,114 @@ func runHooksInstall(cmd *cobra.Command, args []string) error {
 }
 
 func runHooksStatus(cmd *cobra.Command, args []string) error {
-	settingsPath, err := getSettingsPath()
+	cwd, err := GetWorkingDir()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get current directory: %w", err)
 	}
 
-	if _, err := os.Stat(settingsPath); os.IsNotExist(err) {
-		fmt.Println("Claude settings file not found:", settingsPath)
-		fmt.Println("Run 'juggle hooks install' to install hooks.")
-		return nil
-	}
-
-	settings, err := loadClaudeSettings(settingsPath)
+	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get home directory: %w", err)
 	}
 
-	fmt.Printf("Settings file: %s\n\n", settingsPath)
+	// Define all settings files to check (in priority order)
+	settingsFiles := []struct {
+		path  string
+		label string
+	}{
+		{filepath.Join(cwd, ".claude", "settings.local.json"), "Project local (gitignored)"},
+		{filepath.Join(cwd, ".claude", "settings.json"), "Project (version controlled)"},
+		{filepath.Join(homeDir, ".claude", "settings.json"), "User global"},
+	}
 
 	hookTypes := []string{"PostToolUse", "PostToolUseFailure", "Stop", "SessionEnd"}
-	allInstalled := true
+	foundAny := false
 
-	for _, hookType := range hookTypes {
-		installed := hasJugglerHook(settings.Hooks[hookType])
-		status := "not installed"
-		if installed {
-			status = "installed"
-		} else {
-			allInstalled = false
+	for _, sf := range settingsFiles {
+		if _, err := os.Stat(sf.path); os.IsNotExist(err) {
+			continue
 		}
-		fmt.Printf("  %-20s %s\n", hookType+":", status)
+
+		settings, err := loadClaudeSettings(sf.path)
+		if err != nil {
+			continue
+		}
+
+		// Check if any juggler hooks are in this file
+		hasAnyHook := false
+		for _, hookType := range hookTypes {
+			if hasJugglerHook(settings.Hooks[hookType]) {
+				hasAnyHook = true
+				break
+			}
+		}
+
+		if !hasAnyHook {
+			continue
+		}
+
+		foundAny = true
+		fmt.Printf("%s:\n  %s\n\n", sf.label, sf.path)
+
+		allInstalled := true
+		for _, hookType := range hookTypes {
+			installed := hasJugglerHook(settings.Hooks[hookType])
+			status := "not installed"
+			if installed {
+				status = "installed"
+			} else {
+				allInstalled = false
+			}
+			fmt.Printf("  %-20s %s\n", hookType+":", status)
+		}
+		fmt.Println()
+
+		if allInstalled {
+			fmt.Println("All juggler hooks are installed in this file.")
+		}
+		return nil // Found hooks, done
 	}
 
-	fmt.Println()
-	if allInstalled {
-		fmt.Println("All juggler hooks are installed.")
-	} else {
-		fmt.Println("Run 'juggle hooks install' to install missing hooks.")
+	if !foundAny {
+		fmt.Println("Juggler hooks are not installed in any settings file.")
+		fmt.Println()
+		fmt.Println("Checked locations:")
+		for _, sf := range settingsFiles {
+			exists := "not found"
+			if _, err := os.Stat(sf.path); err == nil {
+				exists = "exists (no juggler hooks)"
+			}
+			fmt.Printf("  %s: %s\n", sf.label, exists)
+		}
+		fmt.Println()
+		fmt.Println("Run 'juggle hooks install' to install hooks.")
 	}
 
 	return nil
 }
 
 func getSettingsPath() (string, error) {
-	if hooksProjectFlag {
-		cwd, err := GetWorkingDir()
+	if hooksGlobalFlag {
+		// User-level settings (all projects)
+		homeDir, err := os.UserHomeDir()
 		if err != nil {
-			return "", fmt.Errorf("failed to get current directory: %w", err)
+			return "", fmt.Errorf("failed to get home directory: %w", err)
 		}
+		return filepath.Join(homeDir, ".claude", "settings.json"), nil
+	}
+
+	cwd, err := GetWorkingDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get current directory: %w", err)
+	}
+
+	if hooksProjectFlag {
+		// Project settings (version controlled)
 		return filepath.Join(cwd, ".claude", "settings.json"), nil
 	}
 
-	// User-level settings
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("failed to get home directory: %w", err)
-	}
-	return filepath.Join(homeDir, ".claude", "settings.json"), nil
+	// Default: project-local settings (gitignored)
+	return filepath.Join(cwd, ".claude", "settings.local.json"), nil
 }
 
 func loadClaudeSettings(path string) (*ClaudeSettings, error) {
@@ -308,25 +364,32 @@ func hasJugglerHook(matchers []HookMatcher) bool {
 	return false
 }
 
-// AreHooksInstalled checks if juggler hooks are installed
+// AreHooksInstalled checks if juggler hooks are installed in any settings file
 func AreHooksInstalled() bool {
-	// Check user settings first
+	cwd, err := os.Getwd()
+	if err != nil {
+		return false
+	}
+
+	// Check project-local settings first (highest priority)
+	localPath := filepath.Join(cwd, ".claude", "settings.local.json")
+	if checkHooksInFile(localPath) {
+		return true
+	}
+
+	// Check project settings
+	projectPath := filepath.Join(cwd, ".claude", "settings.json")
+	if checkHooksInFile(projectPath) {
+		return true
+	}
+
+	// Check user settings (lowest priority)
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return false
 	}
 	userPath := filepath.Join(homeDir, ".claude", "settings.json")
-	if checkHooksInFile(userPath) {
-		return true
-	}
-
-	// Check project settings
-	cwd, err := os.Getwd()
-	if err != nil {
-		return false
-	}
-	projectPath := filepath.Join(cwd, ".claude", "settings.json")
-	return checkHooksInFile(projectPath)
+	return checkHooksInFile(userPath)
 }
 
 func checkHooksInFile(path string) bool {

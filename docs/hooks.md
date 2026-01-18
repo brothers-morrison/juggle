@@ -33,9 +33,10 @@ Press Enter or `y` to install. Use `--skip-hooks-check` to bypass this prompt.
 ### Manual Installation
 
 ```bash
-juggle hooks install           # Install to ~/.claude/settings.json
-juggle hooks install --project # Install to project .claude/settings.json
-juggle hooks status           # Check installation status
+juggle hooks install           # Install to .claude/settings.local.json (default, gitignored)
+juggle hooks install --project # Install to .claude/settings.json (version controlled)
+juggle hooks install --global  # Install to ~/.claude/settings.json (all projects)
+juggle hooks status            # Check installation status
 ```
 
 ### What Gets Installed
@@ -118,8 +119,9 @@ Juggler hooks are appended to existing hook configurations. If you have conflict
 ## Files
 
 - **Metrics file**: `.juggle/sessions/<session-id>/agent-metrics.json`
-- **User settings**: `~/.claude/settings.json`
-- **Project settings**: `.claude/settings.json`
+- **Project local settings**: `.claude/settings.local.json` (gitignored, highest priority)
+- **Project settings**: `.claude/settings.json` (version controlled)
+- **User settings**: `~/.claude/settings.json` (global, lowest priority)
 
 ## Comparison: Hooks vs Loop Update
 
