@@ -819,3 +819,48 @@ func parseAgentUpdate(content string) (phase, message, ballID string) {
 	}
 	return
 }
+
+// AgentMetricsState holds metrics from Claude Code hooks
+type AgentMetricsState struct {
+	FilesChanged    []string
+	ToolCounts      map[string]int
+	ToolFailures    int
+	TotalTools      int
+	TurnCount       int
+	InputTokens     int
+	OutputTokens    int
+	CacheReadTokens int
+	LastActivity    time.Time
+	SessionEnded    bool
+}
+
+// agentMetricsLoadedMsg is sent when agent-metrics.json is loaded
+type agentMetricsLoadedMsg struct {
+	metrics *AgentMetricsState
+	err     error
+}
+
+// loadAgentMetricsCmd creates a command that loads the agent metrics from the metrics file
+func loadAgentMetricsCmd(sessionStore *session.SessionStore, sessionID string) tea.Cmd {
+	return func() tea.Msg {
+		metrics, err := sessionStore.LoadMetrics(sessionID)
+		if err != nil {
+			return agentMetricsLoadedMsg{err: err}
+		}
+
+		return agentMetricsLoadedMsg{
+			metrics: &AgentMetricsState{
+				FilesChanged:    metrics.FilesChanged,
+				ToolCounts:      metrics.ToolCounts,
+				ToolFailures:    metrics.ToolFailures,
+				TotalTools:      metrics.TotalTools,
+				TurnCount:       metrics.TurnCount,
+				InputTokens:     metrics.InputTokens,
+				OutputTokens:    metrics.OutputTokens,
+				CacheReadTokens: metrics.CacheReadTokens,
+				LastActivity:    metrics.LastActivity,
+				SessionEnded:    metrics.SessionEnded,
+			},
+		}
+	}
+}

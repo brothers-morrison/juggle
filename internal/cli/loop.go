@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
@@ -43,9 +44,39 @@ Examples:
 	RunE: runLoopUpdate,
 }
 
+var loopHookEventCmd = &cobra.Command{
+	Use:   "hook-event <event-type>",
+	Short: "Receive Claude Code hook events and update metrics",
+	Long: `Process Claude Code hook events and update session metrics.
+
+This command is designed to be called by Claude Code hooks. It reads
+JSON data from stdin and updates the session's agent-metrics.json file.
+
+The session ID must be set via the JUGGLE_SESSION_ID environment variable.
+If not set, the command exits silently (not a juggler-managed session).
+
+Event types:
+  post-tool     - After a tool executes successfully (tracks file changes, tool counts)
+  tool-failure  - After a tool fails (tracks failure count)
+  stop          - When Claude finishes a response (tracks turns, token usage)
+  session-end   - When the Claude session ends (marks session as ended)
+
+The hook reads JSON from stdin with structure depending on the event type:
+  post-tool:    {"tool_name": "Write", "tool_input": {"file_path": "...", "command": "..."}}
+  stop:         {"usage": {"input_tokens": N, "output_tokens": N, "cache_read_input_tokens": N}}
+  session-end:  (any JSON, just signals end)
+
+Examples:
+  # Called by Claude Code hook (receives JSON on stdin)
+  echo '{"tool_name":"Write","tool_input":{"file_path":"foo.go"}}' | juggle loop hook-event post-tool`,
+	Args: cobra.ExactArgs(1),
+	RunE: runLoopHookEvent,
+}
+
 func init() {
 	loopUpdateCmd.Flags().BoolVar(&loopUpdateJSONFlag, "json", false, "Output as JSON")
 	loopCmd.AddCommand(loopUpdateCmd)
+	loopCmd.AddCommand(loopHookEventCmd)
 	rootCmd.AddCommand(loopCmd)
 }
 
@@ -164,4 +195,111 @@ func printLoopUpdateJSONError(err error) error {
 	data, _ := json.Marshal(errResp)
 	fmt.Println(string(data))
 	return nil // Return nil so the error is in JSON, not stderr
+}
+
+// runLoopHookEvent processes Claude Code hook events and updates session metrics
+func runLoopHookEvent(cmd *cobra.Command, args []string) error {
+	eventType := args[0]
+
+	// Get session ID from environment - exit silently if not set
+	sessionID := os.Getenv("JUGGLE_SESSION_ID")
+	if sessionID == "" {
+		// Not a juggler-managed session, exit silently
+		return nil
+	}
+
+	// Read JSON from stdin
+	inputData, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		// Hooks should not block Claude, fail silently
+		return nil
+	}
+
+	cwd, err := GetWorkingDir()
+	if err != nil {
+		return nil // Fail silently
+	}
+
+	store, err := session.NewSessionStoreWithConfig(cwd, GetStoreConfig())
+	if err != nil {
+		return nil // Fail silently
+	}
+
+	// Map "all" meta-session to "_all" for storage
+	storageID := sessionID
+	if sessionID == "all" {
+		storageID = "_all"
+	}
+
+	// Process based on event type
+	switch eventType {
+	case "post-tool":
+		return handlePostToolEvent(store, storageID, inputData)
+	case "tool-failure":
+		return handleToolFailureEvent(store, storageID, inputData)
+	case "stop":
+		return handleStopEvent(store, storageID, inputData)
+	case "session-end":
+		return handleSessionEndEvent(store, storageID)
+	default:
+		// Unknown event type, ignore silently
+		return nil
+	}
+}
+
+// PostToolPayload represents the JSON structure from PostToolUse hooks
+type PostToolPayload struct {
+	ToolName  string `json:"tool_name"`
+	ToolInput struct {
+		FilePath string `json:"file_path"`
+		Command  string `json:"command"`
+	} `json:"tool_input"`
+}
+
+// StopPayload represents the JSON structure from Stop hooks
+type StopPayload struct {
+	Usage struct {
+		InputTokens          int `json:"input_tokens"`
+		OutputTokens         int `json:"output_tokens"`
+		CacheReadInputTokens int `json:"cache_read_input_tokens"`
+	} `json:"usage"`
+}
+
+func handlePostToolEvent(store *session.SessionStore, sessionID string, inputData []byte) error {
+	var payload PostToolPayload
+	if err := json.Unmarshal(inputData, &payload); err != nil {
+		return nil // Invalid JSON, fail silently
+	}
+
+	// Determine the file path from tool input
+	filePath := payload.ToolInput.FilePath
+
+	return store.UpdateMetricsFromPostTool(sessionID, payload.ToolName, filePath)
+}
+
+func handleToolFailureEvent(store *session.SessionStore, sessionID string, inputData []byte) error {
+	var payload PostToolPayload
+	if err := json.Unmarshal(inputData, &payload); err != nil {
+		return nil // Invalid JSON, fail silently
+	}
+
+	return store.UpdateMetricsFromToolFailure(sessionID, payload.ToolName)
+}
+
+func handleStopEvent(store *session.SessionStore, sessionID string, inputData []byte) error {
+	var payload StopPayload
+	if err := json.Unmarshal(inputData, &payload); err != nil {
+		return nil // Invalid JSON, fail silently
+	}
+
+	return store.UpdateMetricsFromStop(
+		sessionID,
+		payload.Usage.InputTokens,
+		payload.Usage.OutputTokens,
+		payload.Usage.CacheReadInputTokens,
+	)
+}
+
+func handleSessionEndEvent(store *session.SessionStore, sessionID string) error {
+	return store.UpdateMetricsFromSessionEnd(sessionID)
 }

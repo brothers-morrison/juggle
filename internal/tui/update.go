@@ -407,6 +407,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case agentMetricsLoadedMsg:
+		if msg.err != nil {
+			// Silently ignore errors loading agent metrics
+			return m, nil
+		}
+		// Update metrics state
+		m.agentMetrics = msg.metrics
+		return m, nil
+
 	case logTailerStartedMsg:
 		// Store the log tailer and start listening for log lines
 		m.agentLogTailer = msg.tailer
@@ -1335,6 +1344,13 @@ func (m Model) handleWatcherEvent(event watcher.Event) (tea.Model, tea.Cmd) {
 		if event.SessionID != "" && event.SessionID == m.agentStatus.SessionID {
 			// Load the updated agent phase info
 			cmds = append(cmds, loadAgentUpdateCmd(m.sessionStore, event.SessionID))
+		}
+
+	case watcher.AgentMetricsChanged:
+		// Agent metrics file changed - update metrics display if in monitor view
+		if event.SessionID != "" && event.SessionID == m.agentStatus.SessionID {
+			// Load the updated agent metrics
+			cmds = append(cmds, loadAgentMetricsCmd(m.sessionStore, event.SessionID))
 		}
 	}
 

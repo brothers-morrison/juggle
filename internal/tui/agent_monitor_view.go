@@ -353,7 +353,48 @@ func (m Model) renderMonitorMetricsPanel() string {
 			monitorMetricValueStyle.Render(phaseMessage)))
 	}
 
+	// Row 6: Hook metrics (if available)
+	if m.agentMetrics != nil && m.agentMetrics.TotalTools > 0 {
+		// Format tools info
+		toolsInfo := fmt.Sprintf("%d", m.agentMetrics.TotalTools)
+		if m.agentMetrics.ToolFailures > 0 {
+			toolsInfo += fmt.Sprintf(" (%d failed)", m.agentMetrics.ToolFailures)
+		}
+
+		// Format files info
+		filesInfo := fmt.Sprintf("%d", len(m.agentMetrics.FilesChanged))
+
+		// Format tokens info
+		tokensInfo := "—"
+		totalTokens := m.agentMetrics.InputTokens + m.agentMetrics.OutputTokens
+		if totalTokens > 0 {
+			tokensInfo = formatTokenCount(totalTokens)
+			if m.agentMetrics.CacheReadTokens > 0 {
+				tokensInfo += fmt.Sprintf(" (cache: %s)", formatTokenCount(m.agentMetrics.CacheReadTokens))
+			}
+		}
+
+		b.WriteString(fmt.Sprintf("  %s %s    %s %s    %s %s\n",
+			monitorMetricLabelStyle.Render("Tools:"),
+			monitorMetricValueStyle.Render(toolsInfo),
+			monitorMetricLabelStyle.Render("Files:"),
+			monitorMetricValueStyle.Render(filesInfo),
+			monitorMetricLabelStyle.Render("Tokens:"),
+			monitorMetricValueStyle.Render(tokensInfo)))
+	}
+
 	return b.String()
+}
+
+// formatTokenCount formats token counts with K/M suffixes
+func formatTokenCount(tokens int) string {
+	if tokens >= 1000000 {
+		return fmt.Sprintf("%.1fM", float64(tokens)/1000000)
+	}
+	if tokens >= 1000 {
+		return fmt.Sprintf("%.1fK", float64(tokens)/1000)
+	}
+	return fmt.Sprintf("%d", tokens)
 }
 
 // renderMonitorControlsPanel renders the controls help line

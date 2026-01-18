@@ -241,6 +241,7 @@ type Model struct {
 	agentSpinner            spinner.Model   // Spinner for agent running animation
 	agentLogTailer          *LogTailer      // Log file tailer for streaming agent output
 	agentDaemonError        string          // Error message from daemon (displayed prominently)
+	agentMetrics            *AgentMetricsState // Hook-provided metrics (files changed, tool counts, tokens)
 
 	// Time provider for testability
 	nowFunc func() time.Time // Can be overridden in tests
@@ -363,9 +364,10 @@ func (m Model) Init() tea.Cmd {
 		cmds = append(cmds, loadDaemonStateCmd(m.store.ProjectDir(), m.agentStatus.SessionID))
 		cmds = append(cmds, m.agentSpinner.Tick)
 		cmds = append(cmds, startLogTailCmd(m.store.ProjectDir(), m.agentStatus.SessionID, true))
-		// Also load agent update for phase info
+		// Also load agent update for phase info and metrics
 		if m.sessionStore != nil {
 			cmds = append(cmds, loadAgentUpdateCmd(m.sessionStore, m.agentStatus.SessionID))
+			cmds = append(cmds, loadAgentMetricsCmd(m.sessionStore, m.agentStatus.SessionID))
 		}
 	}
 	return tea.Batch(cmds...)

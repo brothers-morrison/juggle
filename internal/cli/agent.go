@@ -49,8 +49,9 @@ var (
 	agentPickBall      bool   // Interactive ball selection
 	agentMessage       string // Message to append to agent prompt
 	agentMessageFlag   bool   // Track if -m flag was provided (for interactive mode)
-	agentDaemon        bool   // Run in daemon mode (persists after TUI exits)
-	agentMonitor       bool   // Open monitor TUI (connects to running daemon)
+	agentDaemon         bool   // Run in daemon mode (persists after TUI exits)
+	agentMonitor        bool   // Open monitor TUI (connects to running daemon)
+	agentSkipHooksCheck bool   // Skip Claude hooks check
 
 	// Refine command flags
 	refineProvider string // Agent provider for refine command
@@ -214,6 +215,7 @@ func init() {
 	agentRunCmd.Flags().StringVarP(&agentMessage, "message", "M", "", "Message to append to the agent prompt. If flag is provided without value, opens interactive input")
 	agentRunCmd.Flags().BoolVar(&agentDaemon, "daemon", false, "Run agent as background daemon (persists when TUI exits)")
 	agentRunCmd.Flags().BoolVar(&agentMonitor, "monitor", false, "Open monitor TUI (connects to running daemon if exists)")
+	agentRunCmd.Flags().BoolVar(&agentSkipHooksCheck, "skip-hooks-check", false, "Skip Claude hooks installation check")
 
 	// Refine command flags
 	agentRefineCmd.Flags().StringVar(&refineProvider, "provider", "", "Agent provider to use (claude, opencode). Default: from config or claude")
@@ -1818,6 +1820,26 @@ func runAgentRun(cmd *cobra.Command, args []string) error {
 
 		logFile.Close()
 		return nil // Parent exits here
+	}
+
+	// Check if Claude hooks are installed for enhanced progress tracking
+	if !agentSkipHooksCheck && !agentDaemon && isTerminal(os.Stdin.Fd()) {
+		if !AreHooksInstalled() {
+			fmt.Println("Claude Code hooks are not installed.")
+			fmt.Println("Hooks provide enhanced progress tracking: file changes, tool counts, token usage.")
+			fmt.Print("\nInstall hooks now? [Y/n] ")
+
+			reader := bufio.NewReader(os.Stdin)
+			response, _ := reader.ReadString('\n')
+			response = strings.TrimSpace(strings.ToLower(response))
+
+			if response == "" || response == "y" || response == "yes" {
+				if err := runHooksInstall(nil, nil); err != nil {
+					fmt.Printf("Warning: failed to install hooks: %v\n", err)
+				}
+				fmt.Println()
+			}
+		}
 	}
 
 	// Run the agent loop
