@@ -43,6 +43,7 @@ type State struct {
 	Provider         string    `json:"provider"`
 	LastUpdated      time.Time `json:"last_updated"`
 	StartedAt        time.Time `json:"started_at"`
+	Status           string    `json:"status,omitempty"` // Status message (e.g., "No workable balls", "Complete", "Blocked")
 }
 
 // Control represents a command sent to the daemon via the control file

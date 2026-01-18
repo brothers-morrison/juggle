@@ -11,9 +11,10 @@ import (
 )
 
 const (
-	sessionsDir     = "sessions"
-	sessionFile     = "session.json"
-	progressFile    = "progress.txt"
+	sessionsDir       = "sessions"
+	sessionFile       = "session.json"
+	progressFile      = "progress.txt"
+	agentUpdateFile   = "agent-update.txt"
 )
 
 // JuggleSession represents a grouping of balls by tag.
@@ -143,6 +144,11 @@ func (s *SessionStore) sessionFilePath(id string) string {
 // progressFilePath returns the path to a session's progress file
 func (s *SessionStore) progressFilePath(id string) string {
 	return filepath.Join(s.sessionPath(id), progressFile)
+}
+
+// agentUpdateFilePath returns the path to a session's agent update file
+func (s *SessionStore) agentUpdateFilePath(id string) string {
+	return filepath.Join(s.sessionPath(id), agentUpdateFile)
 }
 
 // CreateSession creates a new session with the given ID and description
@@ -327,6 +333,62 @@ func (s *SessionStore) AppendProgress(id, content string) error {
 	}
 
 	return nil
+}
+
+// WriteAgentUpdate writes the current agent status to the session's agent-update.txt file.
+// Unlike AppendProgress, this overwrites the file with the latest status.
+func (s *SessionStore) WriteAgentUpdate(id, content string) error {
+	// Verify session exists (skip for "_all" virtual session)
+	if id != "_all" {
+		if _, err := s.LoadSession(id); err != nil {
+			return err
+		}
+	} else {
+		// For "_all", ensure the directory exists
+		sessionDir := s.sessionPath(id)
+		if err := os.MkdirAll(sessionDir, 0755); err != nil {
+			return fmt.Errorf("failed to create _all session directory: %w", err)
+		}
+	}
+
+	updatePath := s.agentUpdateFilePath(id)
+	lockPath := updatePath + ".lock"
+
+	// Acquire file lock
+	fileLock := flock.New(lockPath)
+	if err := fileLock.Lock(); err != nil {
+		return fmt.Errorf("failed to acquire lock: %w", err)
+	}
+	defer fileLock.Unlock()
+
+	// Write file (overwrite mode)
+	if err := os.WriteFile(updatePath, []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to write agent update file: %w", err)
+	}
+
+	return nil
+}
+
+// LoadAgentUpdate reads the contents of a session's agent-update.txt file
+func (s *SessionStore) LoadAgentUpdate(id string) (string, error) {
+	// Verify session exists (skip for "_all" virtual session)
+	if id != "_all" {
+		if _, err := s.LoadSession(id); err != nil {
+			return "", err
+		}
+	}
+
+	updatePath := s.agentUpdateFilePath(id)
+
+	data, err := os.ReadFile(updatePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil // Empty update is valid
+		}
+		return "", fmt.Errorf("failed to read agent update file: %w", err)
+	}
+
+	return string(data), nil
 }
 
 // LoadProgress reads the contents of a session's progress file

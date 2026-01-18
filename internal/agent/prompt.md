@@ -136,6 +136,35 @@ juggle update <ball-id> --state blocked --reason "description of blocker"
 juggle show <ball-id> --json
 ```
 
+## Real-Time Progress Updates
+
+**Use `juggle loop update` to signal phase transitions.** This provides real-time visibility into what the agent is working on:
+
+```bash
+juggle loop update <session> <ball-id> <state> "<message>"
+```
+
+**States:** `starting`, `working`, `blocked`, `testing`, `complete`
+
+**When to call this:**
+- When you **select a ball** to work on: `starting`
+- When you **begin implementation**: `working`
+- When you **start running tests**: `testing`
+- When you **complete an AC**: `working` with AC number in message
+- When you **get blocked**: `blocked`
+- When you **finish the ball**: `complete`
+
+**Examples:**
+```bash
+juggle loop update mysession juggle-123 starting "Selected for implementation"
+juggle loop update mysession juggle-123 working "Implementing OAuth flow"
+juggle loop update mysession juggle-123 working "AC 2 complete - added validation"
+juggle loop update mysession juggle-123 testing "Running test suite"
+juggle loop update mysession juggle-123 complete "All ACs satisfied"
+```
+
+**Call this frequently** - it's how the loop monitors your progress in real-time.
+
 ## Command Reference
 
 | Command | Description |
@@ -144,6 +173,7 @@ juggle show <ball-id> --json
 | `juggle update <id> --state <state>` | Update ball state (pending/in_progress/blocked/complete) |
 | `juggle update <id> --state blocked --reason "..."` | Mark ball as blocked with reason |
 | `juggle progress append <session> "text" [--json]` | Append timestamped entry to session progress |
+| `juggle loop update <session> <ball-id> <state> "<msg>"` | Update real-time progress (states: starting/working/blocked/testing/complete) |
 
 ## Completion Signals
 

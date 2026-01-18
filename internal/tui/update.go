@@ -387,7 +387,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.agentStatus.ACsTotal = msg.acsTotal
 		m.agentStatus.Model = msg.model
 		m.agentStatus.Provider = msg.provider
+		m.agentStatus.Status = msg.status
 		m.agentMonitorPaused = msg.paused
+		return m, nil
+
+	case agentUpdateLoadedMsg:
+		if msg.err != nil {
+			// Silently ignore errors loading agent update
+			return m, nil
+		}
+		// Update agent status with phase info
+		if msg.phase != "" {
+			m.agentStatus.Phase = msg.phase
+			m.agentStatus.PhaseMessage = msg.message
+		}
 		return m, nil
 
 	case logTailerStartedMsg:
@@ -422,6 +435,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Retry starting the log tailer
 		if m.mode == agentMonitorView && m.store != nil && m.agentStatus.SessionID != "" {
 			return m, startLogTailCmd(m.store.ProjectDir(), m.agentStatus.SessionID)
+		}
+		return m, nil
+
+	case logTailPollMsg:
+		// Poll again after a short delay
+		if m.mode == agentMonitorView && msg.tailer != nil && !msg.tailer.IsClosed() {
+			return m, tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
+				return listenForLogTailCmd(msg.tailer)()
+			})
 		}
 		return m, nil
 
@@ -880,6 +902,10 @@ func (m Model) handleSplitViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					cmds = append(cmds, loadDaemonStateCmd(m.store.ProjectDir(), targetSessionID))
 					cmds = append(cmds, startLogTailCmd(m.store.ProjectDir(), targetSessionID))
 				}
+				// Also load agent update for phase info
+				if m.sessionStore != nil {
+					cmds = append(cmds, loadAgentUpdateCmd(m.sessionStore, targetSessionID))
+				}
 				return m, tea.Batch(cmds...)
 			}
 		}
@@ -1296,6 +1322,13 @@ func (m Model) handleWatcherEvent(event watcher.Event) (tea.Model, tea.Cmd) {
 		if event.SessionID != "" && event.SessionID == m.agentStatus.SessionID {
 			// Load the updated daemon state
 			cmds = append(cmds, loadDaemonStateCmd(m.store.ProjectDir(), event.SessionID))
+		}
+
+	case watcher.AgentUpdateChanged:
+		// Agent loop update file changed - update phase display if in monitor view
+		if event.SessionID != "" && event.SessionID == m.agentStatus.SessionID {
+			// Load the updated agent phase info
+			cmds = append(cmds, loadAgentUpdateCmd(m.sessionStore, event.SessionID))
 		}
 	}
 

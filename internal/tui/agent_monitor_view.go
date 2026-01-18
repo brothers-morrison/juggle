@@ -55,7 +55,8 @@ func (m Model) renderAgentMonitorView() string {
 	b.WriteString("\n")
 
 	// Calculate output section height
-	outputHeight := m.height - 14 // title(2) + progress(2) + metrics(6) + controls(2) + margins
+	// title(2) + progress(2) + metrics(7 with phase) + controls(2) + margins
+	outputHeight := m.height - 15
 	if outputHeight < 5 {
 		outputHeight = 5
 	}
@@ -88,7 +89,11 @@ func (m Model) renderMonitorTitleBar() string {
 		status = "Pausing..."
 		statusColor = lipgloss.Color("3") // Yellow
 	} else if !m.agentStatus.Running {
-		status = "Stopped"
+		if m.agentStatus.Status != "" {
+			status = m.agentStatus.Status
+		} else {
+			status = "Stopped"
+		}
 		statusColor = lipgloss.Color("1") // Red
 	} else {
 		// Running with spinner animation
@@ -298,6 +303,21 @@ func (m Model) renderMonitorMetricsPanel() string {
 		elapsed = formatDuration(time.Since(m.agentMonitorStartTime))
 	}
 
+	// Get phase info
+	phase := "—"
+	phaseMessage := ""
+	if m.agentStatus.Phase != "" {
+		phase = m.agentStatus.Phase
+		if m.agentStatus.PhaseMessage != "" {
+			// Truncate message if too long
+			msg := m.agentStatus.PhaseMessage
+			if len(msg) > 40 {
+				msg = msg[:37] + "..."
+			}
+			phaseMessage = msg
+		}
+	}
+
 	// Row 1: Session and Started
 	b.WriteString(fmt.Sprintf("  %s %s    %s %s\n",
 		monitorMetricLabelStyle.Render("Session:"),
@@ -319,10 +339,19 @@ func (m Model) renderMonitorMetricsPanel() string {
 		monitorMetricLabelStyle.Render("Elapsed:"),
 		monitorMetricValueStyle.Render(elapsed)))
 
-	// Row 4: Model
-	b.WriteString(fmt.Sprintf("  %s %s\n",
+	// Row 4: Model and Phase
+	b.WriteString(fmt.Sprintf("  %s %s    %s %s\n",
 		monitorMetricLabelStyle.Render("Model:"),
-		monitorMetricValueStyle.Render(model)))
+		monitorMetricValueStyle.Render(model),
+		monitorMetricLabelStyle.Render("Phase:"),
+		monitorMetricValueStyle.Render(phase)))
+
+	// Row 5: Phase message (if present)
+	if phaseMessage != "" {
+		b.WriteString(fmt.Sprintf("  %s %s\n",
+			monitorMetricLabelStyle.Render("Status:"),
+			monitorMetricValueStyle.Render(phaseMessage)))
+	}
 
 	return b.String()
 }

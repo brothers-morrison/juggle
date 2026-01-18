@@ -400,12 +400,36 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 		}
 		// Ensure cleanup on exit - write final state first so TUI can detect exit
 		defer func() {
+			// Build status message from result
+			var status string
+			switch {
+			case result.Complete:
+				status = "Complete"
+			case result.Blocked:
+				if result.BlockedReason != "" {
+					status = result.BlockedReason
+				} else if result.BallsBlocked > 0 && result.Iterations == 0 {
+					status = fmt.Sprintf("No workable balls (%d blocked)", result.BallsBlocked)
+				} else {
+					status = "Blocked"
+				}
+			case result.TimedOut:
+				status = "Timed out"
+			case result.RateLimitExceded:
+				status = "Rate limited"
+			case result.OverloadRetries > 0 && result.OverloadWaitTime > 0:
+				status = "Overloaded"
+			default:
+				status = fmt.Sprintf("%d/%d iterations", result.Iterations, config.MaxIterations)
+			}
+
 			// Write final state with Running: false so TUI monitor can detect exit
 			finalState := &daemon.State{
 				Running:       false,
 				Iteration:     result.Iterations,
 				MaxIterations: config.MaxIterations,
 				StartedAt:     startTime,
+				Status:        status,
 			}
 			_ = daemon.WriteStateFile(config.ProjectDir, storageID, finalState)
 			// Clean up PID and control files (but not state file)

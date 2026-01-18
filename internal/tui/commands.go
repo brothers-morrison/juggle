@@ -205,6 +205,9 @@ type AgentStatus struct {
 	ACsTotal         int
 	Model            string
 	Provider         string
+	Status           string // Status message when stopped (e.g., "No workable balls", "Complete")
+	Phase            string // Current agent phase (starting, working, blocked, testing, complete)
+	PhaseMessage     string // Message describing current phase activity
 }
 
 // DaemonInfo stores information about a running daemon for a session
@@ -591,6 +594,11 @@ type logTailerStartedMsg struct {
 	tailer *LogTailer
 }
 
+// logTailPollMsg is sent to continue polling the log file
+type logTailPollMsg struct {
+	tailer *LogTailer
+}
+
 // listenForLogTailCmd creates a command that reads new lines from the log file
 func listenForLogTailCmd(tailer *LogTailer) tea.Cmd {
 	return func() tea.Msg {
@@ -603,9 +611,8 @@ func listenForLogTailCmd(tailer *LogTailer) tea.Cmd {
 		n, err := tailer.file.Read(buf)
 		if err != nil {
 			if err == io.EOF {
-				// No new content - wait a bit and try again
-				time.Sleep(100 * time.Millisecond)
-				return nil // Return nil to keep the listener alive
+				// No new content - signal to poll again after a delay
+				return logTailPollMsg{tailer: tailer}
 			}
 			return logTailErrorMsg{err: err}
 		}
@@ -628,7 +635,8 @@ func listenForLogTailCmd(tailer *LogTailer) tea.Cmd {
 			}
 		}
 
-		return nil
+		// No content found, poll again
+		return logTailPollMsg{tailer: tailer}
 	}
 }
 
@@ -703,6 +711,7 @@ type daemonStateLoadedMsg struct {
 	acsTotal         int
 	model            string
 	provider         string
+	status           string // Status message when stopped (e.g., "No workable balls")
 	err              error
 }
 
@@ -741,6 +750,63 @@ func loadDaemonStateCmd(projectDir, sessionID string) tea.Cmd {
 			acsTotal:         state.ACsTotal,
 			model:            state.Model,
 			provider:         state.Provider,
+			status:           state.Status,
 		}
 	}
+}
+
+// agentUpdateLoadedMsg is sent when agent-update.txt is loaded
+type agentUpdateLoadedMsg struct {
+	phase   string
+	message string
+	ballID  string
+	err     error
+}
+
+// loadAgentUpdateCmd creates a command that loads the agent update from the update file
+func loadAgentUpdateCmd(sessionStore *session.SessionStore, sessionID string) tea.Cmd {
+	return func() tea.Msg {
+		content, err := sessionStore.LoadAgentUpdate(sessionID)
+		if err != nil {
+			return agentUpdateLoadedMsg{err: err}
+		}
+
+		if content == "" {
+			return agentUpdateLoadedMsg{}
+		}
+
+		// Parse the content: [timestamp] ball=<id> state=<state> message=<msg>
+		phase, message, ballID := parseAgentUpdate(content)
+		return agentUpdateLoadedMsg{
+			phase:   phase,
+			message: message,
+			ballID:  ballID,
+		}
+	}
+}
+
+// parseAgentUpdate parses the agent-update.txt content
+// Format: [timestamp] ball=<id> state=<state> message=<msg>
+func parseAgentUpdate(content string) (phase, message, ballID string) {
+	// Find ball=
+	if idx := strings.Index(content, "ball="); idx != -1 {
+		rest := content[idx+5:]
+		if spaceIdx := strings.Index(rest, " "); spaceIdx != -1 {
+			ballID = rest[:spaceIdx]
+			rest = rest[spaceIdx+1:]
+		}
+		// Find state=
+		if stateIdx := strings.Index(rest, "state="); stateIdx != -1 {
+			rest = rest[stateIdx+6:]
+			if spaceIdx := strings.Index(rest, " "); spaceIdx != -1 {
+				phase = rest[:spaceIdx]
+				rest = rest[spaceIdx+1:]
+			}
+			// Find message=
+			if msgIdx := strings.Index(rest, "message="); msgIdx != -1 {
+				message = strings.TrimSpace(rest[msgIdx+8:])
+			}
+		}
+	}
+	return
 }

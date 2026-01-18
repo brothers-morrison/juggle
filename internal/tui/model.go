@@ -362,6 +362,10 @@ func (m Model) Init() tea.Cmd {
 		cmds = append(cmds, loadDaemonStateCmd(m.store.ProjectDir(), m.agentStatus.SessionID))
 		cmds = append(cmds, m.agentSpinner.Tick)
 		cmds = append(cmds, startLogTailCmd(m.store.ProjectDir(), m.agentStatus.SessionID))
+		// Also load agent update for phase info
+		if m.sessionStore != nil {
+			cmds = append(cmds, loadAgentUpdateCmd(m.sessionStore, m.agentStatus.SessionID))
+		}
 	}
 	return tea.Batch(cmds...)
 }
