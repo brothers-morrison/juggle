@@ -398,6 +398,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case logTailLineMsg:
 		// Add the log line to the agent output buffer
 		m.addAgentOutput(msg.line, msg.isError)
+		// Track error for prominent display
+		if msg.isError {
+			m.agentDaemonError = msg.line
+		}
 		// Continue listening for more log lines if in monitor mode
 		if m.mode == agentMonitorView && m.agentLogTailer != nil && !m.agentLogTailer.IsClosed() {
 			return m, listenForLogTailCmd(m.agentLogTailer)

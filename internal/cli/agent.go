@@ -1466,18 +1466,8 @@ func runAgentRun(cmd *cobra.Command, args []string) error {
 				return fmt.Errorf("failed to create log file: %w", err)
 			}
 
-			// Build daemon command - reuse same args but replace --monitor with --daemon
-			daemonArgs := make([]string, 0, len(os.Args))
-			for _, arg := range os.Args[1:] {
-				if arg == "--monitor" || arg == "-monitor" {
-					continue // Skip --monitor flag
-				}
-				daemonArgs = append(daemonArgs, arg)
-			}
-			// Add --daemon flag
-			daemonArgs = append([]string{os.Args[0], "agent", "run", "--daemon", sessionID}, daemonArgs[2:]...)
-
-			daemonCmd := exec.Command(daemonArgs[0], daemonArgs[1:]...)
+			// Build daemon command
+			daemonCmd := exec.Command(os.Args[0], "agent", "run", "--daemon", sessionID)
 			daemonCmd.Env = append(os.Environ(), "JUGGLE_DAEMON_CHILD=1")
 			daemonCmd.Stdout = logFile
 			daemonCmd.Stderr = logFile

@@ -240,6 +240,7 @@ type Model struct {
 	agentMonitorStartTime   time.Time       // When the current agent run started
 	agentSpinner            spinner.Model   // Spinner for agent running animation
 	agentLogTailer          *LogTailer      // Log file tailer for streaming agent output
+	agentDaemonError        string          // Error message from daemon (displayed prominently)
 
 	// Time provider for testability
 	nowFunc func() time.Time // Can be overridden in tests

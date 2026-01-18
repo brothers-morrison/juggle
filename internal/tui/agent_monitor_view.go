@@ -81,7 +81,10 @@ func (m Model) renderMonitorTitleBar() string {
 	var status string
 	statusColor := lipgloss.Color("2") // Green
 
-	if m.agentMonitorPaused {
+	if m.agentDaemonError != "" {
+		status = "⚠ Error"
+		statusColor = lipgloss.Color("1") // Red
+	} else if m.agentMonitorPaused {
 		status = "Pausing..."
 		statusColor = lipgloss.Color("3") // Yellow
 	} else if !m.agentStatus.Running {
@@ -152,6 +155,28 @@ func (m Model) renderMonitorOutputSection(height int) string {
 		Render(title)
 	b.WriteString("  " + titleStyled + "\n")
 	b.WriteString("  " + monitorSeparatorStyle.Render(strings.Repeat("─", m.width-4)) + "\n")
+
+	// Show error banner if there's an error
+	if m.agentDaemonError != "" {
+		errorStyle := lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("15")). // White
+			Background(lipgloss.Color("1")).  // Red background
+			Padding(0, 1)
+		errorBanner := errorStyle.Render("⚠ DAEMON ERROR")
+		b.WriteString("  " + errorBanner + "\n")
+		errorMsgStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("1")). // Red
+			Bold(true)
+		// Truncate error message if too long
+		errMsg := m.agentDaemonError
+		if len(errMsg) > m.width-6 {
+			errMsg = errMsg[:m.width-9] + "..."
+		}
+		b.WriteString("  " + errorMsgStyle.Render(errMsg) + "\n")
+		b.WriteString("\n")
+		height -= 3 // Account for error banner
+	}
 
 	if len(m.agentOutput) == 0 {
 		emptyMsg := "  No agent output"

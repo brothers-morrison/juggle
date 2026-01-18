@@ -618,7 +618,12 @@ func listenForLogTailCmd(tailer *LogTailer) tea.Cmd {
 			// Return the first non-empty line
 			for _, line := range lines {
 				if line != "" {
-					return logTailLineMsg{line: line, isError: false}
+					// Detect error lines
+					isError := strings.HasPrefix(line, "Error:") ||
+						strings.HasPrefix(line, "error:") ||
+						strings.Contains(line, "panic:") ||
+						strings.Contains(line, "FATAL")
+					return logTailLineMsg{line: line, isError: isError}
 				}
 			}
 		}
