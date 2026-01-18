@@ -160,6 +160,7 @@ func customHelpFunc(cmd *cobra.Command, args []string) {
 
 	// Commands grouped by category
 	fmt.Println("Common Commands:")
+	fmt.Println("  init           Initialize a new juggle project")
 	fmt.Println("  plan           Plan a new ball interactively")
 	fmt.Println("  balls          List all balls")
 	fmt.Println("  sessions       Manage sessions (ball groupings)")
@@ -221,4 +222,5 @@ func init() {
 	rootCmd.AddCommand(auditCmd)
 	rootCmd.AddCommand(sessionsCmd)
 	rootCmd.AddCommand(configCmd)
+	rootCmd.AddCommand(initCmd)
 }

@@ -1,6 +1,14 @@
 // Package vcs provides a unified interface for version control systems.
 package vcs
 
+import (
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+)
+
 // VCSType represents the version control system type.
 type VCSType string
 
@@ -79,4 +87,59 @@ func GetBackend(vcsType VCSType) VCS {
 func GetBackendForProject(projectDir string, projectVCS, globalVCS VCSType) VCS {
 	vcsType := Detect(projectDir, projectVCS, globalVCS)
 	return GetBackend(vcsType)
+}
+
+// IsVCSInitialized checks if a VCS is already initialized in the directory.
+// Returns true if either .jj or .git exists.
+func IsVCSInitialized(projectDir string) bool {
+	return AutoDetectExists(projectDir)
+}
+
+// AutoDetectExists checks if any VCS directory exists.
+// Returns true if .jj or .git exists.
+func AutoDetectExists(projectDir string) bool {
+	jjPath := filepath.Join(projectDir, ".jj")
+	gitPath := filepath.Join(projectDir, ".git")
+
+	if _, err := os.Stat(jjPath); err == nil {
+		return true
+	}
+	if _, err := os.Stat(gitPath); err == nil {
+		return true
+	}
+	return false
+}
+
+// IsJJAvailable checks if the jj command is available in PATH.
+func IsJJAvailable() bool {
+	_, err := exec.LookPath("jj")
+	return err == nil
+}
+
+// IsGitAvailable checks if the git command is available in PATH.
+func IsGitAvailable() bool {
+	_, err := exec.LookPath("git")
+	return err == nil
+}
+
+// InitJJ initializes a jj repository in the given directory.
+func InitJJ(projectDir string) error {
+	cmd := exec.Command("jj", "git", "init")
+	cmd.Dir = projectDir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("jj git init: %w\n%s", err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
+// InitGit initializes a git repository in the given directory.
+func InitGit(projectDir string) error {
+	cmd := exec.Command("git", "init")
+	cmd.Dir = projectDir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("git init: %w\n%s", err, strings.TrimSpace(string(output)))
+	}
+	return nil
 }
