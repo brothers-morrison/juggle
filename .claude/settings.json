@@ -9,7 +9,7 @@
     },
     "filesystem": {
       "write": {
-        "additionalAllow": ["~/.cache/nix"]
+        "additionalAllow": ["~/.cache/nix", "~/go"]
       }
     }
   },

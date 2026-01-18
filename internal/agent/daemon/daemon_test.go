@@ -138,6 +138,52 @@ func TestDaemonFiles(t *testing.T) {
 		}
 	})
 
+	// Test CleanupPIDAndControl preserves state file
+	t.Run("CleanupPIDAndControl", func(t *testing.T) {
+		// Write files
+		WritePIDFile(tmpDir, sessionID, &Info{PID: 1})
+		WriteStateFile(tmpDir, sessionID, &State{Running: false, Iteration: 5})
+		SendControlCommand(tmpDir, sessionID, CmdCancel, "")
+
+		// Cleanup PID and control only
+		if err := CleanupPIDAndControl(tmpDir, sessionID); err != nil {
+			t.Fatalf("CleanupPIDAndControl failed: %v", err)
+		}
+
+		// Verify PID file is gone
+		pidPath := GetPIDFilePath(tmpDir, sessionID)
+		if _, err := os.Stat(pidPath); !os.IsNotExist(err) {
+			t.Error("PID file should be removed after CleanupPIDAndControl")
+		}
+
+		// Verify control file is gone
+		ctrlPath := GetControlFilePath(tmpDir, sessionID)
+		if _, err := os.Stat(ctrlPath); !os.IsNotExist(err) {
+			t.Error("Control file should be removed after CleanupPIDAndControl")
+		}
+
+		// Verify state file is preserved
+		statePath := GetStateFilePath(tmpDir, sessionID)
+		if _, err := os.Stat(statePath); os.IsNotExist(err) {
+			t.Error("State file should be preserved after CleanupPIDAndControl")
+		}
+
+		// Verify state file content
+		state, err := ReadStateFile(tmpDir, sessionID)
+		if err != nil {
+			t.Fatalf("Failed to read preserved state file: %v", err)
+		}
+		if state.Running != false {
+			t.Error("State should have Running: false")
+		}
+		if state.Iteration != 5 {
+			t.Errorf("State iteration mismatch: got %d, want 5", state.Iteration)
+		}
+
+		// Clean up for other tests
+		os.Remove(statePath)
+	})
+
 	// Test GetFilePaths
 	t.Run("FilePaths", func(t *testing.T) {
 		pidPath := GetPIDFilePath(tmpDir, sessionID)

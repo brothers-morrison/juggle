@@ -398,8 +398,19 @@ func RunAgentLoop(config AgentLoopConfig) (*AgentResult, error) {
 		if err := daemon.WritePIDFile(config.ProjectDir, storageID, daemonInfo); err != nil {
 			return nil, fmt.Errorf("failed to write daemon PID file: %w", err)
 		}
-		// Ensure cleanup on exit
-		defer daemon.Cleanup(config.ProjectDir, storageID)
+		// Ensure cleanup on exit - write final state first so TUI can detect exit
+		defer func() {
+			// Write final state with Running: false so TUI monitor can detect exit
+			finalState := &daemon.State{
+				Running:       false,
+				Iteration:     result.Iterations,
+				MaxIterations: config.MaxIterations,
+				StartedAt:     startTime,
+			}
+			_ = daemon.WriteStateFile(config.ProjectDir, storageID, finalState)
+			// Clean up PID and control files (but not state file)
+			daemon.CleanupPIDAndControl(config.ProjectDir, storageID)
+		}()
 	}
 
 	// Track rate limit state

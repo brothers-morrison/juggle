@@ -260,3 +260,18 @@ func Cleanup(projectDir, sessionID string) error {
 	}
 	return lastErr
 }
+
+// CleanupPIDAndControl removes PID and control files but preserves the state file
+// This is used for normal daemon exit where the final state should remain readable by the TUI
+func CleanupPIDAndControl(projectDir, sessionID string) error {
+	var lastErr error
+	if err := RemovePIDFile(projectDir, sessionID); err != nil {
+		lastErr = err
+	}
+	// Remove control file if it exists
+	ctrlPath := GetControlFilePath(projectDir, sessionID)
+	if err := os.Remove(ctrlPath); err != nil && !os.IsNotExist(err) {
+		lastErr = err
+	}
+	return lastErr
+}
