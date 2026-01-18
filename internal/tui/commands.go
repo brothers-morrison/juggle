@@ -532,19 +532,24 @@ type LogTailer struct {
 	filePath string
 }
 
-// NewLogTailer creates a new log tailer for the given file path
-func NewLogTailer(filePath string) (*LogTailer, error) {
+// NewLogTailer creates a new log tailer for the given file path.
+// If readExisting is true, it starts from the beginning of the file to read existing content.
+// If readExisting is false, it seeks to the end and only reads new content.
+func NewLogTailer(filePath string, readExisting bool) (*LogTailer, error) {
 	// Open file for reading
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
 	}
 
-	// Seek to end of file (we only want new content)
-	offset, err := file.Seek(0, io.SeekEnd)
-	if err != nil {
-		file.Close()
-		return nil, err
+	var offset int64 = 0
+	if !readExisting {
+		// Seek to end of file (we only want new content)
+		offset, err = file.Seek(0, io.SeekEnd)
+		if err != nil {
+			file.Close()
+			return nil, err
+		}
 	}
 
 	return &LogTailer{
@@ -574,12 +579,14 @@ func (t *LogTailer) IsClosed() bool {
 	return t.closed
 }
 
-// startLogTailCmd creates a command that starts tailing a log file
-func startLogTailCmd(projectDir, sessionID string) tea.Cmd {
+// startLogTailCmd creates a command that starts tailing a log file.
+// If readExisting is true, it reads from the beginning of the file (for reconnecting to existing sessions).
+// If readExisting is false, it starts from the end and only reads new content (for fresh agent starts).
+func startLogTailCmd(projectDir, sessionID string, readExisting bool) tea.Cmd {
 	return func() tea.Msg {
 		logPath := filepath.Join(projectDir, ".juggle", "sessions", sessionID, "agent.log")
 
-		tailer, err := NewLogTailer(logPath)
+		tailer, err := NewLogTailer(logPath, readExisting)
 		if err != nil {
 			// Log file might not exist yet - that's OK, we'll try again
 			return logTailErrorMsg{err: err}
@@ -711,7 +718,8 @@ type daemonStateLoadedMsg struct {
 	acsTotal         int
 	model            string
 	provider         string
-	status           string // Status message when stopped (e.g., "No workable balls")
+	status           string    // Status message when stopped (e.g., "No workable balls")
+	startedAt        time.Time // When the daemon actually started
 	err              error
 }
 
@@ -751,6 +759,7 @@ func loadDaemonStateCmd(projectDir, sessionID string) tea.Cmd {
 			model:            state.Model,
 			provider:         state.Provider,
 			status:           state.Status,
+			startedAt:        state.StartedAt,
 		}
 	}
 }

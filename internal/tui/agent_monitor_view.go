@@ -374,7 +374,6 @@ func (m Model) renderMonitorControlsPanel() string {
 	}
 
 	controls = append(controls,
-		"O:Expand",
 		"Esc:Back",
 		"q:Detach",
 	)

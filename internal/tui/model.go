@@ -358,10 +358,11 @@ func (m Model) Init() tea.Cmd {
 		cmds = append(cmds, listenForWatcherEvents(m.fileWatcher))
 	}
 	// If starting in monitor mode with a session, load daemon state, start spinner, and start log tail
+	// true = starting in monitor mode means reconnecting to existing session, read existing content
 	if m.mode == agentMonitorView && m.agentStatus.SessionID != "" && m.store != nil {
 		cmds = append(cmds, loadDaemonStateCmd(m.store.ProjectDir(), m.agentStatus.SessionID))
 		cmds = append(cmds, m.agentSpinner.Tick)
-		cmds = append(cmds, startLogTailCmd(m.store.ProjectDir(), m.agentStatus.SessionID))
+		cmds = append(cmds, startLogTailCmd(m.store.ProjectDir(), m.agentStatus.SessionID, true))
 		// Also load agent update for phase info
 		if m.sessionStore != nil {
 			cmds = append(cmds, loadAgentUpdateCmd(m.sessionStore, m.agentStatus.SessionID))

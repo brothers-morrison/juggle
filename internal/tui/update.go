@@ -389,6 +389,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.agentStatus.Provider = msg.provider
 		m.agentStatus.Status = msg.status
 		m.agentMonitorPaused = msg.paused
+		// Use daemon's actual start time for elapsed calculation (not TUI connection time)
+		if !msg.startedAt.IsZero() {
+			m.agentMonitorStartTime = msg.startedAt
+		}
 		return m, nil
 
 	case agentUpdateLoadedMsg:
@@ -434,7 +438,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case retryLogTailMsg:
 		// Retry starting the log tailer
 		if m.mode == agentMonitorView && m.store != nil && m.agentStatus.SessionID != "" {
-			return m, startLogTailCmd(m.store.ProjectDir(), m.agentStatus.SessionID)
+			// If reconnecting, read existing content; otherwise just tail new content
+			return m, startLogTailCmd(m.store.ProjectDir(), m.agentStatus.SessionID, m.agentMonitorReconnected)
 		}
 		return m, nil
 
@@ -862,10 +867,10 @@ func (m Model) handleSplitViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.agentStatus.Running {
 			m.mode = agentMonitorView
 			m.agentMonitorStartTime = m.nowFunc()
-			// Start spinner and log tail
+			// Start spinner and log tail (false = fresh agent from current session, only tail new content)
 			cmds := []tea.Cmd{m.agentSpinner.Tick}
 			if m.store != nil && m.agentStatus.SessionID != "" {
-				cmds = append(cmds, startLogTailCmd(m.store.ProjectDir(), m.agentStatus.SessionID))
+				cmds = append(cmds, startLogTailCmd(m.store.ProjectDir(), m.agentStatus.SessionID, false))
 			}
 			return m, tea.Batch(cmds...)
 		}
@@ -897,10 +902,11 @@ func (m Model) handleSplitViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.agentMonitorStartTime = m.nowFunc()
 
 				// Start spinner and log tail, load daemon state for full info
+				// true = reconnecting, read existing log content
 				cmds := []tea.Cmd{m.agentSpinner.Tick}
 				if m.store != nil {
 					cmds = append(cmds, loadDaemonStateCmd(m.store.ProjectDir(), targetSessionID))
-					cmds = append(cmds, startLogTailCmd(m.store.ProjectDir(), targetSessionID))
+					cmds = append(cmds, startLogTailCmd(m.store.ProjectDir(), targetSessionID, true))
 				}
 				// Also load agent update for phase info
 				if m.sessionStore != nil {

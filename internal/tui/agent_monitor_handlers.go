@@ -63,11 +63,6 @@ func (m Model) handleAgentMonitorKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case "O":
-		// Toggle output panel expansion
-		m.agentOutputExpanded = !m.agentOutputExpanded
-		return m, nil
-
 	// Scroll controls for output
 	case "j", "down":
 		return m.handleAgentOutputScrollDown()
