@@ -44,6 +44,7 @@ type InitOptions struct {
 	JuggleDirName        string    // Name of juggle directory (default: ".juggle")
 	InitVCS              bool      // Whether to initialize VCS if not present (default: true)
 	CreateClaudeSettings bool      // Whether to create .claude/settings.json (default: true when not set)
+	NonInteractive       bool      // Skip interactive prompts, apply all defaults (for -y flag)
 	SkipSetupPrompt      bool      // Skip interactive setup-repo prompt
 	Output               io.Writer // Where to write status messages (default: os.Stdout)
 }
@@ -144,10 +145,11 @@ func InitProject(opts InitOptions) error {
 	return nil
 }
 
-// ClaudeSettingsResult contains both added and preserved settings info.
+// ClaudeSettingsResult contains added, preserved, and skipped settings info.
 type ClaudeSettingsResult struct {
 	Added     []string
 	Preserved []string
+	Skipped   []string // Settings the user declined in interactive mode
 }
 
 // ensureClaudeSettings creates or updates .claude/settings.json with default settings.
@@ -212,6 +214,108 @@ func ensureClaudeSettings(path string) (*ClaudeSettingsResult, error) {
 	return result, nil
 }
 
+// ClaudeSettingCategory defines a category of Claude settings that can be applied.
+type ClaudeSettingCategory struct {
+	Name        string                          // Display name (e.g., "SANDBOX MODE")
+	Description string                          // Multi-line explanation for interactive prompts
+	Apply       func(*ClaudeSettings)           // Function to apply this setting
+	IsApplied   func(*ClaudeSettings) bool      // Check if already applied
+}
+
+// GetSettingCategories returns the categories of Claude settings.
+func GetSettingCategories() []ClaudeSettingCategory {
+	defaults := DefaultClaudeSettings()
+	return []ClaudeSettingCategory{
+		{
+			Name: "Sandbox mode",
+			Description: `Enables OS-level security boundaries that restrict what Claude can access.
+This protects your system even if Claude attempts unsafe operations.`,
+			Apply: func(s *ClaudeSettings) {
+				defaultSandbox := defaults.GetSandboxConfig()
+				if defaultSandbox != nil {
+					_ = s.SetSandboxConfig(defaultSandbox)
+				}
+			},
+			IsApplied: func(s *ClaudeSettings) bool { return s.GetSandboxConfig() != nil },
+		},
+		{
+			Name: "Progress hooks",
+			Description: `Installs hooks that report Claude's progress to juggler.
+This enables real-time tracking of file changes, tool usage, and session status.`,
+			Apply: func(s *ClaudeSettings) {
+				if s.Hooks == nil {
+					s.Hooks = make(map[string][]HookMatcher)
+				}
+				for k, v := range defaults.Hooks {
+					s.Hooks[k] = v
+				}
+			},
+			IsApplied: func(s *ClaudeSettings) bool { return hasJugglerHook(s.Hooks["PostToolUse"]) },
+		},
+		{
+			Name: "Secret protection",
+			Description: `Blocks Claude from reading .env files and secrets/ directory.
+Also requires confirmation before git push operations.`,
+			Apply: func(s *ClaudeSettings) {
+				s.Permissions = defaults.Permissions
+			},
+			IsApplied: func(s *ClaudeSettings) bool { return s.Permissions != nil },
+		},
+	}
+}
+
+// EnsureClaudeSettingsInteractive creates or updates .claude/settings.json with interactive prompts.
+// If responses is provided (for testing), it uses those instead of prompting.
+// Each response corresponds to a category in order: sandbox, hooks, permissions.
+func EnsureClaudeSettingsInteractive(path string, w io.Writer, responses []bool) (*ClaudeSettingsResult, error) {
+	result := &ClaudeSettingsResult{}
+
+	// Create .claude directory if needed
+	claudeDir := filepath.Dir(path)
+	if err := os.MkdirAll(claudeDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create .claude directory: %w", err)
+	}
+
+	// Load existing settings or start fresh
+	existing, err := LoadClaudeSettings(path)
+	if err != nil || existing == nil {
+		existing = &ClaudeSettings{}
+	}
+
+	categories := GetSettingCategories()
+	responseIdx := 0
+
+	for _, cat := range categories {
+		if cat.IsApplied(existing) {
+			result.Preserved = append(result.Preserved, cat.Name)
+			continue
+		}
+
+		// Get response (from provided slice for testing, or would prompt in real usage)
+		shouldApply := true
+		if responses != nil && responseIdx < len(responses) {
+			shouldApply = responses[responseIdx]
+			responseIdx++
+		}
+
+		if shouldApply {
+			cat.Apply(existing)
+			result.Added = append(result.Added, cat.Name)
+		} else {
+			result.Skipped = append(result.Skipped, cat.Name)
+		}
+	}
+
+	// Only save if we added something
+	if len(result.Added) > 0 {
+		if err := SaveClaudeSettings(path, existing); err != nil {
+			return nil, err
+		}
+	}
+
+	return result, nil
+}
+
 func printClaudeSettingsResult(w io.Writer, result *ClaudeSettingsResult) {
 	fmt.Fprintln(w, "")
 	if len(result.Added) > 0 {
@@ -229,9 +333,20 @@ func printClaudeSettingsResult(w io.Writer, result *ClaudeSettingsResult) {
 			fmt.Fprintf(w, "  ✓ %s\n", item)
 		}
 	}
-	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "These defaults reduce approval prompts for headless agent loops")
-	fmt.Fprintln(w, "while improving security by restricting what agents can access.")
+	if len(result.Skipped) > 0 {
+		if len(result.Added) > 0 || len(result.Preserved) > 0 {
+			fmt.Fprintln(w, "")
+		}
+		fmt.Fprintln(w, "Skipped (run 'juggle init' again to enable):")
+		for _, item := range result.Skipped {
+			fmt.Fprintf(w, "  - %s\n", item)
+		}
+	}
+	if len(result.Added) > 0 {
+		fmt.Fprintln(w, "")
+		fmt.Fprintln(w, "These defaults reduce approval prompts for headless agent loops")
+		fmt.Fprintln(w, "while improving security by restricting what agents can access.")
+	}
 }
 
 func runInit(cmd *cobra.Command, args []string) error {

@@ -507,3 +507,185 @@ func TestInitWithCreateClaudeSettingsFalse(t *testing.T) {
 		t.Error("Expected .claude/settings.json to NOT exist when CreateClaudeSettings=false")
 	}
 }
+
+// TestInitNonInteractiveAppliesAll tests that --non-interactive/-y applies all defaults
+func TestInitNonInteractiveAppliesAll(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	initDir := filepath.Join(env.TempDir, "non-interactive-test")
+
+	var output bytes.Buffer
+	err := cli.InitProject(cli.InitOptions{
+		TargetDir:            initDir,
+		JuggleDirName:        ".juggle",
+		InitVCS:              false,
+		CreateClaudeSettings: true,
+		NonInteractive:       true, // Should apply all defaults without prompting
+		Output:               &output,
+	})
+	if err != nil {
+		t.Fatalf("InitProject failed: %v", err)
+	}
+
+	// Verify all settings were applied
+	settingsPath := filepath.Join(initDir, ".claude", "settings.json")
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatalf("Failed to read settings: %v", err)
+	}
+
+	// Check sandbox was applied
+	if !strings.Contains(string(data), `"enabled"`) {
+		t.Error("Expected sandbox settings to be applied")
+	}
+
+	// Check hooks were applied
+	if !strings.Contains(string(data), "PostToolUse") {
+		t.Error("Expected hooks to be applied")
+	}
+
+	// Check permissions were applied
+	if !strings.Contains(string(data), "permissions") {
+		t.Error("Expected permissions to be applied")
+	}
+}
+
+// TestInitInteractivePromptsForEachCategory tests that interactive mode prompts for each category
+func TestInitInteractivePromptsForEachCategory(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	initDir := filepath.Join(env.TempDir, "interactive-prompts-test")
+	claudeDir := filepath.Join(initDir, ".claude")
+	if err := os.MkdirAll(claudeDir, 0755); err != nil {
+		t.Fatalf("Failed to create .claude dir: %v", err)
+	}
+
+	// Use EnsureClaudeSettingsInteractive directly with simulated responses
+	settingsPath := filepath.Join(claudeDir, "settings.json")
+	var output bytes.Buffer
+
+	// Simulate: accept sandbox, reject hooks, accept permissions
+	responses := []bool{true, false, true}
+	result, err := cli.EnsureClaudeSettingsInteractive(settingsPath, &output, responses)
+	if err != nil {
+		t.Fatalf("EnsureClaudeSettingsInteractive failed: %v", err)
+	}
+
+	// Verify result tracking
+	if len(result.Added) != 2 {
+		t.Errorf("Expected 2 settings added (sandbox, permissions), got %d: %v", len(result.Added), result.Added)
+	}
+	if len(result.Skipped) != 1 {
+		t.Errorf("Expected 1 setting skipped (hooks), got %d: %v", len(result.Skipped), result.Skipped)
+	}
+
+	// Verify the skipped setting is hooks
+	foundHooksSkipped := false
+	for _, s := range result.Skipped {
+		if strings.Contains(strings.ToLower(s), "hook") {
+			foundHooksSkipped = true
+			break
+		}
+	}
+	if !foundHooksSkipped {
+		t.Errorf("Expected hooks to be in skipped list, got: %v", result.Skipped)
+	}
+
+	// Verify settings file only has sandbox and permissions, not hooks
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatalf("Failed to read settings: %v", err)
+	}
+	if !strings.Contains(string(data), `"enabled"`) {
+		t.Error("Expected sandbox to be applied")
+	}
+	if strings.Contains(string(data), "PostToolUse") {
+		t.Error("Expected hooks to NOT be applied (user declined)")
+	}
+	if !strings.Contains(string(data), "permissions") {
+		t.Error("Expected permissions to be applied")
+	}
+}
+
+// TestInitPreservesExistingNotPrompted tests that existing settings are not re-prompted
+func TestInitPreservesExistingNotPrompted(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	initDir := filepath.Join(env.TempDir, "preserve-existing-test")
+	claudeDir := filepath.Join(initDir, ".claude")
+	if err := os.MkdirAll(claudeDir, 0755); err != nil {
+		t.Fatalf("Failed to create .claude dir: %v", err)
+	}
+
+	// Create settings with sandbox already configured
+	existingSettings := `{"sandbox":{"enabled":true,"customField":"preserved"}}`
+	settingsPath := filepath.Join(claudeDir, "settings.json")
+	if err := os.WriteFile(settingsPath, []byte(existingSettings), 0644); err != nil {
+		t.Fatalf("Failed to write existing settings: %v", err)
+	}
+
+	var output bytes.Buffer
+	// Only 2 responses needed: hooks and permissions (sandbox already exists)
+	responses := []bool{true, true}
+	result, err := cli.EnsureClaudeSettingsInteractive(settingsPath, &output, responses)
+	if err != nil {
+		t.Fatalf("EnsureClaudeSettingsInteractive failed: %v", err)
+	}
+
+	// Verify sandbox was preserved (not added)
+	if len(result.Preserved) != 1 {
+		t.Errorf("Expected 1 preserved (sandbox), got %d: %v", len(result.Preserved), result.Preserved)
+	}
+
+	// Verify hooks and permissions were added
+	if len(result.Added) != 2 {
+		t.Errorf("Expected 2 added (hooks, permissions), got %d: %v", len(result.Added), result.Added)
+	}
+
+	// Verify custom field was preserved
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatalf("Failed to read settings: %v", err)
+	}
+	if !strings.Contains(string(data), "customField") {
+		t.Error("Expected customField to be preserved in sandbox config")
+	}
+}
+
+// TestInitResultIncludesSkipped tests that ClaudeSettingsResult.Skipped is populated
+func TestInitResultIncludesSkipped(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	initDir := filepath.Join(env.TempDir, "skipped-result-test")
+	claudeDir := filepath.Join(initDir, ".claude")
+	if err := os.MkdirAll(claudeDir, 0755); err != nil {
+		t.Fatalf("Failed to create .claude dir: %v", err)
+	}
+
+	settingsPath := filepath.Join(claudeDir, "settings.json")
+	var output bytes.Buffer
+
+	// Decline all settings
+	responses := []bool{false, false, false}
+	result, err := cli.EnsureClaudeSettingsInteractive(settingsPath, &output, responses)
+	if err != nil {
+		t.Fatalf("EnsureClaudeSettingsInteractive failed: %v", err)
+	}
+
+	// All should be skipped
+	if len(result.Skipped) != 3 {
+		t.Errorf("Expected 3 skipped settings, got %d: %v", len(result.Skipped), result.Skipped)
+	}
+	if len(result.Added) != 0 {
+		t.Errorf("Expected 0 added settings, got %d: %v", len(result.Added), result.Added)
+	}
+
+	// Settings file should not exist (nothing was saved)
+	if _, err := os.Stat(settingsPath); !os.IsNotExist(err) {
+		t.Error("Expected settings file to not exist when all settings declined")
+	}
+}
