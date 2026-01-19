@@ -2809,14 +2809,15 @@ func checkClaudeSettings() []string {
 	}
 
 	// Load and check settings
-	settings, err := loadClaudeSettings(settingsPath)
+	settings, err := LoadClaudeSettings(settingsPath)
 	if err != nil {
 		issues = append(issues, "✗ Settings file invalid")
 		return issues
 	}
 
 	// Check sandbox enabled
-	if settings.Sandbox == nil || !settings.Sandbox.Enabled {
+	sandbox := settings.GetSandboxConfig()
+	if sandbox == nil || !sandbox.Enabled {
 		issues = append(issues, "✗ Sandbox mode not enabled")
 	} else {
 		issues = append(issues, "✓ Sandbox mode enabled")

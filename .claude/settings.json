@@ -1,17 +1,47 @@
 {
-  "sandbox": {
-    "enabled": true,
-    "autoAllowBashIfSandboxed": true,
-    "allowUnsandboxedCommands": true,
-    "excludedCommands": [],
-    "network": {
-      "allowLocalBinding": true
-    },
-    "filesystem": {
-      "write": {
-        "additionalAllow": ["~/.cache/nix", "~/go"]
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "juggle loop hook-event post-tool"
+          }
+        ]
       }
-    }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Write|Edit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "juggle loop hook-event tool-failure"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "juggle loop hook-event session-end"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "juggle loop hook-event stop"
+          }
+        ]
+      }
+    ]
   },
   "permissions": {
     "allow": [
@@ -27,13 +57,13 @@
       "Bash(juggle:*)",
       "Bash(./juggle:*)",
       "Bash(jj commit:*)",
-      "Bash(jj bookmark:*)",
       "Bash(git commit:*)",
       "WebFetch(domain:proxy.golang.org)",
       "WebFetch(domain:sum.golang.org)",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:docs.anthropic.com)",
-      "WebFetch(domain:docs.claude.com)"
+      "WebFetch(domain:docs.claude.com)",
+      "Bash(./scripts/*:*)"
     ],
     "deny": [
       "Read(./.env)",
@@ -44,5 +74,22 @@
       "Bash(jj git push:*)",
       "Bash(git push:*)"
     ]
+  },
+  "sandbox": {
+    "allowUnsandboxedCommands": true,
+    "autoAllowBashIfSandboxed": true,
+    "enabled": true,
+    "excludedCommands": [],
+    "filesystem": {
+      "write": {
+        "additionalAllow": [
+          "~/.cache",
+          "~/go"
+        ]
+      }
+    },
+    "network": {
+      "allowLocalBinding": true
+    }
   }
 }

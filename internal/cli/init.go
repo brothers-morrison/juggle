@@ -132,22 +132,28 @@ func InitProject(opts InitOptions) error {
 	// Create or update Claude settings if requested (default behavior)
 	if opts.CreateClaudeSettings {
 		claudeSettingsPath := filepath.Join(opts.TargetDir, ".claude", "settings.json")
-		added, err := ensureClaudeSettings(claudeSettingsPath)
+		result, err := ensureClaudeSettings(claudeSettingsPath)
 		if err != nil {
 			return fmt.Errorf("failed to configure Claude settings: %w", err)
 		}
-		if len(added) > 0 {
-			printClaudeSettingsAdded(opts.Output, added)
+		if len(result.Added) > 0 || len(result.Preserved) > 0 {
+			printClaudeSettingsResult(opts.Output, result)
 		}
 	}
 
 	return nil
 }
 
+// ClaudeSettingsResult contains both added and preserved settings info.
+type ClaudeSettingsResult struct {
+	Added     []string
+	Preserved []string
+}
+
 // ensureClaudeSettings creates or updates .claude/settings.json with default settings.
-// Returns a list of what was added (empty if nothing changed).
-func ensureClaudeSettings(path string) ([]string, error) {
-	var added []string
+// Returns what was added and what was preserved (empty if nothing changed).
+func ensureClaudeSettings(path string) (*ClaudeSettingsResult, error) {
+	result := &ClaudeSettingsResult{}
 	defaults := DefaultClaudeSettings()
 
 	// Create .claude directory if needed
@@ -157,22 +163,30 @@ func ensureClaudeSettings(path string) ([]string, error) {
 	}
 
 	// Load existing settings or start fresh
-	existing, err := loadClaudeSettings(path)
+	existing, err := LoadClaudeSettings(path)
 	if err != nil || existing == nil {
 		existing = &ClaudeSettings{}
 	}
 
 	// Merge sandbox settings
-	if existing.Sandbox == nil {
-		existing.Sandbox = defaults.Sandbox
-		added = append(added, "Sandbox mode enabled (OS-level security boundaries)")
+	if existing.GetSandboxConfig() == nil {
+		// Copy defaults' sandbox config to existing
+		defaultSandbox := defaults.GetSandboxConfig()
+		if defaultSandbox != nil {
+			_ = existing.SetSandboxConfig(defaultSandbox)
+		}
+		result.Added = append(result.Added, "Sandbox mode enabled (OS-level security boundaries)")
+	} else {
+		result.Preserved = append(result.Preserved, "Sandbox settings")
 	}
 
 	// Merge permissions
 	if existing.Permissions == nil {
 		existing.Permissions = defaults.Permissions
-		added = append(added, "Secret file protection (.env, secrets/)")
-		added = append(added, "Push confirmation prompts")
+		result.Added = append(result.Added, "Secret file protection (.env, secrets/)")
+		result.Added = append(result.Added, "Push confirmation prompts")
+	} else {
+		result.Preserved = append(result.Preserved, "Permission rules")
 	}
 
 	// Merge hooks (check if juggler hooks are missing)
@@ -183,24 +197,37 @@ func ensureClaudeSettings(path string) ([]string, error) {
 		for k, v := range defaults.Hooks {
 			existing.Hooks[k] = v
 		}
-		added = append(added, "Hooks for progress tracking")
+		result.Added = append(result.Added, "Hooks for progress tracking")
+	} else {
+		result.Preserved = append(result.Preserved, "Hooks")
 	}
 
 	// Only save if we added something
-	if len(added) > 0 {
-		if err := saveClaudeSettings(path, existing); err != nil {
+	if len(result.Added) > 0 {
+		if err := SaveClaudeSettings(path, existing); err != nil {
 			return nil, err
 		}
 	}
 
-	return added, nil
+	return result, nil
 }
 
-func printClaudeSettingsAdded(w io.Writer, added []string) {
+func printClaudeSettingsResult(w io.Writer, result *ClaudeSettingsResult) {
 	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "Updated .claude/settings.json with:")
-	for _, item := range added {
-		fmt.Fprintf(w, "  - %s\n", item)
+	if len(result.Added) > 0 {
+		fmt.Fprintln(w, "Updated .claude/settings.json:")
+		for _, item := range result.Added {
+			fmt.Fprintf(w, "  + %s\n", item)
+		}
+	}
+	if len(result.Preserved) > 0 {
+		if len(result.Added) > 0 {
+			fmt.Fprintln(w, "")
+		}
+		fmt.Fprintln(w, "Preserved existing settings:")
+		for _, item := range result.Preserved {
+			fmt.Fprintf(w, "  ✓ %s\n", item)
+		}
 	}
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "These defaults reduce approval prompts for headless agent loops")

@@ -66,7 +66,9 @@ func init() {
 
 // ClaudeSettings represents the structure of .claude/settings.json
 type ClaudeSettings struct {
-	Sandbox     *SandboxConfig             `json:"sandbox,omitempty"`
+	// SandboxRaw stores the complete sandbox config as raw JSON to preserve unknown fields.
+	// Use GetSandboxConfig() to access parsed values, SetSandboxConfig() to set values.
+	SandboxRaw  json.RawMessage            `json:"-"`
 	Permissions *PermissionsConfig         `json:"permissions,omitempty"`
 	Hooks       map[string][]HookMatcher   `json:"hooks,omitempty"`
 	Other       map[string]json.RawMessage `json:"-"` // Preserves unknown fields
@@ -84,11 +86,58 @@ type HookConfig struct {
 	Command string `json:"command"`
 }
 
-// SandboxConfig represents Claude Code sandbox settings
+// SandboxConfig represents known Claude Code sandbox settings.
+// Note: This struct intentionally only contains fields that juggler uses.
+// The full sandbox config is preserved in ClaudeSettings.SandboxRaw.
 type SandboxConfig struct {
 	Enabled                  bool `json:"enabled,omitempty"`
 	AutoAllowBashIfSandboxed bool `json:"autoAllowBashIfSandboxed,omitempty"`
 	AllowUnsandboxedCommands bool `json:"allowUnsandboxedCommands,omitempty"`
+}
+
+// GetSandboxConfig parses and returns the known sandbox config fields.
+// Returns nil if no sandbox config is set.
+func (s *ClaudeSettings) GetSandboxConfig() *SandboxConfig {
+	if len(s.SandboxRaw) == 0 {
+		return nil
+	}
+	var config SandboxConfig
+	if err := json.Unmarshal(s.SandboxRaw, &config); err != nil {
+		return nil
+	}
+	return &config
+}
+
+// SetSandboxConfig merges the given config into the existing sandbox config,
+// preserving any unknown fields. If no existing config, creates a new one.
+func (s *ClaudeSettings) SetSandboxConfig(config *SandboxConfig) error {
+	if config == nil {
+		s.SandboxRaw = nil
+		return nil
+	}
+
+	// Parse existing config into a map to preserve unknown fields
+	var existing map[string]interface{}
+	if len(s.SandboxRaw) > 0 {
+		if err := json.Unmarshal(s.SandboxRaw, &existing); err != nil {
+			existing = make(map[string]interface{})
+		}
+	} else {
+		existing = make(map[string]interface{})
+	}
+
+	// Merge known fields
+	existing["enabled"] = config.Enabled
+	existing["autoAllowBashIfSandboxed"] = config.AutoAllowBashIfSandboxed
+	existing["allowUnsandboxedCommands"] = config.AllowUnsandboxedCommands
+
+	// Marshal back
+	data, err := json.Marshal(existing)
+	if err != nil {
+		return err
+	}
+	s.SandboxRaw = data
+	return nil
 }
 
 // PermissionsConfig represents Claude Code permission rules
@@ -137,12 +186,7 @@ func JugglerHookConfig() map[string][]HookMatcher {
 // DefaultClaudeSettings returns the bare-bones Claude settings for juggle projects.
 // These settings enable sandbox mode and hooks while protecting secrets.
 func DefaultClaudeSettings() *ClaudeSettings {
-	return &ClaudeSettings{
-		Sandbox: &SandboxConfig{
-			Enabled:                  true,
-			AutoAllowBashIfSandboxed: true,
-			AllowUnsandboxedCommands: true,
-		},
+	settings := &ClaudeSettings{
 		Permissions: &PermissionsConfig{
 			Allow: []string{"Bash(juggle:*)"},
 			Deny:  []string{"Read(./.env)", "Read(./.env.*)", "Read(./secrets/**)"},
@@ -150,6 +194,13 @@ func DefaultClaudeSettings() *ClaudeSettings {
 		},
 		Hooks: JugglerHookConfig(),
 	}
+	// Set sandbox config
+	_ = settings.SetSandboxConfig(&SandboxConfig{
+		Enabled:                  true,
+		AutoAllowBashIfSandboxed: true,
+		AllowUnsandboxedCommands: true,
+	})
+	return settings
 }
 
 func runHooksInstall(cmd *cobra.Command, args []string) error {
@@ -172,7 +223,7 @@ func runHooksInstall(cmd *cobra.Command, args []string) error {
 	}
 
 	// Load existing settings or create new
-	settings, err := loadClaudeSettings(settingsPath)
+	settings, err := LoadClaudeSettings(settingsPath)
 	if err != nil {
 		return err
 	}
@@ -191,7 +242,7 @@ func runHooksInstall(cmd *cobra.Command, args []string) error {
 	}
 
 	// Save updated settings
-	if err := saveClaudeSettings(settingsPath, settings); err != nil {
+	if err := SaveClaudeSettings(settingsPath, settings); err != nil {
 		return err
 	}
 
@@ -236,7 +287,7 @@ func runHooksStatus(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
-		settings, err := loadClaudeSettings(sf.path)
+		settings, err := LoadClaudeSettings(sf.path)
 		if err != nil {
 			continue
 		}
@@ -318,7 +369,9 @@ func getSettingsPath() (string, error) {
 	return filepath.Join(cwd, ".claude", "settings.json"), nil
 }
 
-func loadClaudeSettings(path string) (*ClaudeSettings, error) {
+// LoadClaudeSettings loads Claude settings from the given path.
+// It preserves unknown fields in the Other map for round-trip safety.
+func LoadClaudeSettings(path string) (*ClaudeSettings, error) {
 	settings := &ClaudeSettings{
 		Hooks: make(map[string][]HookMatcher),
 		Other: make(map[string]json.RawMessage),
@@ -338,12 +391,9 @@ func loadClaudeSettings(path string) (*ClaudeSettings, error) {
 		return nil, fmt.Errorf("failed to parse settings file: %w", err)
 	}
 
-	// Extract sandbox field
+	// Extract sandbox field as raw JSON to preserve all fields
 	if sandboxRaw, ok := raw["sandbox"]; ok {
-		settings.Sandbox = &SandboxConfig{}
-		if err := json.Unmarshal(sandboxRaw, settings.Sandbox); err != nil {
-			return nil, fmt.Errorf("failed to parse sandbox field: %w", err)
-		}
+		settings.SandboxRaw = sandboxRaw
 		delete(raw, "sandbox")
 	}
 
@@ -370,7 +420,9 @@ func loadClaudeSettings(path string) (*ClaudeSettings, error) {
 	return settings, nil
 }
 
-func saveClaudeSettings(path string, settings *ClaudeSettings) error {
+// SaveClaudeSettings saves Claude settings to the given path.
+// It preserves unknown fields from the Other map.
+func SaveClaudeSettings(path string, settings *ClaudeSettings) error {
 	// Ensure directory exists
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -380,9 +432,12 @@ func saveClaudeSettings(path string, settings *ClaudeSettings) error {
 	// Reconstruct the full settings map
 	output := make(map[string]interface{})
 
-	// Add sandbox
-	if settings.Sandbox != nil {
-		output["sandbox"] = settings.Sandbox
+	// Add sandbox (as raw JSON to preserve all fields)
+	if len(settings.SandboxRaw) > 0 {
+		var sandbox interface{}
+		if err := json.Unmarshal(settings.SandboxRaw, &sandbox); err == nil {
+			output["sandbox"] = sandbox
+		}
 	}
 
 	// Add permissions
@@ -457,7 +512,7 @@ func AreHooksInstalled() bool {
 }
 
 func checkHooksInFile(path string) bool {
-	settings, err := loadClaudeSettings(path)
+	settings, err := LoadClaudeSettings(path)
 	if err != nil {
 		return false
 	}
