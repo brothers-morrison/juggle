@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/ohare93/juggle/internal/session"
@@ -25,22 +26,84 @@ func init() {
 }
 
 func runShow(cmd *cobra.Command, args []string) error {
-	ballID := args[0]
+	id := args[0]
 
-	// Use findBallByID which respects --all flag
-	foundBall, _, err := findBallByID(ballID)
-	if err != nil {
+	// Try to find a ball first
+	foundBall, _, err := findBallByID(id)
+	if err == nil {
 		if showJSONFlag {
-			return printJSONError(err)
+			return printBallJSON(foundBall)
 		}
-		return err
+		renderBallDetails(foundBall)
+		return nil
 	}
+
+	// Ball not found, try to find a session
+	cwd, cwdErr := GetWorkingDir()
+	if cwdErr != nil {
+		if showJSONFlag {
+			return printJSONError(cwdErr)
+		}
+		return cwdErr
+	}
+
+	store, storeErr := session.NewSessionStoreWithConfig(cwd, GetStoreConfig())
+	if storeErr != nil {
+		if showJSONFlag {
+			return printJSONError(storeErr)
+		}
+		return storeErr
+	}
+
+	sess, sessErr := store.LoadSession(id)
+	if sessErr != nil {
+		// Neither ball nor session found
+		if showJSONFlag {
+			return printJSONError(fmt.Errorf("no ball or session found with id: %s", id))
+		}
+		return fmt.Errorf("no ball or session found with id: %s", id)
+	}
+
+	// Found a session - load linked balls and progress
+	ballStore, _ := NewStoreForCommand(cwd)
+	var sessionBalls []*session.Ball
+	if ballStore != nil {
+		allBalls, _ := ballStore.LoadBalls()
+		for _, ball := range allBalls {
+			for _, tag := range ball.Tags {
+				if tag == id {
+					sessionBalls = append(sessionBalls, ball)
+					break
+				}
+			}
+		}
+	}
+	progress, _ := store.LoadProgress(id)
 
 	if showJSONFlag {
-		return printBallJSON(foundBall)
+		return printSessionJSON(sess, sessionBalls, progress)
 	}
 
-	renderBallDetails(foundBall)
+	renderSessionDetails(sess, sessionBalls, progress)
+	return nil
+}
+
+// printSessionJSON outputs a session with linked balls as JSON
+func printSessionJSON(sess *session.JuggleSession, balls []*session.Ball, progress string) error {
+	response := struct {
+		Session  *session.JuggleSession `json:"session"`
+		Balls    []*session.Ball        `json:"balls"`
+		Progress string                 `json:"progress,omitempty"`
+	}{
+		Session:  sess,
+		Balls:    balls,
+		Progress: progress,
+	}
+	data, err := json.MarshalIndent(response, "", "  ")
+	if err != nil {
+		return printJSONError(err)
+	}
+	fmt.Println(string(data))
 	return nil
 }
 
@@ -54,12 +117,15 @@ func printBallJSON(ball *session.Ball) error {
 	return nil
 }
 
-// printJSONError outputs an error in JSON format
+// printJSONError outputs an error in JSON format to stdout
+// Returns nil to prevent cobra from printing the error again to stderr
+// Note: This means exit code will be 0 even on errors when using --json
+// Callers can check the JSON "error" field to detect failures
 func printJSONError(err error) error {
 	errResp := map[string]string{"error": err.Error()}
 	data, _ := json.Marshal(errResp)
 	fmt.Println(string(data))
-	return nil // Return nil so the error is in JSON, not stderr
+	return nil
 }
 
 func renderBallDetails(ball *session.Ball) {
@@ -105,5 +171,77 @@ func renderBallDetails(ball *session.Ball) {
 	if ball.Output != "" {
 		fmt.Printf("\n%s\n", labelStyle.Render("Output:"))
 		fmt.Println(valueStyle.Render(ball.Output))
+	}
+}
+
+func renderSessionDetails(sess *session.JuggleSession, balls []*session.Ball, progress string) {
+	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
+	valueStyle := lipgloss.NewStyle()
+	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15"))
+
+	fmt.Println(headerStyle.Render("Session: " + sess.ID))
+	fmt.Println()
+
+	if sess.Description != "" {
+		fmt.Println(labelStyle.Render("Description:"), valueStyle.Render(sess.Description))
+	}
+	fmt.Println(labelStyle.Render("Created:"), valueStyle.Render(sess.CreatedAt.Format(time.RFC3339)))
+	fmt.Println(labelStyle.Render("Updated:"), valueStyle.Render(sess.UpdatedAt.Format(time.RFC3339)))
+
+	// Acceptance criteria section
+	fmt.Println()
+	fmt.Printf("%s (%d)\n", labelStyle.Render("Acceptance Criteria:"), len(sess.AcceptanceCriteria))
+	if len(sess.AcceptanceCriteria) > 0 {
+		for i, ac := range sess.AcceptanceCriteria {
+			fmt.Printf("  %d. %s\n", i+1, ac)
+		}
+	} else {
+		fmt.Println("  (no session-level acceptance criteria)")
+	}
+
+	// Context section
+	fmt.Println()
+	fmt.Println(labelStyle.Render("Context:"))
+	if sess.Context != "" {
+		lines := strings.Split(sess.Context, "\n")
+		for _, line := range lines {
+			fmt.Printf("  %s\n", line)
+		}
+	} else {
+		fmt.Println("  (no context set)")
+	}
+
+	// Balls section
+	fmt.Println()
+	fmt.Printf("%s (%d)\n", labelStyle.Render("Balls:"), len(balls))
+	if len(balls) > 0 {
+		for _, ball := range balls {
+			stateStyle := lipgloss.NewStyle()
+			switch ball.State {
+			case session.StateInProgress:
+				stateStyle = stateStyle.Foreground(lipgloss.Color("10"))
+			case session.StatePending:
+				stateStyle = stateStyle.Foreground(lipgloss.Color("14"))
+			case session.StateBlocked:
+				stateStyle = stateStyle.Foreground(lipgloss.Color("11"))
+			case session.StateComplete:
+				stateStyle = stateStyle.Foreground(lipgloss.Color("8"))
+			}
+			fmt.Printf("  - %s [%s] %s\n", ball.ID, stateStyle.Render(string(ball.State)), ball.Title)
+		}
+	} else {
+		fmt.Println("  (no balls linked to this session)")
+	}
+
+	// Progress section
+	fmt.Println()
+	fmt.Println(labelStyle.Render("Progress:"))
+	if progress != "" {
+		lines := strings.Split(progress, "\n")
+		for _, line := range lines {
+			fmt.Printf("  %s\n", line)
+		}
+	} else {
+		fmt.Println("  (no progress logged)")
 	}
 }

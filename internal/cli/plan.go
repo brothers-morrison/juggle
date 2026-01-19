@@ -54,6 +54,7 @@ var dependsOnFlag []string
 var contextFlag string
 var nonInteractiveFlag bool
 var editFlag bool
+var planJSONFlag bool
 
 func init() {
 	planCmd.Flags().StringVarP(&intentFlag, "intent", "i", "", "What are you planning to work on?")
@@ -67,16 +68,23 @@ func init() {
 	planCmd.Flags().StringSliceVar(&dependsOnFlag, "depends-on", []string{}, "Ball IDs this ball depends on (can be specified multiple times)")
 	planCmd.Flags().BoolVar(&nonInteractiveFlag, "non-interactive", false, "Skip interactive prompts, use defaults for unspecified fields (headless mode)")
 	planCmd.Flags().BoolVar(&editFlag, "edit", false, "Open $EDITOR with YAML template instead of TUI form")
+	planCmd.Flags().BoolVar(&planJSONFlag, "json", false, "Output created ball as JSON (implies --non-interactive)")
 }
 
 func runPlan(cmd *cobra.Command, args []string) error {
 	cwd, err := GetWorkingDir()
 	if err != nil {
+		if planJSONFlag {
+			return printJSONError(err)
+		}
 		return fmt.Errorf("failed to get current directory: %w", err)
 	}
 
 	store, err := NewStoreForCommand(cwd)
 	if err != nil {
+		if planJSONFlag {
+			return printJSONError(err)
+		}
 		return fmt.Errorf("failed to initialize store: %w", err)
 	}
 
@@ -94,7 +102,8 @@ func runPlan(cmd *cobra.Command, args []string) error {
 	// Determine which mode to use
 	isTTY := term.IsTerminal(int(os.Stdin.Fd()))
 
-	if nonInteractiveFlag {
+	// --json implies --non-interactive
+	if planJSONFlag || nonInteractiveFlag {
 		// Non-interactive mode: require intent, use defaults
 		return runPlanNonInteractive(store, cwd, intent, acceptanceCriteria)
 	}
@@ -265,7 +274,11 @@ func runPlanEditor(store *session.Store, cwd, intent string, acceptanceCriteria 
 // runPlanNonInteractive creates a ball without any interactive prompts
 func runPlanNonInteractive(store *session.Store, cwd, intent string, acceptanceCriteria []string) error {
 	if intent == "" {
-		return fmt.Errorf("intent is required in non-interactive mode (use positional args or --intent)")
+		err := fmt.Errorf("intent is required in non-interactive mode (use positional args or --intent)")
+		if planJSONFlag {
+			return printJSONError(err)
+		}
+		return err
 	}
 
 	// Get priority from flag or default
@@ -274,12 +287,19 @@ func runPlanNonInteractive(store *session.Store, cwd, intent string, acceptanceC
 		priority = "medium"
 	}
 	if !session.ValidatePriority(priority) {
-		return fmt.Errorf("invalid priority %q, must be one of: low, medium, high, urgent", priority)
+		err := fmt.Errorf("invalid priority %q, must be one of: low, medium, high, urgent", priority)
+		if planJSONFlag {
+			return printJSONError(err)
+		}
+		return err
 	}
 
 	// Create the planned ball
 	ball, err := session.NewBall(cwd, intent, session.Priority(priority))
 	if err != nil {
+		if planJSONFlag {
+			return printJSONError(err)
+		}
 		return fmt.Errorf("failed to create planned ball: %w", err)
 	}
 
@@ -309,7 +329,11 @@ func runPlanNonInteractive(store *session.Store, cwd, intent string, acceptanceC
 	if modelSizeFlag != "" {
 		ms := session.ModelSize(modelSizeFlag)
 		if ms != session.ModelSizeSmall && ms != session.ModelSizeMedium && ms != session.ModelSizeLarge {
-			return fmt.Errorf("invalid model size %q, must be one of: small, medium, large", modelSizeFlag)
+			err := fmt.Errorf("invalid model size %q, must be one of: small, medium, large", modelSizeFlag)
+			if planJSONFlag {
+				return printJSONError(err)
+			}
+			return err
 		}
 		ball.ModelSize = ms
 	}
@@ -318,27 +342,44 @@ func runPlanNonInteractive(store *session.Store, cwd, intent string, acceptanceC
 	if len(dependsOnFlag) > 0 {
 		resolvedDeps, err := resolveDependencyIDs(store, dependsOnFlag)
 		if err != nil {
+			if planJSONFlag {
+				return printJSONError(err)
+			}
 			return fmt.Errorf("failed to resolve dependencies: %w", err)
 		}
 		ball.SetDependencies(resolvedDeps)
 
 		balls, err := store.LoadBalls()
 		if err != nil {
+			if planJSONFlag {
+				return printJSONError(err)
+			}
 			return fmt.Errorf("failed to load balls for dependency check: %w", err)
 		}
 		allBalls := append(balls, ball)
 		if err := session.DetectCircularDependencies(allBalls); err != nil {
+			if planJSONFlag {
+				return printJSONError(err)
+			}
 			return fmt.Errorf("dependency error: %w", err)
 		}
 	}
 
 	// Save the ball
 	if err := store.AppendBall(ball); err != nil {
+		if planJSONFlag {
+			return printJSONError(err)
+		}
 		return fmt.Errorf("failed to save planned ball: %w", err)
 	}
 
 	// Ensure project is in search paths for discovery
 	_ = session.EnsureProjectInSearchPaths(cwd)
+
+	// Output JSON if requested
+	if planJSONFlag {
+		return printBallJSON(ball)
+	}
 
 	fmt.Printf("✓ Planned ball added: %s\n", ball.ID)
 	fmt.Printf("  Title: %s\n", ball.Title)

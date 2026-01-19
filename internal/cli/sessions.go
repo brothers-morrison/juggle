@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -47,6 +48,10 @@ var (
 	sessionACFlag               []string // Acceptance criteria for session
 	sessionYesFlag              bool     // Skip confirmation for delete
 	sessionNonInteractiveFlag   bool     // Skip interactive prompts
+	sessionsListJSONFlag        bool     // Output sessions list as JSON
+	sessionsShowJSONFlag        bool     // Output session show as JSON
+	sessionsCreateJSONFlag      bool     // Output created session as JSON
+	sessionsContextJSONFlag     bool     // Output updated session as JSON
 )
 
 var sessionsCreateCmd = &cobra.Command{
@@ -155,10 +160,16 @@ func init() {
 	sessionsCreateCmd.Flags().StringVar(&sessionContextFlag, "context", "", "Initial session context (agent-friendly)")
 	sessionsCreateCmd.Flags().StringSliceVar(&sessionACFlag, "ac", []string{}, "Session-level acceptance criteria (can be specified multiple times)")
 	sessionsCreateCmd.Flags().BoolVar(&sessionNonInteractiveFlag, "non-interactive", false, "Skip interactive prompts (for headless mode)")
+	sessionsCreateCmd.Flags().BoolVar(&sessionsCreateJSONFlag, "json", false, "Output created session as JSON (implies --non-interactive)")
 	sessionsContextCmd.Flags().BoolVar(&sessionEditFlag, "edit", false, "Open context in $EDITOR")
 	sessionsContextCmd.Flags().StringVar(&sessionSetFlag, "set", "", "Set context directly (agent-friendly)")
+	sessionsContextCmd.Flags().BoolVar(&sessionsContextJSONFlag, "json", false, "Output updated session as JSON")
 	sessionsDeleteCmd.Flags().BoolVarP(&sessionYesFlag, "yes", "y", false, "Skip confirmation prompt (for headless mode)")
 	sessionsProgressClearCmd.Flags().BoolVarP(&sessionProgressClearYesFlag, "yes", "y", false, "Skip confirmation prompt (for headless mode)")
+
+	// Add JSON output flags for list and show commands
+	sessionsListCmd.Flags().BoolVar(&sessionsListJSONFlag, "json", false, "Output as JSON")
+	sessionsShowCmd.Flags().BoolVar(&sessionsShowJSONFlag, "json", false, "Output as JSON")
 
 	// Add flags for edit command
 	sessionsEditCmd.Flags().StringVarP(&sessionEditDescriptionFlag, "message", "m", "", "Update session description")
@@ -187,22 +198,34 @@ func runSessionsCreate(cmd *cobra.Command, args []string) error {
 
 	cwd, err := GetWorkingDir()
 	if err != nil {
+		if sessionsCreateJSONFlag {
+			return printJSONError(err)
+		}
 		return fmt.Errorf("failed to get current directory: %w", err)
 	}
 
 	store, err := session.NewSessionStoreWithConfig(cwd, GetStoreConfig())
 	if err != nil {
+		if sessionsCreateJSONFlag {
+			return printJSONError(err)
+		}
 		return fmt.Errorf("failed to initialize session store: %w", err)
 	}
 
 	sess, err := store.CreateSession(id, description)
 	if err != nil {
+		if sessionsCreateJSONFlag {
+			return printJSONError(err)
+		}
 		return fmt.Errorf("failed to create session: %w", err)
 	}
 
 	// Set context if provided
 	if sessionContextFlag != "" {
 		if err := store.UpdateSessionContext(id, sessionContextFlag); err != nil {
+			if sessionsCreateJSONFlag {
+				return printJSONError(err)
+			}
 			return fmt.Errorf("failed to set context: %w", err)
 		}
 	}
@@ -215,8 +238,8 @@ func runSessionsCreate(cmd *cobra.Command, args []string) error {
 	var acceptanceCriteria []string
 	if len(sessionACFlag) > 0 {
 		acceptanceCriteria = sessionACFlag
-	} else if !sessionNonInteractiveFlag && term.IsTerminal(int(os.Stdin.Fd())) {
-		// Interactive mode: ask if user wants to add ACs (only in TTY)
+	} else if !sessionsCreateJSONFlag && !sessionNonInteractiveFlag && term.IsTerminal(int(os.Stdin.Fd())) {
+		// Interactive mode: ask if user wants to add ACs (only in TTY, skip in JSON mode)
 		if inheritedCount > 0 {
 			fmt.Printf("This session will inherit %d acceptance criteria from repo defaults.\n", inheritedCount)
 		}
@@ -246,13 +269,34 @@ func runSessionsCreate(cmd *cobra.Command, args []string) error {
 	// Apply acceptance criteria: provided ACs take precedence, otherwise inherit defaults
 	if len(acceptanceCriteria) > 0 {
 		if err := store.UpdateSessionAcceptanceCriteria(id, acceptanceCriteria); err != nil {
+			if sessionsCreateJSONFlag {
+				return printJSONError(err)
+			}
 			return fmt.Errorf("failed to set acceptance criteria: %w", err)
 		}
 	} else if inheritedCount > 0 {
 		// No ACs provided interactively, inherit from repo-level defaults
 		if err := store.UpdateSessionAcceptanceCriteria(id, repoACs); err != nil {
+			if sessionsCreateJSONFlag {
+				return printJSONError(err)
+			}
 			return fmt.Errorf("failed to set default acceptance criteria: %w", err)
 		}
+	}
+
+	// Output JSON if requested
+	if sessionsCreateJSONFlag {
+		// Reload session to get final state with all updates
+		sess, err = store.LoadSession(id)
+		if err != nil {
+			return printJSONError(err)
+		}
+		data, err := json.MarshalIndent(sess, "", "  ")
+		if err != nil {
+			return printJSONError(err)
+		}
+		fmt.Println(string(data))
+		return nil
 	}
 
 	fmt.Printf("Created session: %s\n", sess.ID)
@@ -286,6 +330,19 @@ func runSessionsList(cmd *cobra.Command, args []string) error {
 	sessions, err := store.ListSessions()
 	if err != nil {
 		return fmt.Errorf("failed to list sessions: %w", err)
+	}
+
+	// Handle JSON output
+	if sessionsListJSONFlag {
+		data, err := json.MarshalIndent(sessions, "", "  ")
+		if err != nil {
+			errResp := map[string]string{"error": err.Error()}
+			errData, _ := json.Marshal(errResp)
+			fmt.Println(string(errData))
+			return err
+		}
+		fmt.Println(string(data))
+		return nil
 	}
 
 	if len(sessions) == 0 {
@@ -375,6 +432,29 @@ func runSessionsShow(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Handle JSON output
+	if sessionsShowJSONFlag {
+		// Create a response struct with session and linked balls
+		response := struct {
+			Session  *session.JuggleSession `json:"session"`
+			Balls    []*session.Ball        `json:"balls"`
+			Progress string                 `json:"progress,omitempty"`
+		}{
+			Session:  sess,
+			Balls:    sessionBalls,
+			Progress: progress,
+		}
+		data, err := json.MarshalIndent(response, "", "  ")
+		if err != nil {
+			errResp := map[string]string{"error": err.Error()}
+			errData, _ := json.Marshal(errResp)
+			fmt.Println(string(errData))
+			return err
+		}
+		fmt.Println(string(data))
+		return nil
+	}
+
 	// Render session details
 	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
 	valueStyle := lipgloss.NewStyle()
@@ -455,24 +535,49 @@ func runSessionsContext(cmd *cobra.Command, args []string) error {
 
 	cwd, err := GetWorkingDir()
 	if err != nil {
+		if sessionsContextJSONFlag {
+			return printJSONError(err)
+		}
 		return fmt.Errorf("failed to get current directory: %w", err)
 	}
 
 	store, err := session.NewSessionStoreWithConfig(cwd, GetStoreConfig())
 	if err != nil {
+		if sessionsContextJSONFlag {
+			return printJSONError(err)
+		}
 		return fmt.Errorf("failed to initialize session store: %w", err)
 	}
 
 	// Verify session exists
 	_, err = store.LoadSession(id)
 	if err != nil {
+		if sessionsContextJSONFlag {
+			return printJSONError(err)
+		}
 		return fmt.Errorf("failed to load session: %w", err)
 	}
 
 	// Handle --set flag (agent-friendly)
 	if sessionSetFlag != "" {
 		if err := store.UpdateSessionContext(id, sessionSetFlag); err != nil {
+			if sessionsContextJSONFlag {
+				return printJSONError(err)
+			}
 			return fmt.Errorf("failed to update context: %w", err)
+		}
+		// Output JSON if requested
+		if sessionsContextJSONFlag {
+			sess, err := store.LoadSession(id)
+			if err != nil {
+				return printJSONError(err)
+			}
+			data, err := json.MarshalIndent(sess, "", "  ")
+			if err != nil {
+				return printJSONError(err)
+			}
+			fmt.Println(string(data))
+			return nil
 		}
 		fmt.Printf("Updated context for session: %s\n", id)
 		return nil
@@ -487,12 +592,18 @@ func runSessionsContext(cmd *cobra.Command, args []string) error {
 
 		sess, err := store.LoadSession(id)
 		if err != nil {
+			if sessionsContextJSONFlag {
+				return printJSONError(err)
+			}
 			return fmt.Errorf("failed to load session: %w", err)
 		}
 
 		// Create temp file with current context
 		tmpFile, err := os.CreateTemp("", "juggle-context-*.md")
 		if err != nil {
+			if sessionsContextJSONFlag {
+				return printJSONError(err)
+			}
 			return fmt.Errorf("failed to create temp file: %w", err)
 		}
 		tmpPath := tmpFile.Name()
@@ -500,6 +611,9 @@ func runSessionsContext(cmd *cobra.Command, args []string) error {
 
 		if _, err := tmpFile.WriteString(sess.Context); err != nil {
 			tmpFile.Close()
+			if sessionsContextJSONFlag {
+				return printJSONError(err)
+			}
 			return fmt.Errorf("failed to write temp file: %w", err)
 		}
 		tmpFile.Close()
@@ -511,28 +625,64 @@ func runSessionsContext(cmd *cobra.Command, args []string) error {
 		editorCmd.Stderr = os.Stderr
 
 		if err := editorCmd.Run(); err != nil {
+			if sessionsContextJSONFlag {
+				return printJSONError(err)
+			}
 			return fmt.Errorf("editor failed: %w", err)
 		}
 
 		// Read edited content
 		newContext, err := os.ReadFile(tmpPath)
 		if err != nil {
+			if sessionsContextJSONFlag {
+				return printJSONError(err)
+			}
 			return fmt.Errorf("failed to read edited content: %w", err)
 		}
 
 		// Update session context
 		if err := store.UpdateSessionContext(id, string(newContext)); err != nil {
+			if sessionsContextJSONFlag {
+				return printJSONError(err)
+			}
 			return fmt.Errorf("failed to update context: %w", err)
+		}
+
+		// Output JSON if requested
+		if sessionsContextJSONFlag {
+			sess, err = store.LoadSession(id)
+			if err != nil {
+				return printJSONError(err)
+			}
+			data, err := json.MarshalIndent(sess, "", "  ")
+			if err != nil {
+				return printJSONError(err)
+			}
+			fmt.Println(string(data))
+			return nil
 		}
 
 		fmt.Printf("Updated context for session: %s\n", id)
 		return nil
 	}
 
-	// Just display context
+	// Just display context (or session as JSON if --json flag is set)
 	sess, err := store.LoadSession(id)
 	if err != nil {
+		if sessionsContextJSONFlag {
+			return printJSONError(err)
+		}
 		return fmt.Errorf("failed to load session: %w", err)
+	}
+
+	// If --json flag is set, output the session as JSON (even if just viewing)
+	if sessionsContextJSONFlag {
+		data, err := json.MarshalIndent(sess, "", "  ")
+		if err != nil {
+			return printJSONError(err)
+		}
+		fmt.Println(string(data))
+		return nil
 	}
 
 	if sess.Context == "" {

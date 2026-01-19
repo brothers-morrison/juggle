@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -320,7 +321,7 @@ func listAllBalls(cmd *cobra.Command) error {
 	}
 
 	// Filter balls based on flags
-	var filteredBalls []*session.Ball
+	filteredBalls := make([]*session.Ball, 0)
 	for _, ball := range allBalls {
 		if BallsListOpts.ShowCompleted {
 			// Show only completed balls
@@ -338,6 +339,19 @@ func listAllBalls(cmd *cobra.Command) error {
 		}
 	}
 	allBalls = filteredBalls
+
+	// Handle JSON output
+	if BallsListOpts.JSONOutput {
+		data, err := json.MarshalIndent(allBalls, "", "  ")
+		if err != nil {
+			errResp := map[string]string{"error": err.Error()}
+			errData, _ := json.Marshal(errResp)
+			fmt.Println(string(errData))
+			return err
+		}
+		fmt.Println(string(data))
+		return nil
+	}
 
 	if len(allBalls) == 0 {
 		if BallsListOpts.ShowCompleted {

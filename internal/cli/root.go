@@ -156,6 +156,7 @@ func Execute() error {
 type BallsListOptions struct {
 	ShowAll       bool // Show all balls including completed
 	ShowCompleted bool // Show only completed balls
+	JSONOutput    bool // Output as JSON
 }
 
 // BallsListOpts holds the parsed balls list flags
@@ -243,6 +244,7 @@ func init() {
 	// Add flags for ballsCmd
 	ballsCmd.Flags().BoolVar(&BallsListOpts.ShowAll, "all", false, "Show all balls including completed ones")
 	ballsCmd.Flags().BoolVar(&BallsListOpts.ShowCompleted, "completed", false, "Show only completed balls")
+	ballsCmd.Flags().BoolVar(&BallsListOpts.JSONOutput, "json", false, "Output as JSON")
 
 	// Add commands
 	rootCmd.AddCommand(ballsCmd)
