@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/rand"
@@ -196,6 +197,27 @@ Examples:
 	RunE: runAgentRefine,
 }
 
+// agentSetupRepoCmd configures Claude Code settings for optimal headless execution
+var agentSetupRepoCmd = &cobra.Command{
+	Use:   "setup-repo",
+	Short: "Configure repository for autonomous agent operations",
+	Long: `Interactively configure Claude Code settings for this repository.
+
+Analyzes your project's technology stack and creates tailored
+sandbox permissions for build tools, package managers, and dev servers.
+
+Uses AI-assisted configuration to detect:
+  - Package managers (npm, pip, cargo, go mod, etc.)
+  - Build tools and compilers
+  - Dev servers and their ports
+  - Testing frameworks
+
+Example:
+  juggle agent setup-repo`,
+	Args: cobra.NoArgs,
+	RunE: runAgentSetupRepo,
+}
+
 func init() {
 	agentRunCmd.Flags().IntVarP(&agentIterations, "iterations", "n", 10, "Maximum number of iterations")
 	agentRunCmd.Flags().BoolVar(&agentTrust, "trust", false, "Run with --dangerously-skip-permissions (dangerous!)")
@@ -224,6 +246,7 @@ func init() {
 
 	agentCmd.AddCommand(agentRunCmd)
 	agentCmd.AddCommand(agentRefineCmd)
+	agentCmd.AddCommand(agentSetupRepoCmd)
 	rootCmd.AddCommand(agentCmd)
 }
 
@@ -1822,6 +1845,50 @@ func runAgentRun(cmd *cobra.Command, args []string) error {
 		return nil // Parent exits here
 	}
 
+	// Check Claude settings for optimal headless execution
+	if !agentSkipHooksCheck && !agentDaemon && isTerminal(os.Stdin.Fd()) {
+		if !shouldSkipClaudeSetupCheck() {
+			issues := checkClaudeSettings()
+
+			// Check if there are any actual problems (not just status messages)
+			hasProblems := false
+			for _, issue := range issues {
+				if strings.HasPrefix(issue, "✗") {
+					hasProblems = true
+					break
+				}
+			}
+
+			if hasProblems {
+				fmt.Println("Claude Code is not configured for optimal headless execution:")
+				for _, issue := range issues {
+					fmt.Println("  " + issue)
+				}
+				fmt.Println("")
+
+				response := promptSetupOrSkip()
+				switch response {
+				case "y":
+					cwd, _ := GetWorkingDir()
+					if err := InitProject(InitOptions{
+						TargetDir:            cwd,
+						JuggleDirName:        ".juggle",
+						CreateClaudeSettings: true,
+						Output:               os.Stdout,
+					}); err != nil {
+						fmt.Printf("Setup failed: %v\n", err)
+					}
+				case "never":
+					if err := saveSkipClaudeSetupCheck(); err != nil {
+						fmt.Printf("Warning: could not save preference: %v\n", err)
+					} else {
+						fmt.Println("Preference saved. Run 'juggle init' to set up later.")
+					}
+				}
+			}
+		}
+	}
+
 	// Check if Claude hooks are installed for enhanced progress tracking
 	if !agentSkipHooksCheck && !agentDaemon && isTerminal(os.Stdin.Fd()) {
 		if !AreHooksInstalled() {
@@ -2721,6 +2788,192 @@ func prioritizeBallsByModel(balls []*session.Ball, currentModel string, sessionD
 		}
 		return false
 	})
+}
+
+// checkClaudeSettings checks if Claude Code is configured for optimal headless execution.
+// Returns a list of status messages (prefixed with checkmark or X).
+func checkClaudeSettings() []string {
+	var issues []string
+
+	cwd, err := GetWorkingDir()
+	if err != nil {
+		return issues // Don't block on errors
+	}
+
+	settingsPath := filepath.Join(cwd, ".claude", "settings.json")
+
+	// Check if settings file exists
+	if _, err := os.Stat(settingsPath); os.IsNotExist(err) {
+		issues = append(issues, "✗ Settings file missing (.claude/settings.json)")
+		return issues
+	}
+
+	// Load and check settings
+	settings, err := loadClaudeSettings(settingsPath)
+	if err != nil {
+		issues = append(issues, "✗ Settings file invalid")
+		return issues
+	}
+
+	// Check sandbox enabled
+	if settings.Sandbox == nil || !settings.Sandbox.Enabled {
+		issues = append(issues, "✗ Sandbox mode not enabled")
+	} else {
+		issues = append(issues, "✓ Sandbox mode enabled")
+	}
+
+	// Check hooks
+	if AreHooksInstalled() {
+		issues = append(issues, "✓ Hooks installed")
+	} else {
+		issues = append(issues, "✗ Hooks not installed")
+	}
+
+	return issues
+}
+
+// shouldSkipClaudeSetupCheck checks if the user has chosen to skip the setup check.
+func shouldSkipClaudeSetupCheck() bool {
+	cwd, err := GetWorkingDir()
+	if err != nil {
+		return false
+	}
+
+	configPath := filepath.Join(cwd, ".juggle", "config.json")
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return false
+	}
+
+	var config map[string]interface{}
+	if err := json.Unmarshal(data, &config); err != nil {
+		return false
+	}
+
+	skip, ok := config["skip_claude_setup_check"].(bool)
+	return ok && skip
+}
+
+// saveSkipClaudeSetupCheck saves the preference to skip the setup check.
+func saveSkipClaudeSetupCheck() error {
+	cwd, err := GetWorkingDir()
+	if err != nil {
+		return err
+	}
+
+	configPath := filepath.Join(cwd, ".juggle", "config.json")
+
+	// Load existing config or create new
+	var config map[string]interface{}
+	data, err := os.ReadFile(configPath)
+	if err == nil {
+		json.Unmarshal(data, &config)
+	}
+	if config == nil {
+		config = make(map[string]interface{})
+	}
+
+	config["skip_claude_setup_check"] = true
+
+	newData, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(configPath, newData, 0644)
+}
+
+// promptSetupOrSkip prompts the user with Y/n/never options.
+// Returns "y", "n", or "never".
+func promptSetupOrSkip() string {
+	fmt.Print("Run setup now? [Y/n/never]: ")
+
+	fd := int(os.Stdin.Fd())
+	oldState, err := term.MakeRaw(fd)
+	if err != nil {
+		return "n"
+	}
+	defer term.Restore(fd, oldState)
+
+	b := make([]byte, 1)
+	for {
+		_, err := os.Stdin.Read(b)
+		if err != nil {
+			return "n"
+		}
+
+		key := b[0]
+
+		// Ctrl+C
+		if key == 3 {
+			fmt.Println("\n^C")
+			return "n"
+		}
+
+		// Enter or Y/y = yes
+		if key == '\r' || key == '\n' || key == 'y' || key == 'Y' {
+			fmt.Println("y")
+			return "y"
+		}
+
+		// N/n = no
+		if key == 'n' || key == 'N' {
+			fmt.Println("n")
+			return "n"
+		}
+
+		// Never (accept 'e' for "never")
+		if key == 'e' || key == 'E' {
+			fmt.Println("never")
+			return "never"
+		}
+	}
+}
+
+func runAgentSetupRepo(cmd *cobra.Command, args []string) error {
+	cwd, err := GetWorkingDir()
+	if err != nil {
+		return fmt.Errorf("failed to get working directory: %w", err)
+	}
+
+	// Determine the provider
+	globalProvider, err := session.GetGlobalAgentProviderWithOptions(GetConfigOptions())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to load global agent provider config: %v\n", err)
+	}
+	projectProvider, err := session.GetProjectAgentProvider(cwd)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to load project agent provider config: %v\n", err)
+	}
+	providerType := provider.Detect("", projectProvider, globalProvider)
+
+	// Verify provider binary is available
+	if !provider.IsAvailable(providerType) {
+		return fmt.Errorf("agent provider %q is not available (binary %q not found in PATH)",
+			providerType, provider.BinaryName(providerType))
+	}
+
+	agentProv := provider.Get(providerType)
+	agent.SetProvider(agentProv)
+
+	prompt := "Use the /sandbox-setup skill to configure this repository for autonomous agent operations. Analyze the codebase, ask me questions about my workflow, and update .claude/settings.json with appropriate permissions."
+
+	fmt.Println("Launching interactive sandbox configuration...")
+	fmt.Println("")
+
+	opts := agent.RunOptions{
+		Prompt:     prompt,
+		Mode:       agent.ModeInteractive,
+		Permission: agent.PermissionAcceptEdits,
+		WorkingDir: cwd,
+	}
+
+	_, err = agent.DefaultRunner.Run(opts)
+	if err != nil {
+		return fmt.Errorf("setup failed: %w", err)
+	}
+
+	return nil
 }
 
 // SelectModelForIterationForTest is an exported wrapper for testing

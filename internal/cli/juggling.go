@@ -284,6 +284,10 @@ func listJugglingBalls(cmd *cobra.Command) error {
 // listAllBalls lists balls based on filter flags
 // By default hides completed balls; use --all to show all or --completed to show only completed
 func listAllBalls(cmd *cobra.Command) error {
+	if err := checkJuggleProjectExists(); err != nil {
+		return err
+	}
+
 	// Get current directory
 	cwd, err := GetWorkingDir()
 	if err != nil {

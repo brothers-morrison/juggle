@@ -3,9 +3,11 @@ package cli
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/ohare93/juggle/internal/session"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 var rootCmd = &cobra.Command{
@@ -83,6 +85,45 @@ func NewStoreForCommand(projectDir string) (*session.Store, error) {
 // LoadConfigForCommand loads Config with options from global flags
 func LoadConfigForCommand() (*session.Config, error) {
 	return session.LoadConfigWithOptions(GetConfigOptions())
+}
+
+// checkJuggleProjectExists checks if the current directory has a .juggle project.
+// If not, and we're in an interactive terminal, it offers to initialize.
+// Returns an error if no project and user declines or non-interactive.
+func checkJuggleProjectExists() error {
+	cwd, err := GetWorkingDir()
+	if err != nil {
+		return nil // Don't block on error getting cwd
+	}
+
+	juggleDirName := GlobalOpts.JuggleDir
+	if juggleDirName == "" {
+		juggleDirName = ".juggle"
+	}
+
+	juggleDir := filepath.Join(cwd, juggleDirName)
+	if _, err := os.Stat(juggleDir); os.IsNotExist(err) {
+		fmt.Println("No juggle project found in this directory.")
+		fmt.Println("")
+
+		// Only prompt if interactive terminal
+		if term.IsTerminal(int(os.Stdin.Fd())) {
+			confirmed, err := ConfirmSingleKey("Initialize now?")
+			if err != nil {
+				return fmt.Errorf("interrupted")
+			}
+			if confirmed {
+				return InitProject(InitOptions{
+					TargetDir:            cwd,
+					JuggleDirName:        juggleDirName,
+					CreateClaudeSettings: true,
+					Output:               os.Stdout,
+				})
+			}
+		}
+		return fmt.Errorf("no juggle project found - run 'juggle init' to initialize")
+	}
+	return nil
 }
 
 // DiscoverProjectsForCommand discovers projects respecting the --all flag

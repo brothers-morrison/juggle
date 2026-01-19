@@ -24,7 +24,6 @@ func TestInitCreatesJuggleDirectory(t *testing.T) {
 	err := cli.InitProject(cli.InitOptions{
 		TargetDir:     initDir,
 		JuggleDirName: ".juggle",
-		Force:         false,
 		InitVCS:       false, // Disable VCS to keep test isolated
 		Output:        &output,
 	})
@@ -69,7 +68,6 @@ func TestInitAtSpecifiedPath(t *testing.T) {
 	err := cli.InitProject(cli.InitOptions{
 		TargetDir:     targetPath,
 		JuggleDirName: ".juggle",
-		Force:         false,
 		InitVCS:       false,
 		Output:        &output,
 	})
@@ -119,7 +117,6 @@ func TestInitWithExistingVCS(t *testing.T) {
 	err := cli.InitProject(cli.InitOptions{
 		TargetDir:     initDir,
 		JuggleDirName: ".juggle",
-		Force:         false,
 		InitVCS:       true, // Enable VCS init
 		Output:        &output,
 	})
@@ -160,8 +157,8 @@ func TestInitWithExistingJJ(t *testing.T) {
 	}
 }
 
-// TestInitFailsIfJuggleExists tests that init fails if .juggle already exists
-func TestInitFailsIfJuggleExists(t *testing.T) {
+// TestInitIsIdempotent tests that init succeeds even if .juggle already exists
+func TestInitIsIdempotent(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
@@ -173,31 +170,30 @@ func TestInitFailsIfJuggleExists(t *testing.T) {
 		t.Fatalf("Failed to create existing .juggle dir: %v", err)
 	}
 
-	// Init without force should fail
+	// Init should succeed (idempotent) and print "already initialized"
 	var output bytes.Buffer
 	err := cli.InitProject(cli.InitOptions{
 		TargetDir:     initDir,
 		JuggleDirName: ".juggle",
-		Force:         false,
 		InitVCS:       false,
 		Output:        &output,
 	})
 
-	if err == nil {
-		t.Fatal("Expected error when .juggle already exists without --force")
+	if err != nil {
+		t.Fatalf("InitProject should succeed on existing dir: %v", err)
 	}
 
-	if !strings.Contains(err.Error(), "already exists") {
-		t.Errorf("Expected 'already exists' error, got: %v", err)
+	if !strings.Contains(output.String(), "already initialized") {
+		t.Errorf("Expected 'already initialized' message, got: %s", output.String())
 	}
 }
 
-// TestInitWithForceReinitializes tests that --force allows reinitialization
-func TestInitWithForceReinitializes(t *testing.T) {
+// TestInitCreatesMissingSubdirs tests that init creates missing subdirectories
+func TestInitCreatesMissingSubdirs(t *testing.T) {
 	env := SetupTestEnv(t)
 	defer CleanupTestEnv(t, env)
 
-	initDir := filepath.Join(env.TempDir, "force-reinit")
+	initDir := filepath.Join(env.TempDir, "missing-subdirs")
 	juggleDir := filepath.Join(initDir, ".juggle")
 
 	// Create existing .juggle directory (without subdirs)
@@ -205,22 +201,21 @@ func TestInitWithForceReinitializes(t *testing.T) {
 		t.Fatalf("Failed to create existing .juggle dir: %v", err)
 	}
 
-	// With --force, init should succeed and create/update the structure
+	// Init should succeed and create missing subdirectories
 	var output bytes.Buffer
 	err := cli.InitProject(cli.InitOptions{
 		TargetDir:     initDir,
 		JuggleDirName: ".juggle",
-		Force:         true,
 		InitVCS:       false,
 		Output:        &output,
 	})
 	if err != nil {
-		t.Fatalf("InitProject with force failed: %v", err)
+		t.Fatalf("InitProject failed: %v", err)
 	}
 
 	// Verify structure exists
 	if _, err := os.Stat(filepath.Join(juggleDir, "sessions")); os.IsNotExist(err) {
-		t.Error("Expected sessions directory to exist after force reinit")
+		t.Error("Expected sessions directory to exist after init")
 	}
 	if _, err := os.Stat(filepath.Join(juggleDir, "archive")); os.IsNotExist(err) {
 		t.Error("Expected archive directory to exist after force reinit")
@@ -285,7 +280,6 @@ func TestInitCreatesEmptyBallsFile(t *testing.T) {
 	err := cli.InitProject(cli.InitOptions{
 		TargetDir:     initDir,
 		JuggleDirName: ".juggle",
-		Force:         false,
 		InitVCS:       false,
 		Output:        &output,
 	})
@@ -317,7 +311,6 @@ func TestInitWithCustomJuggleDirName(t *testing.T) {
 	err := cli.InitProject(cli.InitOptions{
 		TargetDir:     initDir,
 		JuggleDirName: ".my-juggle",
-		Force:         false,
 		InitVCS:       false,
 		Output:        &output,
 	})
@@ -345,7 +338,6 @@ func TestInitRequiresTargetDir(t *testing.T) {
 	err := cli.InitProject(cli.InitOptions{
 		TargetDir:     "",
 		JuggleDirName: ".juggle",
-		Force:         false,
 		InitVCS:       false,
 		Output:        &output,
 	})
@@ -356,5 +348,162 @@ func TestInitRequiresTargetDir(t *testing.T) {
 
 	if !strings.Contains(err.Error(), "target directory is required") {
 		t.Errorf("Expected 'target directory is required' error, got: %v", err)
+	}
+}
+
+// TestInitCreatesClaudeSettings tests that init creates .claude/settings.json
+func TestInitCreatesClaudeSettings(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	initDir := filepath.Join(env.TempDir, "claude-settings-test")
+
+	var output bytes.Buffer
+	err := cli.InitProject(cli.InitOptions{
+		TargetDir:            initDir,
+		JuggleDirName:        ".juggle",
+		InitVCS:              false,
+		CreateClaudeSettings: true,
+		Output:               &output,
+	})
+	if err != nil {
+		t.Fatalf("InitProject failed: %v", err)
+	}
+
+	// Verify .claude/settings.json exists
+	settingsPath := filepath.Join(initDir, ".claude", "settings.json")
+	if _, err := os.Stat(settingsPath); os.IsNotExist(err) {
+		t.Error("Expected .claude/settings.json to exist")
+	}
+
+	// Verify output mentions the settings
+	if !strings.Contains(output.String(), "Sandbox mode") {
+		t.Errorf("Expected output to mention sandbox mode, got: %s", output.String())
+	}
+}
+
+// TestInitMergesClaudeSettings tests that init merges into existing settings
+func TestInitMergesClaudeSettings(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	initDir := filepath.Join(env.TempDir, "claude-merge-test")
+	claudeDir := filepath.Join(initDir, ".claude")
+
+	// Create existing settings with only sandbox (no hooks)
+	if err := os.MkdirAll(claudeDir, 0755); err != nil {
+		t.Fatalf("Failed to create .claude dir: %v", err)
+	}
+	existingSettings := `{"sandbox":{"enabled":true}}`
+	if err := os.WriteFile(filepath.Join(claudeDir, "settings.json"), []byte(existingSettings), 0644); err != nil {
+		t.Fatalf("Failed to write existing settings: %v", err)
+	}
+
+	var output bytes.Buffer
+	err := cli.InitProject(cli.InitOptions{
+		TargetDir:            initDir,
+		JuggleDirName:        ".juggle",
+		InitVCS:              false,
+		CreateClaudeSettings: true,
+		Output:               &output,
+	})
+	if err != nil {
+		t.Fatalf("InitProject failed: %v", err)
+	}
+
+	// Verify hooks were added (should mention hooks in output)
+	if !strings.Contains(output.String(), "Hooks") {
+		t.Errorf("Expected output to mention hooks being added, got: %s", output.String())
+	}
+
+	// Read the merged settings and verify hooks exist
+	data, err := os.ReadFile(filepath.Join(claudeDir, "settings.json"))
+	if err != nil {
+		t.Fatalf("Failed to read settings: %v", err)
+	}
+	if !strings.Contains(string(data), "PostToolUse") {
+		t.Errorf("Expected merged settings to contain hooks, got: %s", string(data))
+	}
+	// Verify original sandbox setting was preserved
+	if !strings.Contains(string(data), `"enabled"`) {
+		t.Errorf("Expected sandbox setting to be preserved, got: %s", string(data))
+	}
+}
+
+// TestInitSkipsClaudeSettingsWhenComplete tests that init doesn't modify complete settings
+func TestInitSkipsClaudeSettingsWhenComplete(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	initDir := filepath.Join(env.TempDir, "claude-complete-test")
+	claudeDir := filepath.Join(initDir, ".claude")
+
+	// Create complete settings with sandbox, permissions, and hooks
+	if err := os.MkdirAll(claudeDir, 0755); err != nil {
+		t.Fatalf("Failed to create .claude dir: %v", err)
+	}
+	completeSettings := `{
+		"sandbox": {"enabled": true},
+		"permissions": {"allow": ["Bash(test:*)"]},
+		"hooks": {
+			"PostToolUse": [{"matcher": "Write", "hooks": [{"type": "command", "command": "juggle test"}]}]
+		}
+	}`
+	settingsPath := filepath.Join(claudeDir, "settings.json")
+	if err := os.WriteFile(settingsPath, []byte(completeSettings), 0644); err != nil {
+		t.Fatalf("Failed to write complete settings: %v", err)
+	}
+
+	// Get original mod time
+	origInfo, _ := os.Stat(settingsPath)
+	origModTime := origInfo.ModTime()
+
+	var output bytes.Buffer
+	err := cli.InitProject(cli.InitOptions{
+		TargetDir:            initDir,
+		JuggleDirName:        ".juggle",
+		InitVCS:              false,
+		CreateClaudeSettings: true,
+		Output:               &output,
+	})
+	if err != nil {
+		t.Fatalf("InitProject failed: %v", err)
+	}
+
+	// Verify file was not modified (no "Updated" message)
+	if strings.Contains(output.String(), "Updated .claude/settings.json") {
+		t.Errorf("Expected no update to complete settings, but got: %s", output.String())
+	}
+
+	// Verify mod time unchanged (file not rewritten)
+	newInfo, _ := os.Stat(settingsPath)
+	if !newInfo.ModTime().Equal(origModTime) {
+		t.Error("Expected settings file to not be modified when already complete")
+	}
+}
+
+// TestInitWithCreateClaudeSettingsFalse tests that settings are skipped when disabled
+func TestInitWithCreateClaudeSettingsFalse(t *testing.T) {
+	env := SetupTestEnv(t)
+	defer CleanupTestEnv(t, env)
+
+	initDir := filepath.Join(env.TempDir, "no-claude-test")
+
+	var output bytes.Buffer
+	err := cli.InitProject(cli.InitOptions{
+		TargetDir:            initDir,
+		JuggleDirName:        ".juggle",
+		InitVCS:              false,
+		CreateClaudeSettings: false,
+		Output:               &output,
+	})
+	if err != nil {
+		t.Fatalf("InitProject failed: %v", err)
+	}
+
+	// Verify .claude/settings.json does NOT exist
+	settingsPath := filepath.Join(initDir, ".claude", "settings.json")
+	if _, err := os.Stat(settingsPath); !os.IsNotExist(err) {
+		t.Error("Expected .claude/settings.json to NOT exist when CreateClaudeSettings=false")
 	}
 }

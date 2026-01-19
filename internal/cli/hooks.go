@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -32,14 +33,14 @@ These hooks automatically track:
   - Turn counts
   - Session end events
 
-By default, hooks are installed to .claude/settings.local.json in the current
-project directory. This file is typically gitignored.
+By default, hooks are installed to .claude/settings.json in the current
+project directory. This file is version controlled and shared with the team.
 
 A backup is created before modifying the settings file.
 
 Examples:
-  juggle hooks install              # Install to .claude/settings.local.json (default)
-  juggle hooks install --project    # Install to .claude/settings.json (version controlled)
+  juggle hooks install              # Install to .claude/settings.json (default, version controlled)
+  juggle hooks install --local      # Install to .claude/settings.local.json (gitignored)
   juggle hooks install --global     # Install to ~/.claude/settings.json (all projects)`,
 	RunE: runHooksInstall,
 }
@@ -51,12 +52,12 @@ var hooksStatusCmd = &cobra.Command{
 }
 
 var (
-	hooksProjectFlag bool
-	hooksGlobalFlag  bool
+	hooksLocalFlag  bool
+	hooksGlobalFlag bool
 )
 
 func init() {
-	hooksInstallCmd.Flags().BoolVar(&hooksProjectFlag, "project", false, "Install to project .claude/settings.json (version controlled)")
+	hooksInstallCmd.Flags().BoolVar(&hooksLocalFlag, "local", false, "Install to .claude/settings.local.json (gitignored)")
 	hooksInstallCmd.Flags().BoolVar(&hooksGlobalFlag, "global", false, "Install to ~/.claude/settings.json (all projects)")
 	hooksCmd.AddCommand(hooksInstallCmd)
 	hooksCmd.AddCommand(hooksStatusCmd)
@@ -65,9 +66,10 @@ func init() {
 
 // ClaudeSettings represents the structure of .claude/settings.json
 type ClaudeSettings struct {
-	Hooks map[string][]HookMatcher `json:"hooks,omitempty"`
-	// Preserve other fields
-	Other map[string]json.RawMessage `json:"-"`
+	Sandbox     *SandboxConfig             `json:"sandbox,omitempty"`
+	Permissions *PermissionsConfig         `json:"permissions,omitempty"`
+	Hooks       map[string][]HookMatcher   `json:"hooks,omitempty"`
+	Other       map[string]json.RawMessage `json:"-"` // Preserves unknown fields
 }
 
 // HookMatcher represents a hook matcher configuration
@@ -80,6 +82,20 @@ type HookMatcher struct {
 type HookConfig struct {
 	Type    string `json:"type"`
 	Command string `json:"command"`
+}
+
+// SandboxConfig represents Claude Code sandbox settings
+type SandboxConfig struct {
+	Enabled                  bool `json:"enabled,omitempty"`
+	AutoAllowBashIfSandboxed bool `json:"autoAllowBashIfSandboxed,omitempty"`
+	AllowUnsandboxedCommands bool `json:"allowUnsandboxedCommands,omitempty"`
+}
+
+// PermissionsConfig represents Claude Code permission rules
+type PermissionsConfig struct {
+	Allow []string `json:"allow,omitempty"`
+	Deny  []string `json:"deny,omitempty"`
+	Ask   []string `json:"ask,omitempty"`
 }
 
 // JugglerHookConfig returns the hook configuration for juggler
@@ -115,6 +131,24 @@ func JugglerHookConfig() map[string][]HookMatcher {
 				},
 			},
 		},
+	}
+}
+
+// DefaultClaudeSettings returns the bare-bones Claude settings for juggle projects.
+// These settings enable sandbox mode and hooks while protecting secrets.
+func DefaultClaudeSettings() *ClaudeSettings {
+	return &ClaudeSettings{
+		Sandbox: &SandboxConfig{
+			Enabled:                  true,
+			AutoAllowBashIfSandboxed: true,
+			AllowUnsandboxedCommands: true,
+		},
+		Permissions: &PermissionsConfig{
+			Allow: []string{"Bash(juggle:*)"},
+			Deny:  []string{"Read(./.env)", "Read(./.env.*)", "Read(./secrets/**)"},
+			Ask:   []string{"Bash(juggle agent:*)", "Bash(jj git push:*)", "Bash(git push:*)"},
+		},
+		Hooks: JugglerHookConfig(),
 	}
 }
 
@@ -275,13 +309,13 @@ func getSettingsPath() (string, error) {
 		return "", fmt.Errorf("failed to get current directory: %w", err)
 	}
 
-	if hooksProjectFlag {
-		// Project settings (version controlled)
-		return filepath.Join(cwd, ".claude", "settings.json"), nil
+	if hooksLocalFlag {
+		// Project-local settings (gitignored)
+		return filepath.Join(cwd, ".claude", "settings.local.json"), nil
 	}
 
-	// Default: project-local settings (gitignored)
-	return filepath.Join(cwd, ".claude", "settings.local.json"), nil
+	// Default: project settings (version controlled)
+	return filepath.Join(cwd, ".claude", "settings.json"), nil
 }
 
 func loadClaudeSettings(path string) (*ClaudeSettings, error) {
@@ -302,6 +336,24 @@ func loadClaudeSettings(path string) (*ClaudeSettings, error) {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("failed to parse settings file: %w", err)
+	}
+
+	// Extract sandbox field
+	if sandboxRaw, ok := raw["sandbox"]; ok {
+		settings.Sandbox = &SandboxConfig{}
+		if err := json.Unmarshal(sandboxRaw, settings.Sandbox); err != nil {
+			return nil, fmt.Errorf("failed to parse sandbox field: %w", err)
+		}
+		delete(raw, "sandbox")
+	}
+
+	// Extract permissions field
+	if permissionsRaw, ok := raw["permissions"]; ok {
+		settings.Permissions = &PermissionsConfig{}
+		if err := json.Unmarshal(permissionsRaw, settings.Permissions); err != nil {
+			return nil, fmt.Errorf("failed to parse permissions field: %w", err)
+		}
+		delete(raw, "permissions")
 	}
 
 	// Extract hooks field
@@ -328,6 +380,16 @@ func saveClaudeSettings(path string, settings *ClaudeSettings) error {
 	// Reconstruct the full settings map
 	output := make(map[string]interface{})
 
+	// Add sandbox
+	if settings.Sandbox != nil {
+		output["sandbox"] = settings.Sandbox
+	}
+
+	// Add permissions
+	if settings.Permissions != nil {
+		output["permissions"] = settings.Permissions
+	}
+
 	// Add hooks
 	if len(settings.Hooks) > 0 {
 		output["hooks"] = settings.Hooks
@@ -336,7 +398,9 @@ func saveClaudeSettings(path string, settings *ClaudeSettings) error {
 	// Add other preserved fields
 	for key, value := range settings.Other {
 		var v interface{}
-		json.Unmarshal(value, &v)
+		if err := json.Unmarshal(value, &v); err != nil {
+			continue // Skip corrupted fields
+		}
 		output[key] = v
 	}
 
@@ -356,7 +420,7 @@ func saveClaudeSettings(path string, settings *ClaudeSettings) error {
 func hasJugglerHook(matchers []HookMatcher) bool {
 	for _, matcher := range matchers {
 		for _, hook := range matcher.Hooks {
-			if len(hook.Command) >= 6 && hook.Command[:6] == "juggle" {
+			if strings.HasPrefix(hook.Command, "juggle") {
 				return true
 			}
 		}

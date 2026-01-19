@@ -8,9 +8,8 @@ import (
 
 	"github.com/ohare93/juggle/internal/vcs"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
-
-var initForce bool
 
 var initCmd = &cobra.Command{
 	Use:   "init [path]",
@@ -23,31 +22,30 @@ Creates the .juggle directory structure:
   ├── sessions/      # Session data
   └── archive/       # Completed tasks
 
+Also creates .claude/settings.json with sensible defaults for autonomous
+agent loops (sandbox mode, hooks, secret protection).
+
 If no VCS (jj or git) is detected:
   - Initializes jj if available
   - Falls back to git otherwise
 
-If a VCS already exists, only creates the .juggle directory structure.
+Safe to run on existing projects - only creates missing files.
 
 Examples:
   juggle init              # Initialize in current directory
-  juggle init ./myproject  # Initialize at specified path
-  juggle init --force      # Reinitialize even if .juggle exists`,
+  juggle init ./myproject  # Initialize at specified path`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runInit,
 }
 
-func init() {
-	initCmd.Flags().BoolVarP(&initForce, "force", "f", false, "Reinitialize even if .juggle already exists")
-}
-
 // InitOptions configures the InitProject function.
 type InitOptions struct {
-	TargetDir     string // Directory to initialize (required)
-	JuggleDirName string // Name of juggle directory (default: ".juggle")
-	Force         bool   // Allow reinitialization if .juggle exists
-	InitVCS       bool   // Whether to initialize VCS if not present (default: true)
-	Output        io.Writer // Where to write status messages (default: os.Stdout)
+	TargetDir            string    // Directory to initialize (required)
+	JuggleDirName        string    // Name of juggle directory (default: ".juggle")
+	InitVCS              bool      // Whether to initialize VCS if not present (default: true)
+	CreateClaudeSettings bool      // Whether to create .claude/settings.json (default: true when not set)
+	SkipSetupPrompt      bool      // Skip interactive setup-repo prompt
+	Output               io.Writer // Where to write status messages (default: os.Stdout)
 }
 
 // InitProject initializes a juggle project at the specified directory.
@@ -71,12 +69,11 @@ func InitProject(opts InitOptions) error {
 	}
 
 	juggleDir := filepath.Join(opts.TargetDir, opts.JuggleDirName)
+	juggleDirExists := false
 
 	// Check if .juggle already exists
 	if _, err := os.Stat(juggleDir); err == nil {
-		if !opts.Force {
-			return fmt.Errorf("%s already exists (use --force to reinitialize)", juggleDir)
-		}
+		juggleDirExists = true
 	}
 
 	// Initialize VCS if needed (default behavior unless explicitly disabled)
@@ -126,8 +123,88 @@ func InitProject(opts InitOptions) error {
 		f.Close()
 	}
 
-	fmt.Fprintf(opts.Output, "Initialized juggle project at %s\n", opts.TargetDir)
+	if juggleDirExists {
+		fmt.Fprintf(opts.Output, "Juggle project already initialized at %s\n", opts.TargetDir)
+	} else {
+		fmt.Fprintf(opts.Output, "Initialized juggle project at %s\n", opts.TargetDir)
+	}
+
+	// Create or update Claude settings if requested (default behavior)
+	if opts.CreateClaudeSettings {
+		claudeSettingsPath := filepath.Join(opts.TargetDir, ".claude", "settings.json")
+		added, err := ensureClaudeSettings(claudeSettingsPath)
+		if err != nil {
+			return fmt.Errorf("failed to configure Claude settings: %w", err)
+		}
+		if len(added) > 0 {
+			printClaudeSettingsAdded(opts.Output, added)
+		}
+	}
+
 	return nil
+}
+
+// ensureClaudeSettings creates or updates .claude/settings.json with default settings.
+// Returns a list of what was added (empty if nothing changed).
+func ensureClaudeSettings(path string) ([]string, error) {
+	var added []string
+	defaults := DefaultClaudeSettings()
+
+	// Create .claude directory if needed
+	claudeDir := filepath.Dir(path)
+	if err := os.MkdirAll(claudeDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create .claude directory: %w", err)
+	}
+
+	// Load existing settings or start fresh
+	existing, err := loadClaudeSettings(path)
+	if err != nil || existing == nil {
+		existing = &ClaudeSettings{}
+	}
+
+	// Merge sandbox settings
+	if existing.Sandbox == nil {
+		existing.Sandbox = defaults.Sandbox
+		added = append(added, "Sandbox mode enabled (OS-level security boundaries)")
+	}
+
+	// Merge permissions
+	if existing.Permissions == nil {
+		existing.Permissions = defaults.Permissions
+		added = append(added, "Secret file protection (.env, secrets/)")
+		added = append(added, "Push confirmation prompts")
+	}
+
+	// Merge hooks (check if juggler hooks are missing)
+	if !hasJugglerHook(existing.Hooks["PostToolUse"]) {
+		if existing.Hooks == nil {
+			existing.Hooks = make(map[string][]HookMatcher)
+		}
+		for k, v := range defaults.Hooks {
+			existing.Hooks[k] = v
+		}
+		added = append(added, "Hooks for progress tracking")
+	}
+
+	// Only save if we added something
+	if len(added) > 0 {
+		if err := saveClaudeSettings(path, existing); err != nil {
+			return nil, err
+		}
+	}
+
+	return added, nil
+}
+
+func printClaudeSettingsAdded(w io.Writer, added []string) {
+	fmt.Fprintln(w, "")
+	fmt.Fprintln(w, "Updated .claude/settings.json with:")
+	for _, item := range added {
+		fmt.Fprintf(w, "  - %s\n", item)
+	}
+	fmt.Fprintln(w, "")
+	fmt.Fprintln(w, "These defaults reduce approval prompts for headless agent loops")
+	fmt.Fprintln(w, "while improving security by restricting what agents can access.")
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
@@ -155,11 +232,31 @@ func runInit(cmd *cobra.Command, args []string) error {
 		juggleDirName = ".juggle"
 	}
 
-	return InitProject(InitOptions{
-		TargetDir:     targetDir,
-		JuggleDirName: juggleDirName,
-		Force:         initForce,
-		InitVCS:       true,
-		Output:        os.Stdout,
+	err := InitProject(InitOptions{
+		TargetDir:            targetDir,
+		JuggleDirName:        juggleDirName,
+		InitVCS:              true,
+		CreateClaudeSettings: true,
+		Output:               os.Stdout,
 	})
+	if err != nil {
+		return err
+	}
+
+	// Offer interactive setup if running in terminal
+	if term.IsTerminal(int(os.Stdin.Fd())) {
+		fmt.Println("")
+		fmt.Println("To complete setup with project-specific permissions (build tools,")
+		fmt.Println("package managers, dev servers), run interactive configuration now.")
+		fmt.Println("")
+		confirmed, err := ConfirmSingleKey("Configure project-specific settings?")
+		if err == nil && confirmed {
+			if err := runAgentSetupRepo(nil, nil); err != nil {
+				fmt.Printf("Setup failed: %v\n", err)
+				fmt.Println("You can run 'juggle agent setup-repo' later to configure.")
+			}
+		}
+	}
+
+	return nil
 }

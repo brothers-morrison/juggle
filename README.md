@@ -131,6 +131,10 @@ go install github.com/ohare93/juggle/cmd/juggle@latest
 
 See [Installation Guide](docs/installation.md) for building from source and additional options.
 
+## Claude Code Setup
+
+Juggle works best with Claude Code's sandbox mode enabled for headless agent loops. Run `juggle init` to configure automatically, or see [Claude Integration](docs/claude-integration.md) for details.
+
 ## Quick Start
 
 > **Prerequisite:** You need [Claude Code](https://claude.ai/code) or [OpenCode](https://opencode.ai/) already set up and authenticated. This is what Juggle will be running, with flags.
