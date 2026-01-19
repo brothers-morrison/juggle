@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "juggle loop hook-event post-tool"
+            "command": "./juggle loop hook-event post-tool"
           }
         ]
       }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "juggle loop hook-event tool-failure"
+            "command": "./juggle loop hook-event tool-failure"
           }
         ]
       }
@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "juggle loop hook-event session-end"
+            "command": "./juggle loop hook-event session-end"
           }
         ]
       }
@@ -37,7 +37,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "juggle loop hook-event stop"
+            "command": "./juggle loop hook-event stop"
           }
         ]
       }
