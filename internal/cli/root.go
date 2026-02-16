@@ -37,7 +37,7 @@ Task operations:
 Task states: pending → in_progress → complete (or blocked)`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		if GlobalOpts.HelpQuickstart {
-			fmt.Println(quickstartContent)
+			fmt.Println(RenderMarkdown(quickstartContent))
 			os.Exit(0)
 		}
 	},
