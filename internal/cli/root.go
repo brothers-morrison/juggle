@@ -1,6 +1,7 @@
 package cli
 
 import (
+	_ "embed"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +10,9 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
+
+//go:embed quickstart.md
+var quickstartContent string
 
 var rootCmd = &cobra.Command{
 	Use:   "juggle",
@@ -31,6 +35,12 @@ Task operations:
   juggle update <id> ...   Update task properties
 
 Task states: pending → in_progress → complete (or blocked)`,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		if GlobalOpts.HelpQuickstart {
+			fmt.Println(quickstartContent)
+			os.Exit(0)
+		}
+	},
 	RunE:                       runRootCommand,
 	Args:                       cobra.ArbitraryArgs,
 	DisableFlagParsing:         false,
@@ -39,12 +49,13 @@ Task states: pending → in_progress → complete (or blocked)`,
 
 // GlobalOptions holds global configuration flags for testing and path overrides
 type GlobalOptions struct {
-	ConfigHome  string // Override for ~/.juggle directory
-	ProjectDir  string // Override for current working directory
-	JuggleDir   string // Override for .juggle directory name
-	AllProjects bool   // Enable cross-project discovery (default is local only)
-	JSONOutput  bool   // Output as JSON
-	EditTUI     bool   // Open TUI editor for ball
+	ConfigHome     string // Override for ~/.juggle directory
+	ProjectDir     string // Override for current working directory
+	JuggleDir      string // Override for .juggle directory name
+	AllProjects    bool   // Enable cross-project discovery (default is local only)
+	JSONOutput     bool   // Output as JSON
+	EditTUI        bool   // Open TUI editor for ball
+	HelpQuickstart bool   // Show quickstart guide and exit
 }
 
 // GlobalOpts holds the parsed global flags (exported for testing)
@@ -219,9 +230,12 @@ func customHelpFunc(cmd *cobra.Command, args []string) {
 	fmt.Println()
 
 	fmt.Println("Flags:")
-	fmt.Println("  -a, --all      Search across all projects")
-	fmt.Println("  -h, --help     Help for juggle")
-	fmt.Println("  -v, --version  Version for juggle")
+	fmt.Println("  -a, --all              Search across all projects")
+	fmt.Println("  -h, --help             Help for juggle")
+	fmt.Println("      --help-quickstart  Show full quickstart guide")
+	fmt.Println("  -v, --version          Version for juggle")
+	fmt.Println()
+	fmt.Println("Quickstart: https://github.com/ohare93/juggle?tab=readme-ov-file#quick-start")
 	fmt.Println()
 	fmt.Println("Use \"juggle [command] --help\" for more information about a command.")
 }
@@ -236,6 +250,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVarP(&GlobalOpts.AllProjects, "all", "a", false, "Search across all discovered projects")
 	rootCmd.PersistentFlags().BoolVar(&GlobalOpts.JSONOutput, "json", false, "Output as JSON")
 	rootCmd.PersistentFlags().BoolVarP(&GlobalOpts.EditTUI, "edit", "e", false, "Open TUI editor for ball")
+	rootCmd.PersistentFlags().BoolVar(&GlobalOpts.HelpQuickstart, "help-quickstart", false, "Show full quickstart guide")
 
 	// Set custom help function
 	defaultHelpFunc = rootCmd.HelpFunc()

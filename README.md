@@ -137,6 +137,8 @@ Juggle works best with Claude Code's sandbox mode enabled for headless agent loo
 
 ## Quick Start
 
+<!-- BEGIN QUICKSTART (auto-synced from internal/cli/quickstart.md — do not edit this section manually) -->
+
 > **Prerequisite:** You need [Claude Code](https://claude.ai/code) or [OpenCode](https://opencode.ai/) already set up and authenticated. This is what Juggle will be running, with flags.
 
 ### Create a session and add tasks
@@ -186,6 +188,8 @@ juggle update cc58e434 --ac "juggle worktree add <path> registers worktree in ma
        --ac "Integration tests for worktree registration and ball sharing" \
        --ac "devbox run test passes"
 ```
+
+<!-- END QUICKSTART -->
 
 ## Parallel Agents with Worktrees
 
