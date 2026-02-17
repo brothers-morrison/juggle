@@ -1,0 +1,26 @@
+## Summary
+
+I was having trouble remembering the set of commands (session, add folders, add balls, agent run?) to get juggle going on a new project.  I love the idea of juggle and it's filling a need that I had to be able to better see, understand, and prioritize work/tasks/balls that I want to run with agents (thanks for building this!).  Further, I'm trying to get the most out of my AI subscriptions, so I'm attempting to seek out and understand how to run and manage agent loops in parallel.  This seemed like an excellent tool for that, but with a steep learning curve. (I still have not got 2x OpenCode sessions at the same time, should I be using nohup bg ?)
+So this PR attempts to lessen the learning curve, making it easier for a beginner to get started especially for the 2nd or 3rd time when he (me) can't remember the correct command order, or what all is required for getting juggle working.
+
+## Changes
+
+1. Adds command line arg --help-quickstart (colorized markdown with lipgloss), which shows the same quickstart section from the readme, but this time on the command line, so that I don't have to leave my vm/cloud machine to go look it up again. 
+
+2. Refactor quickstart text into it's own separate .md file, so that it can be included into readme.md (same as before, no changes) but have that same text also shown as a response to command arg --help-quickstart
+by placing it in it's own file, the hope is that it can be edited in one place only (for future) single source of truth (SSOT) and still be up-to-date in both other places (readme.md and command line arg content).
+
+3. third part is adding to the "juggle import spec" functionality to look for a spec.md or PRD.md file and convert that into balls.
+it uses ## headers to divide the markdown file up into separate tasks/balls.  Just trying to save time and make this more interoperable so that I don't have to transpose a bunch of stuff by hand if I've already got a Spec.md file written.
+
+## Testing
+
+<!-- How was this tested? -->
+- [ ] `devbox run test-quiet` passes
+- [ ] Manual testing performed
+
+## Checklist
+
+- [ ] Code follows existing patterns in the codebase
+- [ ] Documentation updated (if applicable)
+- [ ] Tests added for new functionality (if applicable)

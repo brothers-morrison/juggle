@@ -7,17 +7,59 @@ import (
 )
 
 // Lipgloss styles for markdown rendering (vanilla terminal safe - ANSI 256 colors only)
+
+type StyleSet struct {
+        Name string
+        H2 lipgloss.Style
+        H3 lipgloss.Style
+		BlockquoteBar lipgloss.Style
+		BlockquoteText lipgloss.Style
+		BoldStyle lipgloss.Style
+		CodeBlockStyle lipgloss.Style
+		InlineCode lipgloss.Style
+		CommentStyle lipgloss.Style
+		TextStyle lipgloss.Style
+}
+var ANSI256 = StyleSet{
+        H2:             lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("14")).MarginBottom(1), // Cyan bold
+        H3:             lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("11")),                // Yellow bold
+        BlockquoteBar:  lipgloss.NewStyle().Foreground(lipgloss.Color("8")),                            // Gray bar
+        BlockquoteText: lipgloss.NewStyle().Foreground(lipgloss.Color("7")).Italic(true),               // Light gray italic
+        BoldStyle:      lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15")),                // Bright white bold
+        CodeBlockStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("10")),                           // Green (like terminal output)
+        InlineCode:     lipgloss.NewStyle().Foreground(lipgloss.Color("12")),                           // Blue
+        CommentStyle:   lipgloss.NewStyle().Foreground(lipgloss.Color("8")),                            // Gray for # comments
+        TextStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("7")),                            // Default light gray
+}
+var Harlequin = StyleSet{
+        H2:             lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFBA08")).MarginBottom(1),
+        H3:             lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF006E")),
+        BlockquoteBar:  lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
+        BlockquoteText: lipgloss.NewStyle().Foreground(lipgloss.Color("#E6EDF3")).Italic(true),
+        BoldStyle:      lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#D7263D")),
+        CodeBlockStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
+        InlineCode:     lipgloss.NewStyle().Foreground(lipgloss.Color("12")),
+        CommentStyle:   lipgloss.NewStyle().Foreground(lipgloss.Color("#D7263D")),
+        TextStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color("#F8F9FA")),
+}
+// TBD: check for current terminal support, and fallback to ANSI256 if these HEXCodes are not supported.
+var ChosenStyle = Harlequin
+
+
 var (
-	mdH2Style        = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("14")).MarginBottom(1) // Cyan bold
-	mdH3Style        = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("11"))                // Yellow bold
-	mdBlockquoteBar  = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))                            // Gray bar
-	mdBlockquoteText = lipgloss.NewStyle().Foreground(lipgloss.Color("7")).Italic(true)                // Light gray italic
-	mdBoldStyle      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15"))                // Bright white bold
-	mdCodeBlockStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))                           // Green (like terminal output)
-	mdInlineCode     = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))                           // Blue
-	mdCommentStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))                            // Gray for # comments
-	mdTextStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("7"))                            // Default light gray
+        mdH2Style        = ChosenStyle.H2
+        mdH3Style        = ChosenStyle.H3
+        mdBlockquoteBar  = ChosenStyle.BlockquoteBar
+        mdBlockquoteText = ChosenStyle.BlockquoteText
+        mdBoldStyle      = ChosenStyle.BoldStyle
+        mdCodeBlockStyle = ChosenStyle.CodeBlockStyle
+        mdInlineCode     = ChosenStyle.InlineCode
+        mdCommentStyle   = ChosenStyle.CommentStyle
+        mdTextStyle      = ChosenStyle.TextStyle
 )
+
+
+
 
 // RenderMarkdown renders a markdown string with lipgloss styling for terminal output.
 // Handles the subset of markdown used in quickstart.md: headers, blockquotes,
