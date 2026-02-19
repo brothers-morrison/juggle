@@ -8,7 +8,7 @@ import (
 )
 
 // version is set at build time via -ldflags
-var version = "dev"
+var version = "0.2.0"
 
 func main() {
 	cli.SetVersion(version)

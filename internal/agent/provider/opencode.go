@@ -2,11 +2,13 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 	"sync"
+	"time"
 )
 
 // OpenCodeProvider implements Provider for OpenCode CLI
@@ -146,6 +148,25 @@ func (o *OpenCodeProvider) runHeadless(opts RunOptions) (*RunResult, error) {
 	// Parse signals - same format as Claude since the prompt instructs the LLM
 	parseSignals(result)
 
+	// Signal recovery: if no signal found in stdout, try opencode export
+	// OpenCode's stdout capture is unreliable - signals may be lost
+	if !result.Complete && !result.Continue && !result.Blocked && !result.RateLimited && result.Error == nil {
+		if recovered := o.recoverSignalsFromExport(opts.WorkingDir); recovered != nil {
+			if recovered.Complete {
+				result.Complete = true
+				result.CommitMessage = recovered.CommitMessage
+			}
+			if recovered.Continue {
+				result.Continue = true
+				result.CommitMessage = recovered.CommitMessage
+			}
+			if recovered.Blocked {
+				result.Blocked = true
+				result.BlockedReason = recovered.BlockedReason
+			}
+		}
+	}
+
 	// Parse rate limits with OpenCode-specific patterns
 	o.parseRateLimit(result)
 
@@ -264,6 +285,201 @@ func (o *OpenCodeProvider) parseRateLimit(result *RunResult) {
 
 	// Check for overload exhaustion
 	o.parseOverloadExhausted(result)
+}
+
+// recoverSignalsFromExport attempts to recover missed <promise> signals by
+// running `opencode export` on the most recent session. This handles the common
+// case where OpenCode's stdout doesn't reliably flush the LLM's signal output.
+func (o *OpenCodeProvider) recoverSignalsFromExport(workingDir string) *RunResult {
+	// Get the most recent session ID
+	sessionID := o.getMostRecentSession(workingDir)
+	if sessionID == "" {
+		return nil
+	}
+
+	// Export session data
+	exportOutput, err := o.runOpenCodeExport(sessionID, workingDir)
+	if err != nil || exportOutput == "" {
+		return nil
+	}
+
+	// Parse the export JSON and extract text from the last assistant message
+	lastAssistantText := extractLastAssistantText(exportOutput)
+	if lastAssistantText == "" {
+		return nil
+	}
+
+	// Check for signals in the extracted text
+	recovered := &RunResult{Output: lastAssistantText}
+	parseSignals(recovered)
+
+	if recovered.Complete || recovered.Continue || recovered.Blocked {
+		fmt.Fprintf(os.Stderr, "[juggle] Recovered signal from OpenCode export (session %s)\n", sessionID)
+		return recovered
+	}
+
+	// Also check for juggle tool calls that indicate completion
+	// e.g., the agent ran `juggle loop update --state complete` but the signal was lost
+	if o.checkForJuggleToolCalls(exportOutput) {
+		fmt.Fprintf(os.Stderr, "[juggle] Detected juggle tool calls in OpenCode export (session %s), treating as CONTINUE\n", sessionID)
+		return &RunResult{Continue: true}
+	}
+
+	return nil
+}
+
+// getMostRecentSession runs `opencode session list` and returns the most recent session ID
+func (o *OpenCodeProvider) getMostRecentSession(workingDir string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "opencode", "session", "list")
+	if workingDir != "" {
+		cmd.Dir = workingDir
+	}
+
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+
+	// Parse the table output - first data line after the separator has the most recent session
+	// Format:
+	// Session ID                      Title                           Updated
+	// ──────────────────────────────────────────────────────────────────────
+	// ses_xxxxx                        ...                             ...
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "ses_") {
+			// Extract session ID (first whitespace-delimited field)
+			fields := strings.Fields(line)
+			if len(fields) > 0 {
+				return fields[0]
+			}
+		}
+	}
+
+	return ""
+}
+
+// runOpenCodeExport runs `opencode export <sessionID>` and returns the JSON output
+func (o *OpenCodeProvider) runOpenCodeExport(sessionID, workingDir string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "opencode", "export", sessionID)
+	if workingDir != "" {
+		cmd.Dir = workingDir
+	}
+
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+
+	return string(output), nil
+}
+
+// openCodeExport represents the top-level structure of opencode export JSON
+type openCodeExport struct {
+	Messages []openCodeMessage `json:"messages"`
+}
+
+// openCodeMessage represents a message in the export
+type openCodeMessage struct {
+	Info  openCodeMessageInfo `json:"info"`
+	Parts []openCodePart      `json:"parts"`
+}
+
+// openCodeMessageInfo contains message metadata
+type openCodeMessageInfo struct {
+	Role string `json:"role"`
+}
+
+// openCodePart represents a part of a message (text, tool call, etc.)
+type openCodePart struct {
+	Type   string `json:"type"`
+	Text   string `json:"text"`
+	Tool   string `json:"tool"`
+	Input  any    `json:"input"`
+	Output string `json:"output"`
+}
+
+// extractLastAssistantText parses export JSON and returns concatenated text
+// from the last assistant message's text parts
+func extractLastAssistantText(exportJSON string) string {
+	var export openCodeExport
+	if err := json.Unmarshal([]byte(exportJSON), &export); err != nil {
+		return ""
+	}
+
+	// Find the last assistant message
+	var lastAssistant *openCodeMessage
+	for i := len(export.Messages) - 1; i >= 0; i-- {
+		if export.Messages[i].Info.Role == "assistant" {
+			lastAssistant = &export.Messages[i]
+			break
+		}
+	}
+
+	if lastAssistant == nil {
+		return ""
+	}
+
+	// Concatenate all text parts and tool output parts
+	var texts []string
+	for _, part := range lastAssistant.Parts {
+		if part.Type == "text" && part.Text != "" {
+			texts = append(texts, part.Text)
+		}
+		if part.Type == "tool" && part.Output != "" {
+			texts = append(texts, part.Output)
+		}
+	}
+
+	return strings.Join(texts, "\n")
+}
+
+// checkForJuggleToolCalls scans the export JSON for recent juggle tool invocations
+// that indicate the agent was updating state (e.g., `juggle loop update`, `juggle update`)
+func (o *OpenCodeProvider) checkForJuggleToolCalls(exportJSON string) bool {
+	var export openCodeExport
+	if err := json.Unmarshal([]byte(exportJSON), &export); err != nil {
+		return false
+	}
+
+	// Check the last few assistant messages for juggle-related tool calls
+	checkedMessages := 0
+	for i := len(export.Messages) - 1; i >= 0 && checkedMessages < 5; i-- {
+		msg := export.Messages[i]
+		if msg.Info.Role != "assistant" {
+			continue
+		}
+		checkedMessages++
+
+		for _, part := range msg.Parts {
+			if part.Type != "tool" {
+				continue
+			}
+
+			// Check tool name
+			toolName := strings.ToLower(part.Tool)
+			if toolName == "bash" || toolName == "terminal" || toolName == "shell" {
+				// Check if the command input references juggle
+				inputStr := fmt.Sprintf("%v", part.Input)
+				if strings.Contains(inputStr, "juggle") &&
+					(strings.Contains(inputStr, "update") ||
+						strings.Contains(inputStr, "complete") ||
+						strings.Contains(inputStr, "blocked") ||
+						strings.Contains(inputStr, "progress")) {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
 }
 
 // parseOverloadExhausted detects when the agent has exited after exhausting retries

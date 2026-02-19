@@ -67,9 +67,56 @@ type Config struct {
 	AgentProvider  string            `json:"agent_provider,omitempty"`  // Agent CLI: "claude" or "opencode"
 	ModelOverrides map[string]string `json:"model_overrides,omitempty"` // Custom model mappings (e.g., "opus": "anthropic/claude-opus-5")
 
+	// Supervisor settings
+	Supervisor *SupervisorConfig `json:"supervisor,omitempty"` // Supervisor daemon configuration
+
 	// UnknownFields stores any fields from the config file that aren't recognized.
 	// These are preserved when saving to avoid data loss.
 	UnknownFields map[string]interface{} `json:"-"`
+}
+
+// SupervisorConfig holds configuration for the juggle supervisor daemon
+type SupervisorConfig struct {
+	PollIntervalMinutes int  `json:"poll_interval_minutes,omitempty"` // How often to check session status (default: 5)
+	StallTimeoutMinutes int  `json:"stall_timeout_minutes,omitempty"` // Consider daemon stalled after this many minutes (default: 30)
+	AutoRestart         bool `json:"auto_restart,omitempty"`          // Automatically restart stalled daemons
+	MaxConcurrent       int  `json:"max_concurrent,omitempty"`        // Max concurrent daemons (default: 3)
+	AutoLaunch          bool `json:"auto_launch,omitempty"`           // Auto-launch daemons for sessions with pending balls
+}
+
+// DefaultSupervisorConfig returns supervisor config with sensible defaults
+func DefaultSupervisorConfig() *SupervisorConfig {
+	return &SupervisorConfig{
+		PollIntervalMinutes: 5,
+		StallTimeoutMinutes: 30,
+		AutoRestart:         true,
+		MaxConcurrent:       3,
+		AutoLaunch:          false,
+	}
+}
+
+// GetPollInterval returns the poll interval, defaulting to 5 minutes
+func (s *SupervisorConfig) GetPollInterval() int {
+	if s.PollIntervalMinutes <= 0 {
+		return 5
+	}
+	return s.PollIntervalMinutes
+}
+
+// GetStallTimeout returns the stall timeout, defaulting to 30 minutes
+func (s *SupervisorConfig) GetStallTimeout() int {
+	if s.StallTimeoutMinutes <= 0 {
+		return 30
+	}
+	return s.StallTimeoutMinutes
+}
+
+// GetMaxConcurrent returns the max concurrent daemons, defaulting to 3
+func (s *SupervisorConfig) GetMaxConcurrent() int {
+	if s.MaxConcurrent <= 0 {
+		return 3
+	}
+	return s.MaxConcurrent
 }
 
 // knownConfigFields lists the field names we recognize in config JSON
@@ -81,6 +128,7 @@ var knownConfigFields = map[string]bool{
 	"vcs":                     true,
 	"agent_provider":          true,
 	"model_overrides":         true,
+	"supervisor":              true,
 }
 
 // UnmarshalJSON implements custom JSON unmarshaling to capture unknown fields
@@ -106,6 +154,7 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 	c.VCS = alias.VCS
 	c.AgentProvider = alias.AgentProvider
 	c.ModelOverrides = alias.ModelOverrides
+	c.Supervisor = alias.Supervisor
 
 	// Extract unknown fields
 	c.UnknownFields = make(map[string]interface{})
@@ -145,6 +194,9 @@ func (c *Config) MarshalJSON() ([]byte, error) {
 	}
 	if len(c.ModelOverrides) > 0 {
 		result["model_overrides"] = c.ModelOverrides
+	}
+	if c.Supervisor != nil {
+		result["supervisor"] = c.Supervisor
 	}
 
 	return json.Marshal(result)

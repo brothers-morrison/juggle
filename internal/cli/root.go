@@ -281,4 +281,6 @@ func init() {
 	rootCmd.AddCommand(sessionsCmd)
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(initCmd)
+	rootCmd.AddCommand(supervisorCmd)
+	rootCmd.AddCommand(cronCmd)
 }
